@@ -166,6 +166,12 @@
   jangan pakai `actionsFor('lucy')` karena hasilnya selalu kosong.
 - **Aksi user TIDAK dibalas sama sekali**, termasuk info "pengingat OFF" untuk anggota
   yang belum mengatur. Jangan menambahkan pesan ajakan di `handleAction`.
+- Sakelar induk counter per server: `lucyCounter.enabled` (default OFF, sama dengan
+  dashboard). `d s count on|off` (alias `count`) mengubahnya; admin server ATAU
+  developer bot. Saat OFF: `handleAction` tidak mencatat & tidak menjadwalkan, mention
+  Lucy tidak dihitung, dan SEMUA perintah leaderboard (`top`/`global`/`lcount`/
+  `lcountall`/`ltarget`/`lservers` + tombol navigasi) membalas `counterOffNotice()`
+  ("No data found! ... `d s count`"). Pakai helper itu, jangan tulis pesan baru.
 - Perintah leaderboard: `top`/`t` (per server) dan `global`/`g` (lintas server), dengan
   alias lama `llb`/`llbboard`/`lboard`. `global`/`g` = `top` dengan flag global dipaksa,
   jadi tidak ada penghitung baru. `tglobal`/`tall` juga memaksa global. Token `semua`

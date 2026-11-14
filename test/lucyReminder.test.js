@@ -6,15 +6,30 @@ const path = require('node:path');
 
 let tempDir;
 
+const TEST_GUILDS = ['guild1', 'guild9', 'g', 'serverA', 'serverB', 'lain'];
+
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'boss-tracker-lrem-'));
   process.chdir(tempDir);
   for (const key of Object.keys(require.cache)) {
     if (/lucyReminder|lucyActionStorage|lucyCounter|storage\.js/.test(key)) delete require.cache[key];
   }
+  // Sebagian besar test menguji penghitungan/pengingat, jadi counter server
+  // dinyalakan dulu. Perilaku saat OFF diuji di blok "counter switch".
+  const { updateGuildSettings } = require('../src/utils/storage');
+  for (const id of TEST_GUILDS) updateGuildSettings(id, s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: true } }));
 });
 
 let counter = 0;
+
+// Sebagian besar test di berkas ini menguji penghitungan/pengingat, jadi counter
+// server dinyalakan dulu. Perilaku saat OFF diuji tersendiri di blok "counter switch".
+function setCounter(enabled, ...guildIds) {
+  const { updateGuildSettings } = require('../src/utils/storage');
+  for (const id of (guildIds.length ? guildIds : TEST_GUILDS)) {
+    updateGuildSettings(id, s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled } }));
+  }
+}
 
 function makeMessage(content, { guildId = 'guild1', channelId = 'chan1', userId = 'user1', name = 'Tester', admin = false } = {}) {
   const sent = [];
@@ -1097,5 +1112,69 @@ describe('premium custom replies', () => {
     require('../src/utils/lucyActionStorage').setPref('u1', 'pray', { enabled: true });
     await svc.deliverReminder(client, { guildId: 'guild1', channelId: 'c', userId: 'u1', name: 'Ani', kind: 'pray', messageId: 'm' });
     assert.match(sent[0].content, /Doa Ani dikabulkan!/);
+  });
+});
+
+describe('counter switch per server', () => {
+  it('records no action at all while the counter is OFF', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    setCounter(false);
+    const msg = makeMessage('lpray');
+    assert.equal(await svc.handleMessage(msg), true, 'tetap dianggap ditangani');
+    const day = svc.dayKey();
+    assert.equal(store.topByDay('guild1', day, ['pray']).length, 0, 'tidak ada yang tercatat');
+    assert.equal(svc.timers.size, 0, 'tidak ada pengingat dipasang');
+    assert.equal(msg.publicSent.length, 0, 'tidak ada balasan');
+  });
+
+  it('counts again once the counter is turned back ON', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    const day = svc.dayKey();
+    setCounter(false);
+    await svc.handleMessage(makeMessage('lpray'));
+    setCounter(true);
+    await svc.handleMessage(makeMessage('lpray'));
+    assert.equal(store.topByDay('guild1', day, ['pray'])[0].count, 1, 'hanya yang saat ON tercatat');
+    for (const t of svc.timers.values()) clearTimeout(t);
+  });
+
+  it('answers `top` and `global` with the enable notice while OFF', async () => {
+    const svc = require('../src/services/lucyReminder');
+    setCounter(false);
+    for (const command of ['d top', 'd t', 'd top pray', 'd g', 'd global']) {
+      const msg = makeMessage(command);
+      assert.equal(await svc.handleMessage(msg), true, command);
+      assert.match(msg.replies[0], /No data found!/, command);
+      assert.match(msg.replies[0], /using `d s count`/, command);
+    }
+  });
+
+  it('keeps the switch per server', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    setCounter(false, 'guild1');
+    setCounter(true, 'guild9');
+    await svc.handleMessage(makeMessage('lpray', { guildId: 'guild1' }));
+    await svc.handleMessage(makeMessage('lpray', { guildId: 'guild9' }));
+    const day = svc.dayKey();
+    assert.equal(store.topByDay('guild1', day, ['pray']).length, 0, 'guild1 OFF');
+    assert.equal(store.topByDay('guild9', day, ['pray'])[0].count, 1, 'guild9 ON');
+    for (const t of svc.timers.values()) clearTimeout(t);
+  });
+
+  it('shows the board again after the switch is turned back ON', async () => {
+    const svc = require('../src/services/lucyReminder');
+    setCounter(false);
+    const off = makeMessage('d top pray');
+    await svc.handleMessage(off);
+    assert.match(off.replies[0], /No data found!/);
+
+    setCounter(true);
+    const on = makeMessage('d top pray');
+    await svc.handleMessage(on);
+    assert.ok(on.replies[0].embeds, 'embed kembali tampil');
+    assert.match(on.replies[0].embeds[0].data.title, /Leaderboard Lucy Pray/);
   });
 });

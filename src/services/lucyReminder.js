@@ -17,7 +17,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFl
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
-const { parseIndonesianDate } = require('./lucyCounter');
+const { parseIndonesianDate, counterOffNotice } = require('./lucyCounter');
 const trigger = require('../utils/lucyTrigger');
 
 const WIB = 'Asia/Jakarta';
@@ -111,6 +111,12 @@ function humanDuration(ms) {
 
 function guildConfig(guildId) {
   return getGuildSettings(guildId).lucyReminder || {};
+}
+
+// Sakelar induk per server: kalau OFF, tidak ada aksi yang dicatat dan tidak ada
+// leaderboard yang ditampilkan (satu pesan arahan saja).
+function counterEnabled(guildId) {
+  return getGuildSettings(guildId).lucyCounter?.enabled === true;
 }
 
 // Kategori leaderboard. `lucy` membaca dari lucyCounterStorage; sisanya dari
@@ -481,6 +487,7 @@ function helpText(prefix) {
     `\`${prefix} global\` (alias \`${prefix} g\`) — leaderboard lintas server, default jumlah LUCY`,
     `  contoh: \`${prefix} g\`, \`${prefix} g pray\`, \`${prefix} g battle 7d\`,`
     `\`${prefix} lcount\` / \`${prefix} lcountall\` — leaderboard Lucy harian / all-time (dengan tombol)`
+    `\`${prefix} s count on|off\` — sakelar counter Lucy seluruh server (admin/developer)`
   ].join('\n');
 }
 
@@ -578,14 +585,14 @@ async function handleAction(message, action) {
   const kind = TRIGGER_KIND_TO_REMINDER[action] || action;
   const info = KINDS[kind];
   if (!info) return false;
+  // Counter server OFF: aksi tidak dihitung, tidak dicatat, tanpa balasan.
+  if (!counterEnabled(message.guildId)) return true;
   const userId = message.author.id;
   const name = message.member?.displayName || message.author?.username || 'Pemain';
   const now = Date.now();
 
   // Cooldown per JENIS reminder (battle/hunt berbagi satu jendela), sementara
   // penghitungan tetap per AKSI supaya leaderboard battle dan hunt terpisah.
-  const readyAt = store.getCooldown(message.guildId, userId, kind);
-
   store.recordAction({ guildId: message.guildId, userId, name, day: dayKey(new Date(now)), action });
   store.setCooldown(message.guildId, userId, kind, now + info.waitMs);
 
@@ -706,6 +713,12 @@ async function handleLeaderboardCommand(message, prefix, parts, { forceGlobal = 
   const first = (positional[0] || '').toLowerCase();
   const named = first === 'all' || first === 'gabungan' || Boolean(CATEGORY_ALIASES[first]);
   const category = first === 'all' || first === 'gabungan' ? 'all' : (CATEGORY_ALIASES[first] || 'lucy');
+
+  // Counter server OFF: jangan tampilkan board, cukup beri arahan ke admin.
+  if (!counterEnabled(message.guildId)) {
+    await message.reply(counterOffNotice(prefix));
+    return true;
+  }
 
   // Kalau kategori tidak disebut, seluruh token dianggap rentang/halaman.
   const { range, page } = parseRangeAndPage(named ? positional.slice(1) : positional);

@@ -17,7 +17,9 @@ const ALIASES = {
   server: ['server', 'sv'],
   prefix: ['awalan', 'prefix', 'pref'],
   menu: ['menu', 'panel', 'pengaturan'],
-  'admin-help': ['bantuan-admin', 'admin-help', 'admin']
+  'admin-help': ['bantuan-admin', 'admin-help', 'admin'],
+  count: ['count', 'counter', 'hitung'],
+  settings: ['s', 'settings', 'setelan']
 };
 
 function expandAliases() {
@@ -35,7 +37,7 @@ const ALIAS_MAP = expandAliases();
 // mis. "duh"/"dah" saat prefix = "d" — tidak memicu balasan bot.
 const KNOWN_SUBS = new Set(Object.keys(ALIAS_MAP));
 // Perintah tingkat bot, tidak di bawah kategori `boss`: bantuan & ubah prefix.
-const TOP_SUBS = new Set(['help', 'prefix']);
+const TOP_SUBS = new Set(['help', 'prefix', 'count', 'settings']);
 
 function parsePrefixInput(content, prefix) {
   const matched = matchPrefix(content, prefix);
@@ -46,9 +48,16 @@ function parsePrefixInput(content, prefix) {
   if (head === '') head = 'help'; // `<prefix>` saja = bantuan
   const headSub = ALIAS_MAP[head] || head;
 
-  // Tingkat bot: `<prefix> prefix [nilai]` dan `<prefix> help`.
+  // Tingkat bot: `<prefix> prefix [nilai]`, `<prefix> help`, dan `<prefix> s count`.
   if (TOP_SUBS.has(headSub)) {
-    return { sub: headSub, rawSub: head, args: parts.slice(1) };
+    const args = parts.slice(1);
+    // `s` adalah akar pengaturan; subnya dipetakan ke perintahnya (kini `count`).
+    if (headSub === 'settings') {
+      const setting = (args[0] || '').toLowerCase();
+      if (ALIAS_MAP[setting] === 'count') return { sub: 'count', rawSub: setting, args: args.slice(1) };
+      return { sub: 'settings', rawSub: head, args };
+    }
+    return { sub: headSub, rawSub: head, args };
   }
 
   // Kategori boss: `<prefix> boss <sub>` — `boss` adalah nama kategorinya.
@@ -93,6 +102,18 @@ function isAdmin(message) {
   return Boolean(message.member?.permissions?.has(PermissionFlagsBits.ManageGuild));
 }
 
+// "Developer" = pemilik bot (application owner), ID di env DEVELOPER_IDS, atau
+// pemilik server. Dipakai untuk sakelar counter agar pengelola bot tetap bisa
+// mengubahnya di server tempat ia bukan moderator.
+function isDeveloper(message) {
+  const ids = new Set(String(process.env.DEVELOPER_IDS || '').split(',').map(s => s.trim()).filter(Boolean));
+  const owner = message.client?.application?.owner;
+  if (owner?.id) ids.add(owner.id);
+  else if (owner?.members) for (const id of owner.members.keys()) ids.add(id);
+  if (ids.has(message.author?.id)) return true;
+  return Boolean(message.guild?.ownerId && message.guild.ownerId === message.author.id);
+}
+
 function send(message, payload) {
   return message.reply({ ...payload, allowedMentions: { repliedUser: false, parse: [] } });
 }
@@ -101,6 +122,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   const _send = deps.send || send;
   const _sendText = deps.sendText || ((m, content) => _send(m, { content }));
   const _isAdmin = deps.isAdmin || isAdmin;
+  const _isDeveloper = deps.isDeveloper || isDeveloper;
 
   if (!message.guildId || message.author?.bot) return;
   const settings = getGuildSettings(message.guildId);
@@ -174,6 +196,26 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
     return _sendText(message, '✅ Prefix diubah menjadi `' + normalized + '`. Contoh: `' + normalized + ' boss status`');
   }
 
+  if (sub === 'settings') {
+    return _sendText(message, 'Pengaturan server: `' + prefix + ' s count on|off` — sakelar seluruh counter Lucy (admin/developer).');
+  }
+
+  if (sub === 'count') {
+    if (!(_isAdmin(message) || _isDeveloper(message))) {
+      return _sendText(message, 'Pengaturan counter hanya bisa digunakan admin server atau developer bot.');
+    }
+    const action = (args[0] || '').toLowerCase();
+    if (!['on', 'off'].includes(action)) {
+      const now = getGuildSettings(message.guildId).lucyCounter?.enabled ? 'ON' : 'OFF';
+      return _sendText(message, 'Counter Lucy server ini sedang **' + now + '**. Ubah dengan `' + prefix + ' s count on` atau `' + prefix + ' s count off`.');
+    }
+    const enabled = action === 'on';
+    updateGuildSettings(message.guildId, old => ({ ...old, lucyCounter: { ...old.lucyCounter, enabled } }));
+    return _sendText(message, enabled
+      ? '✅ Counter Lucy diaktifkan untuk server ini. Semua aksi (pray, curse, battle, hunt) dan mention Lucy kembali dihitung.'
+      : '🔕 Counter Lucy dimatikan untuk server ini. Aktivitas tidak lagi dihitung atau dicatat.');
+  }
+
   if (sub === 'admin-help') {
     if (!_isAdmin(message)) return _sendText(message, 'Panduan ini khusus moderator/admin server.');
     return _send(message, { embeds: [new EmbedBuilder().setColor(0xFEE75C).setTitle('⚙️ Pengaturan Moderator/Admin')
@@ -182,6 +224,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
         { name: prefix + ' boss setup #channel @role', value: 'Atur channel dan role tag (alias: set/atur/config).', inline: false },
         { name: prefix + ' boss server on / off', value: 'Aktifkan atau matikan tracker server (alias: server-nyalakan/server-matikan).', inline: false },
         { name: prefix + ' prefix <prefix>', value: 'Lihat atau ubah prefix server (alias: awalan).', inline: false },
+        { name: prefix + ' s count on / off', value: 'Sakelar seluruh counter Lucy untuk server ini (aksi Lucy, battle/hunt, pray, curse).', inline: false },
         { name: 'Slash', value: '/boss setup, /boss server-on, /boss server-off, /boss prefix.', inline: false }
       )] });
   }
@@ -215,4 +258,4 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   return _sendText(message, 'Perintah tidak dikenal. Gunakan `' + prefix + ' boss help`.');
 }
 
-module.exports = { handlePrefixCommand, parsePrefixInput, parsePingInput, pingContent, parseDexInput, ALIASES, ALIAS_MAP, isAdmin };
+module.exports = { handlePrefixCommand, parsePrefixInput, parsePingInput, pingContent, parseDexInput, ALIASES, ALIAS_MAP, isAdmin, isDeveloper };

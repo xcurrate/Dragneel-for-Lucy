@@ -181,6 +181,7 @@ test('navigation reloads live counts from SQLite on each interaction', async () 
     }
     const svc = require('../src/services/lucyCounter');
     const db = require('../src/utils/lucyCounterStorage');
+    require('../src/utils/storage').updateGuildSettings('g1', s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: true } }));
     // 23 users => 3 pages of 10.
     for (let i = 1; i <= 23; i++) {
       db.recordLucy({ guildId: 'g1', userId: 'u' + i, name: 'User ' + i, day: svc.dayKey(), cycleKey: svc.dayKey(), targetActive: false, goal: 0 });

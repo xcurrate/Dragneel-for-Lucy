@@ -288,6 +288,11 @@ async function handleNavigation(i, deps = {}) {
   const date = dateToken && dateToken !== '-' ? dateToken : null;
   const getSettings = deps.getSettings || getGuildSettings;
   const config = getSettings(i.guildId).lucyCounter;
+  if (!config.enabled) {
+    const prefix = getSettings(i.guildId).prefix || DEFAULT_PREFIX;
+    await i.update({ content: counterOffNotice(prefix), embeds: [], components: [] });
+    return true;
+  }
   const client = { guildId: i.guildId, guilds: i.client?.guilds, config, date };
   const embed = i.message?.embeds?.[0];
   const footerText = embed?.footer?.text || embed?.data?.footer?.text || '';
@@ -308,6 +313,12 @@ function parsePage(value) {
 }
 
 function admin(message) { return Boolean(message.member?.permissions?.has(PermissionFlagsBits.ManageGuild)); }
+
+// Pesan saat counter Lucy server ini OFF. Dipakai semua perintah leaderboard,
+// termasuk `top`/`global` di lucyReminder, supaya seragam.
+function counterOffNotice(prefix) {
+  return 'No data found!\n\nServer admins can enable counting for this server using `' + prefix + ' s count`';
+}
 async function handleCommand(message) {
   if (!message.guildId || message.author?.bot) return false;
   const settings = getGuildSettings(message.guildId);
@@ -322,6 +333,7 @@ async function handleCommand(message) {
   const badDate = value => message.reply(`Tanggal tidak dikenali: **${value}**. Contoh: \`${prefix}lcount 5 nov\`.`);
   if (['lcount', 'lcountd', 'lcountall', 'lucycount'].includes(command) ||
       (command === 'lucy' && subcommand === 'count')) {
+    if (!config.enabled) { await message.reply(counterOffNotice(prefix)); return true; }
     const allTime = command === 'lcountall';
     const type = allTime ? 'alltime' : 'daily';
     const { date, rest, invalid } = extractDateArg(command === 'lucy' ? commandParts.slice(2) : commandParts.slice(1));
@@ -334,6 +346,7 @@ async function handleCommand(message) {
   }
   if (['ltarget', 'ltargetlb'].includes(command) ||
       (command === 'lucytarget' && (subcommand === '' || subcommand === 'leaderboard' || /^\d+$/.test(subcommand)))) {
+    if (!config.enabled) { await message.reply(counterOffNotice(prefix)); return true; }
     const raw = commandParts.slice(1).filter(a => a.toLowerCase() !== 'leaderboard');
     const { date, rest, invalid } = extractDateArg(raw);
     if (invalid) return badDate(invalid);
@@ -343,6 +356,7 @@ async function handleCommand(message) {
     return true;
   }
   if (['lservers', 'lserver', 'lserverlb'].includes(command)) {
+    if (!config.enabled) { await message.reply(counterOffNotice(prefix)); return true; }
     const { date, rest, invalid } = extractDateArg(commandParts.slice(1));
     if (invalid) return badDate(invalid);
     const view = serverLeaderboardView(store.getAllData(), message.client, parsePage(rest[0]), date);
@@ -458,4 +472,5 @@ async function handleMessage(message, { onCounted } = {}) {
     if (channel?.isTextBased()) await channel.send({ content: report, allowedMentions: { parse: [] } }).catch(() => {});
   }
 }
-module.exports = { handleMessage, handleCommand, handleNavigation, isLucyNav, navRow, buildLeaderboard, countLucy, dayKey, parseIndonesianDate, formatIndonesianDate, extractDateArg, leaderboardEmbed, dailyLeaderboardView, targetLeaderboardEmbed, targetLeaderboardView, serverLeaderboardEmbed, serverLeaderboardView, ranking, targetRanking, serverRanking, pageRows, LEADERBOARD_PAGE_SIZE, targetSchedule, challengeCycleKey, isTargetWindow };
+module.exports = {
+  counterOffNotice, handleMessage, handleCommand, handleNavigation, isLucyNav, navRow, buildLeaderboard, countLucy, dayKey, parseIndonesianDate, formatIndonesianDate, extractDateArg, leaderboardEmbed, dailyLeaderboardView, targetLeaderboardEmbed, targetLeaderboardView, serverLeaderboardEmbed, serverLeaderboardView, ranking, targetRanking, serverRanking, pageRows, LEADERBOARD_PAGE_SIZE, targetSchedule, challengeCycleKey, isTargetWindow };

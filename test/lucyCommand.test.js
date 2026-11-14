@@ -129,10 +129,39 @@ describe('lucy counter command routing', () => {
     assert.ok(servers.payloads[0].embeds[0].data.footer.text.includes('5 nov 2026'));
   });
 
+  it('answers leaderboard commands with the enable notice while the counter is OFF', async () => {
+    const { updateGuildSettings } = require('../src/utils/storage');
+    const lucyCounter = require('../src/services/lucyCounter');
+    updateGuildSettings('guild1', s => ({ ...s, prefix: '!', lucyCounter: { ...s.lucyCounter, enabled: false } }));
+
+    for (const content of ['!lcount', '!lcountall', '!ltarget', '!lservers']) {
+      const message = makeMessage(content);
+      assert.strictEqual(await lucyCounter.handleCommand(message), true, content);
+      assert.match(message.replies[0], /No data found!/, content);
+      assert.match(message.replies[0], /using `! s count`/, content);
+      assert.strictEqual(message.payloads[0].embeds, undefined, content + ': tanpa embed');
+    }
+  });
+
+  it('stops counting Lucy messages while the counter is OFF, and resumes when ON', async () => {
+    const { updateGuildSettings } = require('../src/utils/storage');
+    const lucyCounter = require('../src/services/lucyCounter');
+    const store = require('../src/utils/lucyCounterStorage');
+    const day = lucyCounter.dayKey(new Date());
+
+    updateGuildSettings('guild1', s => ({ ...s, prefix: '!', lucyCounter: { ...s.lucyCounter, enabled: false } }));
+    await lucyCounter.handleMessage(makeMessage('halo lucy!', { userId: 'user1' }));
+    assert.strictEqual(store.getGuildData('guild1').users?.user1, undefined, 'tidak dicatat saat OFF');
+
+    updateGuildSettings('guild1', s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: true } }));
+    await lucyCounter.handleMessage(makeMessage('halo lucy lagi!', { userId: 'user1' }));
+    assert.strictEqual(store.getGuildData('guild1').users.user1.days[day], 1, 'tercatat setelah ON');
+  });
+
   it('rejects an impossible date instead of silently ignoring it', async () => {
     const { updateGuildSettings } = require('../src/utils/storage');
     const lucyCounter = require('../src/services/lucyCounter');
-    updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
+    updateGuildSettings('guild1', s => ({ ...s, prefix: '!', lucyCounter: { ...s.lucyCounter, enabled: true } }));
 
     const message = makeMessage('!lcount 32 nov');
     assert.ok(await lucyCounter.handleCommand(message));

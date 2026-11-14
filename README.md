@@ -116,11 +116,13 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
 - Balasan default tersedia untuk semua; balasan kustom + embed direncanakan sebagai fitur premium
 
 ### Leaderboard Aksi Lucy
-- d llb <pray|curse|battle|hunt|lucy> [rentang] [halaman] [global]
-- d llb all [rentang] — gabungan semua kategori
-- d global (alias d g) — leaderboard lintas server; tanpa kategori = jumlah LUCY
+- d top [kategori] [rentang] [halaman] (alias d t) — tanpa kategori = jumlah LUCY
+- d top <pray|curse|battle|hunt|lucy|all> — kategori aksi; battle mencakup hunt
+  contoh: d top, d top pray, d top battle 7d, d top all
+- d global (alias d g) — sama seperti `top` tapi lintas server; tanpa kategori = jumlah LUCY
   contoh: d g, d g pray, d g battle 7d
-- Tambahkan `global` untuk menggabungkan seluruh server (mis. `d llb pray 7d global`)
+- Tambahkan `global` untuk menggabungkan seluruh server (mis. `d top pray 7d global`)
+- Bentuk lama `d llb ...` tetap jalan
 - Rentang: kosong/harian (hari ini), 7d (7 hari terakhir), all (semua waktu), atau tanggal (5 nov)
 - battle dan hunt digabung jadi satu kategori; lucy memakai penghitung Lucy yang sudah ada
 - d ping (alias d p) — cek latency bot (roundtrip & WebSocket)
@@ -133,6 +135,21 @@ balasan bot.
 
 ## Lucy Counter & Leaderboard
 Menghitung pesan yang memuat kata "lucy" per anggota (cooldown 10 detik per anggota, maksimal 1 per pesan).
+
+**Sakelar counter per server.** Seluruh counter Lucy (mention Lucy, pray, curse,
+battle, hunt) bisa dinyalakan/dimatikan per server dengan
+`d s count on` atau `d s count off` (alias `d count on|off`; khusus admin server
+atau developer bot). Saat OFF, aktivitas tidak dihitung maupun dicatat, dan
+perintah leaderboard membalas:
+
+```text
+No data found!
+
+Server admins can enable counting for this server using `<prefix> s count`
+```
+
+Saat ON kembali, penghitungan berjalan seperti biasa. Sakelar ini sama dengan
+"LUCY COUNTER SERVER ON/OFF" di dashboard. Default: **OFF**.
 - d lcount [halaman] — leaderboard Lucy harian.
 - d lcountall [halaman] — leaderboard Lucy all-time.
 - d ltarget [halaman] — leaderboard progres Target Lucy (alias: d ltargetlb, d lucytarget leaderboard).

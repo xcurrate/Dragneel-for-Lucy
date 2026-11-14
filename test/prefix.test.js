@@ -42,6 +42,53 @@ describe('prefix command handler', () => {
     };
   }
 
+  it('enables the Lucy counter per server via `s count on`', async () => {
+    const { handlePrefixCommand } = require('../src/commands/prefix');
+    const { getGuildSettings } = require('../src/utils/storage');
+    const deps = makeDeps();
+    await handlePrefixCommand(makeMessage('d s count on', 'guild1', 'user1', true), null, deps);
+    assert.strictEqual(getGuildSettings('guild1').lucyCounter.enabled, true);
+    assert.match(deps.calls[0].content, /diaktifkan/);
+    // Server lain tidak ikut berubah.
+    assert.strictEqual(getGuildSettings('guild2').lucyCounter.enabled, false, 'harus per server');
+  });
+
+  it('disables the counter via `s count off` and the `count` alias', async () => {
+    const { handlePrefixCommand } = require('../src/commands/prefix');
+    const { getGuildSettings, updateGuildSettings } = require('../src/utils/storage');
+    updateGuildSettings('guild1', s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: true } }));
+    const deps = makeDeps();
+    await handlePrefixCommand(makeMessage('d count off', 'guild1', 'user1', true), null, deps);
+    assert.strictEqual(getGuildSettings('guild1').lucyCounter.enabled, false);
+    assert.match(deps.calls[0].content, /dimatikan/);
+  });
+
+  it('rejects non-admin, non-developer members', async () => {
+    const { handlePrefixCommand } = require('../src/commands/prefix');
+    const { getGuildSettings } = require('../src/utils/storage');
+    const deps = { ...makeDeps(), isAdmin: () => false, isDeveloper: () => false };
+    await handlePrefixCommand(makeMessage('d s count on', 'guild1', 'user1', false), null, deps);
+    assert.strictEqual(getGuildSettings('guild1').lucyCounter.enabled, false, 'tidak berubah');
+    assert.match(deps.calls[0].content, /admin server atau developer/);
+  });
+
+  it('lets a developer toggle it even without moderator permission', async () => {
+    const { handlePrefixCommand } = require('../src/commands/prefix');
+    const { getGuildSettings } = require('../src/utils/storage');
+    const deps = { ...makeDeps(), isAdmin: () => false, isDeveloper: () => true };
+    await handlePrefixCommand(makeMessage('d s count on', 'guild1', 'user1', false), null, deps);
+    assert.strictEqual(getGuildSettings('guild1').lucyCounter.enabled, true);
+  });
+
+  it('shows the current state when no on/off is given', async () => {
+    const { handlePrefixCommand } = require('../src/commands/prefix');
+    const { updateGuildSettings } = require('../src/utils/storage');
+    updateGuildSettings('guild1', s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: true } }));
+    const deps = makeDeps();
+    await handlePrefixCommand(makeMessage('d s count', 'guild1', 'user1', true), null, deps);
+    assert.match(deps.calls[0].content, /sedang \*\*ON\*\*/);
+  });
+
   it('handles notify alias', async () => {
     const { handlePrefixCommand } = require('../src/commands/prefix');
     const { getGuildSettings } = require('../src/utils/storage');
