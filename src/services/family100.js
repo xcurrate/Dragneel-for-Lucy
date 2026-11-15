@@ -19,8 +19,8 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 // soal tetap terlihat saat ramai walau tak ada yang menjawab (lihat noteChannelActivity).
 const AUTO_BUMP_AFTER = 20;
 // Jatah `!f100 clue` per pemain per soal. Tiap pemakaian membuka SATU huruf acak
-// pada satu jawaban yang dipilih acak.
-const CLUE_MAX = 2;
+// pada SETIAP jawaban yang masih boleh di-clue.
+const CLUE_MAX = 3;
 // Batas huruf yang WAJIB tetap tersembunyi di sebuah jawaban. Jawaban hanya boleh
 // menerima clue selama sisa huruf tersembunyinya > CLUE_HIDDEN; begitu tersisa tepat
 // CLUE_HIDDEN, jawaban itu terkunci dan tidak menerima clue lagi. Karena itu jawaban
@@ -89,10 +89,11 @@ function clueMask(text, shown = []) {
   return out;
 }
 
-// Buka SATU huruf acak pada satu jawaban yang dipilih acak. Jawaban yang sisa huruf
-// tersembunyinya <= CLUE_HIDDEN tidak ikut dipilih, jadi tidak ada jawaban yang
-// pernah terbaca penuh lewat clue. Mengembalikan false bila tidak ada jawaban yang
-// masih boleh di-clue.
+// Buka SATU huruf acak pada SEMUA jawaban yang masih boleh di-clue, jadi satu clue
+// memberi petunjuk untuk seluruh papan sekaligus. Jawaban yang sisa huruf
+// tersembunyinya <= CLUE_HIDDEN dilewati, sehingga tidak ada jawaban yang pernah
+// terbaca penuh lewat clue. Mengembalikan false bila tidak ada jawaban yang masih
+// boleh di-clue (jatah pemanggil tidak boleh terpotong untuk kasus itu).
 function addHint(session) {
   const { question, revealed } = session;
   if (!session.hints) session.hints = new Map();
@@ -105,12 +106,13 @@ function addHint(session) {
   });
   if (!eligible.length) return false;
 
-  const index = eligible[Math.floor(Math.random() * eligible.length)];
-  const letters = letterIndices(question.answers[index].text);
-  const shown = new Set(session.hints.get(index) || []);
-  const hidden = letters.filter(i => !shown.has(i));
-  shown.add(hidden[Math.floor(Math.random() * hidden.length)]);
-  session.hints.set(index, shown);
+  for (const index of eligible) {
+    const letters = letterIndices(question.answers[index].text);
+    const shown = new Set(session.hints.get(index) || []);
+    const hidden = letters.filter(i => !shown.has(i));
+    shown.add(hidden[Math.floor(Math.random() * hidden.length)]);
+    session.hints.set(index, shown);
+  }
   return true;
 }
 
@@ -526,7 +528,7 @@ function helpText(prefix) {
     `**Family 100** — ${bank.count()} soal, total 100 poin per soal.`,
     `\`${prefix}f100\` — mulai ronde; jika sudah jalan, tampilkan ulang soalnya`,
     `\`${prefix}f100 soal\` — tampilkan ulang soal & jawaban terbuka (alias \`status\`)`,
-    `\`${prefix}f100 clue\` — buka 1 huruf acak; jawaban terkunci saat sisa ${CLUE_HIDDEN} huruf (jatah ${CLUE_MAX}× per pemain)`,
+    `\`${prefix}f100 clue\` — buka 1 huruf acak di semua jawaban; terkunci saat sisa ${CLUE_HIDDEN} huruf (jatah ${CLUE_MAX}× per pemain)`,
     `\`${prefix}f100 reveal\` — tampilkan semua jawaban ${REVEAL_MS / 1000} detik lalu hilang (khusus developer)`,
     `\`${prefix}f100 skip\` — lewati ke soal berikutnya (semua orang)`,
     `\`${prefix}f100 stop\` — hentikan ronde (moderator/admin/developer)`,

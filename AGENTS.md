@@ -80,12 +80,13 @@
   `!f100 soal` (alias `status`, tampilkan ulang soal & jawaban terbuka), `!f100 clue` (**semua orang**),
   `!f100 skip` (**semua orang**), `!f100 stop` & `!f100 on|off` (**moderator/admin/developer**),
   `!f100 lb [all]`. Alias perintah: `kuis`.
-- **Clue** (`!f100 clue` / `petunjuk` / `hint`): tiap pemakaian membuka **satu huruf acak** pada
-  satu jawaban yang dipilih **acak** (lihat `addHint`, `clueMask`, `letterIndices`), jadi clue tidak
-  berurutan dan tidak selalu menyentuh jawaban yang sama. Sebuah jawaban hanya boleh di-clue selama
-  sisa huruf tersembunyinya > `CLUE_HIDDEN` (2); begitu tersisa tepat 2, jawaban itu **terkunci** dan
-  dilewati clue berikutnya — jadi jawaban tidak pernah terbaca penuh. Jawaban dengan huruf < 3
-  (`MIN_CLUE_LETTERS`) tidak pernah bisa di-clue sama sekali. Kuota **per pemain** `CLUE_MAX` (2) per
+- **Clue** (`!f100 clue` / `petunjuk` / `hint`): tiap pemakaian membuka **satu huruf acak pada
+  SETIAP jawaban** yang masih boleh di-clue (lihat `addHint`, `clueMask`, `letterIndices`), jadi satu
+  clue memberi petunjuk untuk seluruh papan sekaligus dan posisinya acak (tidak berurutan dari
+  depan). Sebuah jawaban hanya boleh di-clue selama sisa huruf tersembunyinya > `CLUE_HIDDEN` (2);
+  begitu tersisa tepat 2, jawaban itu **terkunci** dan dilewati clue berikutnya sementara jawaban
+  lain tetap berjalan — jadi tidak ada jawaban yang pernah terbaca penuh. Jawaban dengan huruf < 3
+  (`MIN_CLUE_LETTERS`) tidak pernah bisa di-clue sama sekali. Kuota **per pemain** `CLUE_MAX` (3) per
   soal (`session.clueByUser`); bila tidak ada jawaban yang bisa di-clue, jatah **tidak** dipotong dan
   pemain diberi tahu. Kuota dan hint (`session.hints`, per indeks jawaban) direset tiap soal baru.
   Clue tidak membuka slot dan tidak menambah poin; jumlah huruf yang terbuka tampil di footer

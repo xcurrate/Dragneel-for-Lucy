@@ -357,7 +357,7 @@ describe('family 100 round engine', () => {
     assert.equal(session.revealed.size, 0, 'bump tidak membuka jawaban');
   });
 
-  it('gives every player their own quota of 2 clues', async () => {
+  it('gives every player their own quota of 3 clues', async () => {
     const svc = require('../src/services/family100');
     const { updateGuildSettings } = require('../src/utils/storage');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
@@ -366,52 +366,62 @@ describe('family 100 round engine', () => {
     // Pesan teks ada di antara payload embed, jadi kumpulkan semua teksnya.
     const texts = m => m.sent.map(x => (typeof x === 'string' ? x : x.content || '')).join('\n');
 
-    // Pemain A memakai kedua jatahnya.
+    // Pemain A memakai seluruh jatahnya (3×).
     const a1 = makeMessage('!f100 clue', { userId: 'userA', name: 'Ani', admin: false });
     assert.equal(await svc.handleMessage(a1), true);
     assert.equal(session.clueByUser.get('userA'), 1);
     assert.equal(session.revealed.size, 0, 'clue tidak membuka jawaban');
-    assert.match(texts(a1), /Sisa jatah kamu: \*\*1\/2\*\*/);
+    assert.match(texts(a1), /Sisa jatah kamu: \*\*2\/3\*\*/);
 
-    const a2 = makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' });
-    await svc.handleMessage(a2);
-    assert.equal(session.clueByUser.get('userA'), 2);
+    for (let i = 2; i <= 3; i++) {
+      await svc.handleMessage(makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' }));
+      assert.equal(session.clueByUser.get('userA'), i);
+    }
 
     // Jatah A habis, B tetap punya jatah penuh sendiri.
-    const a3 = makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' });
-    await svc.handleMessage(a3);
-    assert.match(texts(a3), /Jatah clue kamu sudah habis \(2\/2\)/);
-    assert.equal(session.clueByUser.get('userA'), 2, 'jatah A tidak bertambah');
+    const a4 = makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' });
+    await svc.handleMessage(a4);
+    assert.match(texts(a4), /Jatah clue kamu sudah habis \(3\/3\)/);
+    assert.equal(session.clueByUser.get('userA'), 3, 'jatah A tidak bertambah');
 
     const b1 = makeMessage('!f100 clue', { userId: 'userB', name: 'Budi' });
     assert.equal(await svc.handleMessage(b1), true, 'B tidak ikut kehabisan');
     assert.equal(session.clueByUser.get('userB'), 1, 'B punya jatah terpisah');
-    assert.equal(session.clueByUser.get('userA'), 2, 'jatah A tidak berubah oleh B');
+    assert.equal(session.clueByUser.get('userA'), 3, 'jatah A tidak berubah oleh B');
   });
 
-  it('reveals exactly one letter per clue and never leaves fewer than 2 hidden', async () => {
+  it('reveals one letter on every answer per clue, never leaving fewer than 2 hidden', async () => {
     const svc = require('../src/services/family100');
     const { updateGuildSettings } = require('../src/utils/storage');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
     await svc.handleMessage(makeMessage('!f100'));
     const session = fixLongQuestion(svc, 'guild1');
-    const shown = () => [...session.hints.values()].reduce((n, set) => n + set.size, 0);
     const hiddenOf = i => svc.letterIndices(session.question.answers[i].text).length - (session.hints.get(i)?.size || 0);
+    const totalLetters = () => [...session.hints.values()].reduce((n, set) => n + set.size, 0);
 
-    assert.equal(shown(), 0, 'belum ada huruf terbuka');
-    for (let i = 0; i < 2; i++) {
-      const before = shown();
+    assert.equal(session.hints.size, 0, 'belum ada huruf terbuka');
+    for (let round = 1; round <= 3; round++) {
+      const before = session.question.answers.map((_, i) => hiddenOf(i));
       const msg = makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' });
       await svc.handleMessage(msg);
-      assert.equal(shown() - before, 1, 'tiap clue membuka tepat 1 huruf');
-      for (let index = 0; index < session.question.answers.length; index++) {
-        assert.ok(hiddenOf(index) >= 2, 'minimal 2 huruf tetap tersembunyi (jawaban ' + index + ')');
-      }
-      assert.match(msg.boards.at(-1).embeds[0].data.footer.text, new RegExp('Clue ' + (i + 1) + ' huruf'));
+      let expected = 0;
+      session.question.answers.forEach((a, i) => {
+        const now = hiddenOf(i);
+        if (before[i] > 2) {
+          assert.equal(now, before[i] - 1, 'jawaban ke-' + i + ' berkurang 1 huruf');
+          expected++;
+        } else {
+          assert.equal(now, before[i], 'jawaban ke-' + i + ' tetap terkunci di 2 huruf');
+        }
+        assert.ok(now >= 2, 'minimal 2 huruf tetap tersembunyi (jawaban ' + i + ')');
+      });
+      assert.ok(expected > 0, 'ada jawaban yang mendapat huruf');
+      assert.equal(totalLetters(), round * expected, 'total huruf terbuka sesuai jumlah clue');
+      assert.match(msg.boards.at(-1).embeds[0].data.footer.text, /Clue \d+ huruf/);
     }
   });
 
-  it('stops clueing an answer once only 2 letters remain hidden', () => {
+  it('locks an answer at 2 hidden letters while the others keep getting clues', () => {
     const svc = require('../src/services/family100');
     const session = {
       question: { answers: [{ text: 'abc' }, { text: 'abcdefgh' }] },
@@ -419,12 +429,13 @@ describe('family 100 round engine', () => {
       hints: new Map()
     };
     const hiddenOf = i => svc.letterIndices(session.question.answers[i].text).length - (session.hints.get(i)?.size || 0);
-    let guard = 0;
-    while (svc.addHint(session) && guard++ < 20) { /* habiskan semua clue */ }
-    assert.equal(hiddenOf(0), 2, 'jawaban 3 huruf berhenti di 2 huruf tersembunyi');
-    assert.equal(session.hints.get(0).size, 1, 'jawaban 3 huruf hanya menerima 1 clue');
-    assert.equal(hiddenOf(1), 2, 'jawaban panjang juga berhenti di 2 tersembunyi');
-    assert.equal(svc.addHint(session), false, 'tidak ada lagi yang bisa di-clue');
+
+    assert.equal(svc.addHint(session), true);
+    assert.equal(hiddenOf(0), 2, 'jawaban 3 huruf langsung terkunci di 2 tersembunyi');
+    assert.equal(hiddenOf(1), 7, 'jawaban panjang baru kehilangan 1 huruf');
+    assert.equal(svc.addHint(session), true);
+    assert.equal(hiddenOf(0), 2, 'jawaban terkunci tidak menerima clue lagi');
+    assert.equal(hiddenOf(1), 6, 'jawaban panjang lanjut terbuka');
   });
 
   it('never clues an answer that already has only 2 letters hidden', () => {
@@ -434,19 +445,16 @@ describe('family 100 round engine', () => {
       revealed: new Set(),
       hints: new Map()
     };
-    for (let i = 0; i < 5; i++) svc.addHint(session);
-    assert.equal(session.hints.has(0), false, 'jawaban 2 huruf tidak pernah di-clue');
-    assert.equal(svc.letterIndices('wxyz').length - session.hints.get(1).size, 2, 'jawaban 4 huruf berhenti di 2 tersembunyi');
+    assert.equal(svc.addHint(session), true);
+    assert.equal(session.hints.has(0), false, 'jawaban 2 huruf dilewati');
+    assert.equal(svc.letterIndices('wxyz').length - session.hints.get(1).size, 3, 'jawaban 4 huruf berhenti di 2');
   });
 
-  it('picks the answer and the letter at random, not in order', async () => {
+  it('reveals a random letter per answer, not always from the front', async () => {
     const svc = require('../src/services/family100');
     const { updateGuildSettings } = require('../src/utils/storage');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
 
-    // Kumpulkan pilihan selama banyak soal: jawaban yang dibuka harus berganti-ganti,
-    // dan huruf depan harus pernah ikut disembunyikan (jadi tidak selalu dari depan).
-    const pickedAnswers = new Set();
     let frontHidden = false;
     for (let round = 0; round < 15; round++) {
       // Sesi lama dibuang supaya `!f100` benar-benar memulai soal baru; kalau tidak,
@@ -454,15 +462,12 @@ describe('family 100 round engine', () => {
       svc.sessions.delete('guild1');
       await svc.handleMessage(makeMessage('!f100'));
       const session = fixLongQuestion(svc, 'guild1');
-      for (let i = 0; i < 2; i++) {
-        await svc.handleMessage(makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' }));
-      }
+      await svc.handleMessage(makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' }));
       for (const [index, hint] of session.hints.entries()) {
-        pickedAnswers.add(index);
+        assert.equal(hint.size, 1, 'satu clue membuka tepat 1 huruf per jawaban (jawaban ' + index + ')');
         if (!hint.has(0)) frontHidden = true;
       }
     }
-    assert.ok(pickedAnswers.size > 1, 'jawaban yang dibuka berganti-ganti, bukan selalu slot pertama');
     assert.ok(frontHidden, 'huruf depan pernah disembunyikan, jadi clue tidak berurutan dari depan');
   });
 
@@ -490,10 +495,10 @@ describe('family 100 round engine', () => {
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
     await svc.handleMessage(makeMessage('!f100'));
     fixLongQuestion(svc, 'guild1');
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       await svc.handleMessage(makeMessage('!f100 clue', { userId: 'warga', name: 'Warga' }));
     }
-    assert.equal(svc.sessions.get('guild1').clueByUser.get('warga'), 2);
+    assert.equal(svc.sessions.get('guild1').clueByUser.get('warga'), 3);
 
     await svc.handleMessage(makeMessage('!f100 skip', { userId: 'warga', name: 'Warga' }));
     const next = svc.sessions.get('guild1');
