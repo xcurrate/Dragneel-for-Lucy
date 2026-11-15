@@ -362,7 +362,7 @@ describe('family 100 round engine', () => {
     const { updateGuildSettings } = require('../src/utils/storage');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
     await svc.handleMessage(makeMessage('!f100'));
-    const session = fixQuestion(svc, 'guild1');
+    const session = fixLongQuestion(svc, 'guild1');
     // Pesan teks ada di antara payload embed, jadi kumpulkan semua teksnya.
     const texts = m => m.sent.map(x => (typeof x === 'string' ? x : x.content || '')).join('\n');
 
@@ -389,40 +389,63 @@ describe('family 100 round engine', () => {
     assert.equal(session.clueByUser.get('userA'), 2, 'jatah A tidak berubah oleh B');
   });
 
-  it('hides exactly 2 letters per clued answer, never the whole word', async () => {
+  it('reveals exactly one letter per clue and never leaves fewer than 2 hidden', async () => {
     const svc = require('../src/services/family100');
     const { updateGuildSettings } = require('../src/utils/storage');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
     await svc.handleMessage(makeMessage('!f100'));
-    const session = fixQuestion(svc, 'guild1');
-    assert.equal(session.hints.size, 0, 'belum ada hint sebelum clue');
+    const session = fixLongQuestion(svc, 'guild1');
+    const shown = () => [...session.hints.values()].reduce((n, set) => n + set.size, 0);
+    const hiddenOf = i => svc.letterIndices(session.question.answers[i].text).length - (session.hints.get(i)?.size || 0);
 
+    assert.equal(shown(), 0, 'belum ada huruf terbuka');
     for (let i = 0; i < 2; i++) {
+      const before = shown();
       const msg = makeMessage('!f100 clue', { userId: 'userA', name: 'Ani' });
       await svc.handleMessage(msg);
-      const board = msg.boards.at(-1).embeds[0].data.description.split('\n');
-      assert.ok(session.hints.size > 0, 'ada jawaban yang dibuka clue');
-      for (const [index, hint] of session.hints.entries()) {
-        const text = session.question.answers[index].text;
-        const letters = svc.letterIndices(text);
-        const hidden = letters.filter(k => !hint.has(k)).length;
-        assert.equal(hidden, 2, 'setiap jawaban yang dibuka clue menyisakan tepat 2 huruf: ' + text);
-        // Jawaban tidak boleh terbaca penuh dari papan.
-        const shown = svc.clueMask(text, hint);
-        assert.ok(shown.includes('\u2593'), 'masih tersembunyi: ' + shown);
-        assert.ok(board.some(r => r.includes(shown)), 'papan menampilkan mask yang sama');
+      assert.equal(shown() - before, 1, 'tiap clue membuka tepat 1 huruf');
+      for (let index = 0; index < session.question.answers.length; index++) {
+        assert.ok(hiddenOf(index) >= 2, 'minimal 2 huruf tetap tersembunyi (jawaban ' + index + ')');
       }
+      assert.match(msg.boards.at(-1).embeds[0].data.footer.text, new RegExp('Clue ' + (i + 1) + ' huruf'));
     }
   });
 
-  it('picks the answer and the letters at random, not in order', async () => {
+  it('stops clueing an answer once only 2 letters remain hidden', () => {
+    const svc = require('../src/services/family100');
+    const session = {
+      question: { answers: [{ text: 'abc' }, { text: 'abcdefgh' }] },
+      revealed: new Set(),
+      hints: new Map()
+    };
+    const hiddenOf = i => svc.letterIndices(session.question.answers[i].text).length - (session.hints.get(i)?.size || 0);
+    let guard = 0;
+    while (svc.addHint(session) && guard++ < 20) { /* habiskan semua clue */ }
+    assert.equal(hiddenOf(0), 2, 'jawaban 3 huruf berhenti di 2 huruf tersembunyi');
+    assert.equal(session.hints.get(0).size, 1, 'jawaban 3 huruf hanya menerima 1 clue');
+    assert.equal(hiddenOf(1), 2, 'jawaban panjang juga berhenti di 2 tersembunyi');
+    assert.equal(svc.addHint(session), false, 'tidak ada lagi yang bisa di-clue');
+  });
+
+  it('never clues an answer that already has only 2 letters hidden', () => {
+    const svc = require('../src/services/family100');
+    const session = {
+      question: { answers: [{ text: 'ab' }, { text: 'wxyz' }] },
+      revealed: new Set(),
+      hints: new Map()
+    };
+    for (let i = 0; i < 5; i++) svc.addHint(session);
+    assert.equal(session.hints.has(0), false, 'jawaban 2 huruf tidak pernah di-clue');
+    assert.equal(svc.letterIndices('wxyz').length - session.hints.get(1).size, 2, 'jawaban 4 huruf berhenti di 2 tersembunyi');
+  });
+
+  it('picks the answer and the letter at random, not in order', async () => {
     const svc = require('../src/services/family100');
     const { updateGuildSettings } = require('../src/utils/storage');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!' }));
 
-    // Kumpulkan pilihan selama banyak soal: harus ada lebih dari satu jawaban yang
-    // pernah dibuka, dan huruf depan harus pernah ikut disembunyikan (jadi tidak
-    // selalu membuka dari depan).
+    // Kumpulkan pilihan selama banyak soal: jawaban yang dibuka harus berganti-ganti,
+    // dan huruf depan harus pernah ikut disembunyikan (jadi tidak selalu dari depan).
     const pickedAnswers = new Set();
     let frontHidden = false;
     for (let round = 0; round < 15; round++) {

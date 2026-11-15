@@ -46,7 +46,7 @@ perintah tingkat bot langsung mengikuti prefix:
 - d boss warn <detik> — DM peringatan sebelum boss muncul (0 untuk matikan)
 - d boss menu, d boss status
 - d f100 — mulai ronde Family 100
-- d f100 clue — buka 1 jawaban acak sampai sisa 2 huruf (jatah 2x per pemain, semua orang)
+- d f100 clue — buka 1 huruf acak; jawaban terkunci saat sisa 2 huruf (jatah 2x per pemain, semua orang)
 - d f100 reveal — tampilkan semua jawaban soal aktif selama 2 detik lalu hilang (khusus developer)
 
 ## Cepat Tepat (Matematika)

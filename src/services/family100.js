@@ -18,14 +18,16 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 // Jumlah pesan biasa di channel ronde sebelum papan otomatis dikirim ulang. Menjaga
 // soal tetap terlihat saat ramai walau tak ada yang menjawab (lihat noteChannelActivity).
 const AUTO_BUMP_AFTER = 20;
-// Jatah `!f100 clue` per pemain per soal. Tiap pemakaian memilih SATU jawaban
-// tersembunyi secara acak lalu membukanya sampai tersisa CLUE_HIDDEN huruf.
+// Jatah `!f100 clue` per pemain per soal. Tiap pemakaian membuka SATU huruf acak
+// pada satu jawaban yang dipilih acak.
 const CLUE_MAX = 2;
-// Sisa huruf yang tetap tersembunyi setelah sebuah jawaban dibuka. Minimal 2 supaya
-// jawaban tidak pernah terbaca penuh lewat clue (lihat MIN_CLUE_LETTERS).
+// Batas huruf yang WAJIB tetap tersembunyi di sebuah jawaban. Jawaban hanya boleh
+// menerima clue selama sisa huruf tersembunyinya > CLUE_HIDDEN; begitu tersisa tepat
+// CLUE_HIDDEN, jawaban itu terkunci dan tidak menerima clue lagi. Karena itu jawaban
+// tidak pernah terbaca penuh lewat clue (lihat MIN_CLUE_LETTERS).
 const CLUE_HIDDEN = 2;
-// Jawaban dengan huruf < 3 tidak pernah bisa dibuka sebagian: menyisakan 2 huruf
-// tertutup tidak mungkin, jadi jawaban itu dilewati clue sepenuhnya.
+// Jawaban dengan huruf < 3 tidak pernah bisa di-clue: menyisakan 2 huruf tertutup
+// tidak mungkin, jadi jawaban itu dilewati clue sepenuhnya.
 const MIN_CLUE_LETTERS = CLUE_HIDDEN + 1;
 // Skill developer `f100 reveal`: tampilkan semua jawaban soal aktif, lalu hapus
 // pesannya otomatis setelah jendela singkat ini (ms).
@@ -87,35 +89,27 @@ function clueMask(text, shown = []) {
   return out;
 }
 
-// Buka satu jawaban tersembunyi secara ACAK sampai tersisa CLUE_HIDDEN huruf.
-// Jawaban mana yang dibuka dan huruf mana yang dibuka sama-sama acak, jadi clue
-// tidak pernah berurutan. Mengembalikan false bila tidak ada jawaban yang bisa
-// dibuka lagi (semua sudah terbuka atau sudah tersisa CLUE_HIDDEN huruf).
+// Buka SATU huruf acak pada satu jawaban yang dipilih acak. Jawaban yang sisa huruf
+// tersembunyinya <= CLUE_HIDDEN tidak ikut dipilih, jadi tidak ada jawaban yang
+// pernah terbaca penuh lewat clue. Mengembalikan false bila tidak ada jawaban yang
+// masih boleh di-clue.
 function addHint(session) {
   const { question, revealed } = session;
   if (!session.hints) session.hints = new Map();
-  const candidates = [];
+  const eligible = [];
   question.answers.forEach((a, i) => {
     if (revealed.has(i)) return;
     const letters = letterIndices(a.text);
     const shown = session.hints.get(i)?.size || 0;
-    // Butuh sisa > CLUE_HIDDEN huruf agar jawaban tidak terbuka penuh.
-    if (letters.length - shown <= CLUE_HIDDEN) return;
-    candidates.push(i);
+    if (letters.length - shown > CLUE_HIDDEN) eligible.push(i);
   });
-  if (!candidates.length) return false;
+  if (!eligible.length) return false;
 
-  const index = candidates[Math.floor(Math.random() * candidates.length)];
+  const index = eligible[Math.floor(Math.random() * eligible.length)];
   const letters = letterIndices(question.answers[index].text);
   const shown = new Set(session.hints.get(index) || []);
   const hidden = letters.filter(i => !shown.has(i));
-  // Acak posisi huruf yang disembunyikan (Fisher-Yates), lalu buka sisanya.
-  for (let i = hidden.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [hidden[i], hidden[j]] = [hidden[j], hidden[i]];
-  }
-  const keepHidden = new Set(hidden.slice(0, CLUE_HIDDEN));
-  for (const i of letters) if (!keepHidden.has(i)) shown.add(i);
+  shown.add(hidden[Math.floor(Math.random() * hidden.length)]);
   session.hints.set(index, shown);
   return true;
 }
@@ -133,12 +127,12 @@ function buildBoard(session) {
 function roundEmbed(session, { finished = false } = {}) {
   const { question, points, revealed, players } = session;
   const found = revealed.size;
-  const clued = session.hints?.size || 0;
+  const clued = [...(session.hints?.values() || [])].reduce((n, set) => n + set.size, 0);
   const embed = new EmbedBuilder()
     .setColor(finished ? 0x57F287 : 0xFEE75C)
     .setTitle(`📺 FAMILY 100 — Soal #${question.id + 1}`)
     .setDescription(`**${question.soal}**\n\n${buildBoard(session)}`)
-    .setFooter({ text: `${found}/${question.answers.length} jawaban terbuka` + (clued ? ` • Clue ${clued} jawaban` : '') + (finished ? ' • Ronde selesai' : ' • Ketik jawabanmu di channel ini') });
+    .setFooter({ text: `${found}/${question.answers.length} jawaban terbuka` + (clued ? ` • Clue ${clued} huruf` : '') + (finished ? ' • Ronde selesai' : ' • Ketik jawabanmu di channel ini') });
   const leaderboard = [...players.entries()]
     .map(([index, p]) => ({ name: p.name, points: p.points, index }))
     .sort((a, b) => b.points - a.points);
@@ -532,7 +526,7 @@ function helpText(prefix) {
     `**Family 100** — ${bank.count()} soal, total 100 poin per soal.`,
     `\`${prefix}f100\` — mulai ronde; jika sudah jalan, tampilkan ulang soalnya`,
     `\`${prefix}f100 soal\` — tampilkan ulang soal & jawaban terbuka (alias \`status\`)`,
-    `\`${prefix}f100 clue\` — buka 1 jawaban acak sampai sisa ${CLUE_HIDDEN} huruf (jatah ${CLUE_MAX}× per pemain)`,
+    `\`${prefix}f100 clue\` — buka 1 huruf acak; jawaban terkunci saat sisa ${CLUE_HIDDEN} huruf (jatah ${CLUE_MAX}× per pemain)`,
     `\`${prefix}f100 reveal\` — tampilkan semua jawaban ${REVEAL_MS / 1000} detik lalu hilang (khusus developer)`,
     `\`${prefix}f100 skip\` — lewati ke soal berikutnya (semua orang)`,
     `\`${prefix}f100 stop\` — hentikan ronde (moderator/admin/developer)`,
