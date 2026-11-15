@@ -17,7 +17,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFl
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
-const { parseIndonesianDate, counterOffNotice } = require('./lucyCounter');
+const { parseIndonesianDate, counterOffNotice, navRow } = require('./lucyCounter');
 const trigger = require('../utils/lucyTrigger');
 
 const WIB = 'Asia/Jakarta';
@@ -127,8 +127,8 @@ const CATEGORIES = {
   battle: { label: 'Lucy Battle/Hunt', groups: ['battle'] },
   hunt: { label: 'Lucy Battle/Hunt', groups: ['battle'] },
   lucy: { label: 'Lucy', groups: [] },
-  all: { label: 'Semua Aksi (Pray/Curse/Battle/Lucy)', groups: [] }
 };
+// Catatan: `all` BUKAN kategori. parseRange memakainya sebagai rentang all-time.
 // Alias kategori -> kategori kanonik.
 const CATEGORY_ALIASES = {
   pray: 'pray', doa: 'pray',
@@ -348,18 +348,6 @@ function parseRange(input, today = new Date()) {
   return key ? { type: 'date', date: key } : { type: 'invalid', value: text };
 }
 
-function mergeRankings(a, b) {
-  const map = new Map();
-  for (const row of [...a, ...b]) {
-    const cur = map.get(row.userId) || { userId: row.userId, name: row.name, count: 0 };
-    cur.count += row.count;
-    if (!cur.name && row.name) cur.name = row.name;
-    map.set(row.userId, cur);
-  }
-  return [...map.values()].filter(r => r.count > 0)
-    .sort((x, y) => y.count - x.count || String(x.name || '').localeCompare(String(y.name || '')));
-}
-
 function actionRanking(guildId, actions, range) {
   if (range.type === 'alltime') return store.topAllTime(guildId, actions);
   if (range.type === 'range') return store.topByRange(guildId, range.from, range.to, actions);
@@ -376,12 +364,6 @@ function actionRankingGlobal(actions, range) {
 
 function rankingFor(guildId, category, range, { global = false } = {}) {
   if (category === 'lucy') return global ? lucyRankingGlobal(range) : lucyRanking(guildId, range);
-  if (category === 'all') {
-    const actions = Object.values(store.GROUPS).flat();
-    const actionsRank = global ? actionRankingGlobal(actions, range) : actionRanking(guildId, actions, range);
-    const lucy = global ? lucyRankingGlobal(range) : lucyRanking(guildId, range);
-    return mergeRankings(actionsRank, lucy);
-  }
   const actions = actionsFor(category);
   return global ? actionRankingGlobal(actions, range) : actionRanking(guildId, actions, range);
 }
@@ -482,11 +464,12 @@ function helpText(prefix) {
     '**Leaderboard**',
     `\`${prefix} top [kategori] [rentang] [halaman] [global]\` — alias \`${prefix} t\``,
     `  tanpa kategori = leaderboard jumlah LUCY (penghitung yang sama dengan \`${prefix} lcount\`)`,
-    `  kategori: lucy, pray, curse, battle (mencakup hunt), all`,
-    `  contoh: \`${prefix} top\`, \`${prefix} top pray\`, \`${prefix} top battle 7d\`, \`${prefix} top lucy all global\``,
+    '  kategori: lucy, pray, curse, battle (mencakup hunt)',
+    '  rentang: 7d, all (semua waktu), atau tanggal seperti `5 nov`',
+    `  contoh: \`${prefix} top\`, \`${prefix} top pray\`, \`${prefix} top battle 7d\`, \`${prefix} top lucy all\``,
     `\`${prefix} global\` (alias \`${prefix} g\`) — leaderboard lintas server, default jumlah LUCY`,
-    `  contoh: \`${prefix} g\`, \`${prefix} g pray\`, \`${prefix} g battle 7d\`,`
-    `\`${prefix} lcount\` / \`${prefix} lcountall\` — leaderboard Lucy harian / all-time (dengan tombol)`
+    `  contoh: \`${prefix} g\`, \`${prefix} g pray\`, \`${prefix} g battle 7d\``,
+    `\`${prefix} lcount\` / \`${prefix} lcountall\` — leaderboard Lucy harian / all-time (dengan tombol)`,
     `\`${prefix} s count on|off\` — sakelar counter Lucy seluruh server (admin/developer)`
   ].join('\n');
 }
@@ -711,8 +694,8 @@ async function handleLeaderboardCommand(message, prefix, parts, { forceGlobal = 
   // Tanpa kategori, `top`/`t` menampilkan leaderboard jumlah LUCY — memakai
   // penghitung Lucy yang sudah ada (lucyCounterStorage), bukan penghitung baru.
   const first = (positional[0] || '').toLowerCase();
-  const named = first === 'all' || first === 'gabungan' || Boolean(CATEGORY_ALIASES[first]);
-  const category = first === 'all' || first === 'gabungan' ? 'all' : (CATEGORY_ALIASES[first] || 'lucy');
+  const named = Boolean(CATEGORY_ALIASES[first]);
+  const category = CATEGORY_ALIASES[first] || 'lucy';
 
   // Counter server OFF: board per server tidak ditampilkan. Board LINTAS server
   // tetap tampil, karena menggabungkan data server lain yang mungkin ON.
@@ -728,14 +711,78 @@ async function handleLeaderboardCommand(message, prefix, parts, { forceGlobal = 
 }
 
 async function badRange(message, prefix, value) {
-  await message.reply(`Rentang tidak dikenali: **${value}**. Contoh: \`${prefix} llb pray 7d\`, \`${prefix} llb lucy all\`, \`${prefix} llb curse 5 nov\`.`);
+  await message.reply(`Rentang tidak dikenali: **${value}**. Contoh: \`${prefix} top pray 7d\`, \`${prefix} top lucy all\`, \`${prefix} top curse 5 nov\`.`);
   return true;
+}
+
+// --- Navigasi leaderboard aksi ------------------------------------------
+// Semua leaderboard punya tombol ⏮️ ◀️ ▶️ ⏭️ seperti board Lucy. State yang
+// dibutuhkan untuk membangun ulang board diringkas jadi satu token, mis.
+// `lbtop:gabungan|pray|alltime|g|2` (prefix dinamis, jadi panjang aman < 100).
+const LB_NAV = 'lbtop';
+const LB_BUTTONS = [
+  { action: 'first', label: '⏮️', style: ButtonStyle.Secondary },
+  { action: 'prev', label: '◀️', style: ButtonStyle.Primary },
+  { action: 'next', label: '▶️', style: ButtonStyle.Primary },
+  { action: 'last', label: '⏭️', style: ButtonStyle.Secondary }
+];
+
+// Rentang ringkas: `today`, `alltime`, `7d`, atau `date:2026-11-05`.
+function rangeToken(range) {
+  if (range.type === 'alltime') return 'alltime';
+  if (range.type === 'date') return 'date:' + range.date;
+  if (range.type === 'range') return range.days + 'd';
+  return 'today';
+}
+function tokenToRange(token) {
+  if (token === 'alltime') return { type: 'alltime' };
+  if (token === 'today') return parseRange('');
+  const date = /^date:(\d{4}-\d{2}-\d{2})$/.exec(token);
+  if (date) return { type: 'date', date: date[1] };
+  const days = /^(\d+)d$/.exec(token);
+  if (days) return parseRange(days[1] + 'd');
+  return parseRange('');
+}
+function lbNavId(category, range, global) {
+  return [LB_NAV, category, rangeToken(range), global ? 'g' : 'l'].join('|');
+}
+function isLeaderboardNav(customId) {
+  return typeof customId === 'string' && customId.startsWith(LB_NAV + '|');
+}
+function lbNavRow(category, range, global, page) {
+  const id = lbNavId(category, range, global) + '|' + page;
+  return new ActionRowBuilder().addComponents(
+    LB_BUTTONS.map(b => new ButtonBuilder().setCustomId(id + ':' + b.action).setLabel(b.label).setStyle(b.style))
+  );
 }
 
 async function sendLeaderboard(message, category, range, pageArg, global = false) {
   const page = Number(pageArg) > 0 ? Math.floor(Number(pageArg)) : 1;
   const view = leaderboardView(message.guildId, category, range, page, { global });
-  await message.reply({ embeds: [view.embed], allowedMentions: { parse: [] } });
+  await message.reply({
+    embeds: [view.embed],
+    components: [lbNavRow(category, range, global, view.page)],
+    allowedMentions: { parse: [] }
+  });
+  return true;
+}
+
+// Dipanggil dari handler interaksi. Membaca ulang data setiap kali ditekan,
+// jadi jumlah yang tampil selalu sinkron. `i.update` menjaga pesan tetap satu.
+async function handleLeaderboardNav(i) {
+  if (!isLeaderboardNav(i.customId)) return false;
+  const [id, action] = [i.customId.slice(0, i.customId.lastIndexOf(':')), i.customId.slice(i.customId.lastIndexOf(':') + 1)];
+  const [, category, rangeTok, flag, pageTok] = id.split('|');
+  const range = tokenToRange(rangeTok);
+  const global = flag === 'g';
+  const page = Number(pageTok) > 0 ? Math.floor(Number(pageTok)) : 1;
+  const current = leaderboardView(i.guildId, category, range, page, { global });
+  const target = action === 'first' ? 1
+    : action === 'last' ? current.totalPages
+    : action === 'prev' ? Math.max(1, current.page - 1)
+    : Math.min(current.totalPages, current.page + 1);
+  const view = leaderboardView(i.guildId, category, range, target, { global });
+  await i.update({ embeds: [view.embed], components: [lbNavRow(category, range, global, view.page)] });
   return true;
 }
 
@@ -766,6 +813,7 @@ async function handleMessage(message) {
 
 module.exports = {
   handleMessage, handleCommand, handleComponent, isReminderNav, helpText,
+  handleLeaderboardNav, isLeaderboardNav,
   panelEmbed, panelComponents, leaderboardView, parseRange, rangeLabel,
   scheduleReminder, deliverReminder, scheduledCount, renderTemplate, replyTemplate,
   dayKey, shiftDay, humanDuration, KINDS, PING_MODES, CATEGORIES, DEFAULT_REPLIES,

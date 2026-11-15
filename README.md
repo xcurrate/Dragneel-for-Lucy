@@ -117,12 +117,17 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
 
 ### Leaderboard Aksi Lucy
 - d top [kategori] [rentang] [halaman] (alias d t) — tanpa kategori = jumlah LUCY
-- d top <pray|curse|battle|hunt|lucy|all> — kategori aksi; battle mencakup hunt
-  contoh: d top, d top pray, d top battle 7d, d top all
+- d top <pray|curse|battle|hunt|lucy> — kategori aksi; battle mencakup hunt
+  contoh: d top, d top pray, d top battle 7d, d top lucy all
 - d global (alias d g) — sama seperti `top` tapi lintas server; tanpa kategori = jumlah LUCY
   contoh: d g, d g pray, d g battle 7d
 - Tambahkan `global` untuk menggabungkan seluruh server (mis. `d top pray 7d global`)
 - Bentuk lama `d llb ...` tetap jalan
+- `all` adalah **rentang** (semua waktu), bukan kategori. `d top all` = board LUCY
+  sepanjang waktu. Kategori gabungan semua aksi sudah dihapus karena tidak dipakai.
+- Semua leaderboard punya tombol ⏮️ ◀️ ▶️ ⏭️ (awal, sebelumnya, berikutnya,
+  akhir). Tombol membaca ulang data setiap kali ditekan, halaman di-clamp di
+  ujung, dan kategori/rentang/lintas-server ikut terbawa saat berpindah halaman.
 - Rentang: kosong/harian (hari ini), 7d (7 hari terakhir), all (semua waktu), atau tanggal (5 nov)
 - battle dan hunt digabung jadi satu kategori; lucy memakai penghitung Lucy yang sudah ada
 - d ping (alias d p) — cek latency bot (roundtrip & WebSocket)

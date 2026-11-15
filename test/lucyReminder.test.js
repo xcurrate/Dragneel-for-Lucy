@@ -878,8 +878,7 @@ describe('`top` command', () => {
       ['pray', /Leaderboard Lucy Pray/],
       ['curse', /Leaderboard Lucy Curse/],
       ['battle', /Leaderboard Lucy Battle\/Hunt/],
-      ['hunt', /Leaderboard Lucy Battle\/Hunt/],
-      ['all', /Semua Aksi/]
+      ['hunt', /Leaderboard Lucy Battle\/Hunt/]
     ]) {
       const msg = makeMessage('d top ' + token);
       assert.equal(await svc.handleMessage(msg), true, token);
@@ -955,9 +954,9 @@ describe('`global` command', () => {
   it('accepts categories, ranges and the old global token', async () => {
     const svc = require('../src/services/lucyReminder');
     seedTwoServers();
-    const all = makeMessage('d g all');
+    const all = makeMessage('d g pray all');
     await svc.handleMessage(all);
-    assert.match(all.replies[0].embeds[0].data.title, /Semua Aksi/);
+    assert.match(all.replies[0].embeds[0].data.title, /All-Time/);
     assert.match(all.replies[0].embeds[0].data.footer.text, /Global/);
 
     const range = makeMessage('d g battle 7d');
@@ -969,6 +968,19 @@ describe('`global` command', () => {
     const legacy = makeMessage('d top pray global');
     await svc.handleMessage(legacy);
     assert.match(legacy.replies[0].embeds[0].data.footer.text, /Global/);
+  });
+
+  it('reads a bare `all` as the all-time RANGE, never as a category', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const lucyStore = require('../src/utils/lucyCounterStorage');
+    const day = svc.dayKey();
+    lucyStore.recordLucy({ guildId: 'guild1', userId: 'u1', name: 'Ani', day, cycleKey: day, targetActive: false, goal: 0 });
+
+    const msg = makeMessage('d top all');
+    assert.equal(await svc.handleMessage(msg), true);
+    // Tetap board LUCY (kategori default), hanya rentangnya all-time.
+    assert.match(msg.replies[0].embeds[0].data.title, /Leaderboard Lucy • All-Time/);
+    assert.doesNotMatch(msg.replies[0].embeds[0].data.title, /Semua Aksi/);
   });
 
   it('treats `semua` as the all-time range, never as the global flag', async () => {
@@ -1203,5 +1215,91 @@ describe('counter switch per server', () => {
     await svc.handleMessage(on);
     assert.ok(on.replies[0].embeds, 'embed kembali tampil');
     assert.match(on.replies[0].embeds[0].data.title, /Leaderboard Lucy Pray/);
+  });
+});
+
+describe('leaderboard navigation buttons', () => {
+  const seedPlayers = (n, guildId = 'guild1') => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    const day = svc.dayKey();
+    for (let i = 1; i <= n; i++) {
+      store.recordAction({ guildId, userId: 'u' + i, name: 'Pemain' + String(i).padStart(2, '0'), day, action: 'pray' });
+    }
+  };
+  const foot = p => p.embeds[0].data.footer.text;
+  const labels = p => p.components[0].components.map(b => b.data.label);
+  const idFor = (p, label) => p.components[0].components.find(b => b.data.label === label).data.custom_id;
+  const press = async (p, label) => {
+    const svc = require('../src/services/lucyReminder');
+    const updates = [];
+    const handled = await svc.handleLeaderboardNav({
+      customId: idFor(p, label), guildId: 'guild1',
+      client: { guilds: { cache: new Map() } },
+      update: async payload => { updates.push(payload); }
+    });
+    assert.equal(handled, true, label);
+    return updates[0];
+  };
+
+  it('attaches four buttons to `top` and `global`', async () => {
+    const svc = require('../src/services/lucyReminder');
+    for (const command of ['d top', 'd top pray', 'd g', 'd g pray']) {
+      const msg = makeMessage(command);
+      await svc.handleMessage(msg);
+      assert.deepEqual(labels(msg.replies[0]), ['⏮️', '◀️', '▶️', '⏭️'], command);
+      assert.match(idFor(msg.replies[0], '▶️'), /^lbtop\|/, command);
+      assert.ok(idFor(msg.replies[0], '▶️').length <= 100, command + ': custom_id muat');
+    }
+  });
+
+  it('moves between pages, clamps at both ends, and jumps first/last', async () => {
+    const svc = require('../src/services/lucyReminder');
+    seedPlayers(23);
+    const msg = makeMessage('d top pray');
+    await svc.handleMessage(msg);
+    assert.match(foot(msg.replies[0]), /Halaman 1\/3/);
+
+    let p = await press(msg.replies[0], '▶️');
+    assert.match(foot(p), /Halaman 2\/3/);
+    p = await press(p, '▶️');
+    assert.match(foot(p), /Halaman 3\/3/);
+    p = await press(p, '▶️');
+    assert.match(foot(p), /Halaman 3\/3/, 'tidak melewati halaman terakhir');
+    p = await press(p, '⏮️');
+    assert.match(foot(p), /Halaman 1\/3/);
+    p = await press(p, '◀️');
+    assert.match(foot(p), /Halaman 1\/3/, 'tidak melewati halaman pertama');
+    p = await press(p, '⏭️');
+    assert.match(foot(p), /Halaman 3\/3/);
+  });
+
+  it('keeps the range, category and global flag across navigation', async () => {
+    const svc = require('../src/services/lucyReminder');
+    seedPlayers(23);
+    const msg = makeMessage('d g pray all');
+    await svc.handleMessage(msg);
+    assert.match(foot(msg.replies[0]), /semua tanggal/);
+    assert.match(foot(msg.replies[0]), /Global/);
+    const p = await press(msg.replies[0], '▶️');
+    assert.match(foot(p), /Halaman 2\/3/);
+    assert.match(foot(p), /semua tanggal/, 'rentang all-time bertahan');
+    assert.match(foot(p), /Global/, 'tetap lintas server');
+    assert.match(p.embeds[0].data.title, /Lucy Pray/);
+  });
+
+  it('keeps a single-date range across navigation', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const msg = makeMessage('d top pray 5 nov');
+    await svc.handleMessage(msg);
+    assert.match(foot(msg.replies[0]), /5 nov 2026/);
+    const p = await press(msg.replies[0], '▶️');
+    assert.match(foot(p), /5 nov 2026/, 'tanggal bertahan');
+  });
+
+  it('ignores buttons that are not its own', async () => {
+    const svc = require('../src/services/lucyReminder');
+    assert.equal(svc.isLeaderboardNav('lcnav:daily:-:next'), false);
+    assert.equal(await svc.handleLeaderboardNav({ customId: 'lcnav:daily:-:next', guildId: 'guild1' }), false);
   });
 });

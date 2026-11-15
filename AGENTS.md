@@ -175,6 +175,12 @@
   PENGECUALIAN: board LINTAS SERVER tetap tampil walau server ini OFF, karena
   menggabungkan data server lain — `d g`/`d global` (cek `global` sebelum memblokir)
   dan `d lservers` + tombol navigasi type `servers`.
+- `all` adalah RENTANG all-time (parseRange), BUKAN kategori. Kategori gabungan
+  semua aksi sudah dihapus. Kategori hanya: lucy, pray, curse, battle, hunt.
+- Leaderboard `top`/`global` punya tombol navigasi (`lbtop|<kategori>|<rentang>|<g|l>|<hal>:<aksi>`),
+  ditangani `handleLeaderboardNav` dan didaftarkan di `index.js`. Rentang
+  diringkas jadi token (`today`/`alltime`/`7d`/`date:YYYY-MM-DD`) karena
+  custom_id Discord maksimal 100 karakter.
 - Perintah leaderboard: `top`/`t` (per server) dan `global`/`g` (lintas server), dengan
   alias lama `llb`/`llbboard`/`lboard`. `global`/`g` = `top` dengan flag global dipaksa,
   jadi tidak ada penghitung baru. `tglobal`/`tall` juga memaksa global. Token `semua`

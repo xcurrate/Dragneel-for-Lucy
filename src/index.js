@@ -97,6 +97,7 @@ client.on(Events.InteractionCreate, async i => {
   try {
     if (i.isChatInputCommand() && i.commandName === 'boss') { await command.execute(i, tracker); return; }
     if (i.isButton() && lucyCounter.isLucyNav(i.customId)) { await lucyCounter.handleNavigation(i); return; }
+    if (i.isButton() && lucyReminder.isLeaderboardNav(i.customId)) { await lucyReminder.handleLeaderboardNav(i); return; }
     if (i.isButton() && family100.isF100Nav(i.customId)) { await family100.handleNavigation(i); return; }
     if (i.isButton() && mathRace.isMathNav(i.customId)) { await mathRace.handleNavigation(i); return; }
     if (i.isButton() && lucyReminder.isReminderNav(i.customId)) { await lucyReminder.handleComponent(i); return; }
