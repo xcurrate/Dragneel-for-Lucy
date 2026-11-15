@@ -80,13 +80,15 @@
   `!f100 soal` (alias `status`, tampilkan ulang soal & jawaban terbuka), `!f100 clue` (**semua orang**),
   `!f100 skip` (**semua orang**), `!f100 stop` & `!f100 on|off` (**moderator/admin/developer**),
   `!f100 lb [all]`. Alias perintah: `kuis`.
-- **Clue** (`!f100 clue` / `petunjuk` / `hint`): tiap pemakaian membuka satu huruf depan lagi pada
-  semua slot yang masih tersembunyi (`clueMask`). Kuota **per pemain**: masing-masing pemain punya
-  jatah `CLUE_MAX` (3) sendiri per soal (`session.clueByUser`), tapi papan memakai level **tertinggi**
-  yang pernah diminta siapa pun (`session.clueLevel`), jadi petunjuk tidak bisa "mundur" walau pemain
-  lain baru memakai clue pertamanya. Kuota dan level direset setiap soal baru. Huruf di tengah tetap
-  `▓` dan selalu disisakan minimal satu huruf tersembunyi, jadi jawaban pendek tidak terbuka penuh.
-  Clue tidak membuka slot dan tidak menambah poin; tingkat clue tampil di footer (`Clue n/3`).
+- **Clue** (`!f100 clue` / `petunjuk` / `hint`): tiap pemakaian membuka **satu jawaban acak**
+  sampai tersisa `CLUE_HIDDEN` (2) huruf; posisi huruf yang dibuka juga **acak**, jadi clue tidak
+  berurutan (lihat `addHint`, `clueMask`, `letterIndices`). Kuota **per pemain** `CLUE_MAX` (2) per
+  soal (`session.clueByUser`). Jawaban yang tersisa <= 2 huruf, atau yang hurufnya < 3 sehingga tidak
+  bisa disisakan 2 huruf tertutup, dilewati; bila tidak ada kandidat sama sekali, jatah **tidak**
+  dipotong. Kuota dan hint (`session.hints`, per indeks jawaban) direset tiap soal baru. Jawaban
+  yang dibuka clue tetap tersembunyi 2 huruf sehingga **tidak pernah terbaca penuh**. Clue tidak
+  membuka slot dan tidak menambah poin; jumlah jawaban yang dibuka clue tampil di footer
+  (`Clue n jawaban`).
 - **Skill developer `reveal`** (`!f100 reveal`, alias `bocorkan`/`dev`): mengirim embed berisi
   **semua jawaban** soal aktif (menandai mana yang sudah terbuka beserta penemunya), lalu pesannya
   **dihapus otomatis setelah `REVEAL_MS` (2000 ms)**. Hanya pemilik bot / `DEVELOPER_IDS` / pemilik
