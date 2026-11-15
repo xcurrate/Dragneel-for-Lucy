@@ -714,8 +714,9 @@ async function handleLeaderboardCommand(message, prefix, parts, { forceGlobal = 
   const named = first === 'all' || first === 'gabungan' || Boolean(CATEGORY_ALIASES[first]);
   const category = first === 'all' || first === 'gabungan' ? 'all' : (CATEGORY_ALIASES[first] || 'lucy');
 
-  // Counter server OFF: jangan tampilkan board, cukup beri arahan ke admin.
-  if (!counterEnabled(message.guildId)) {
+  // Counter server OFF: board per server tidak ditampilkan. Board LINTAS server
+  // tetap tampil, karena menggabungkan data server lain yang mungkin ON.
+  if (!counterEnabled(message.guildId) && !global) {
     await message.reply(counterOffNotice(prefix));
     return true;
   }

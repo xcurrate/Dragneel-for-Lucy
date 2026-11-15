@@ -150,6 +150,10 @@ Server admins can enable counting for this server using `<prefix> s count`
 
 Saat ON kembali, penghitungan berjalan seperti biasa. Sakelar ini sama dengan
 "LUCY COUNTER SERVER ON/OFF" di dashboard. Default: **OFF**.
+
+Leaderboard **lintas server** (`d g`/`d global`, `d lservers`) tetap tampil
+walau server ini OFF — data server lain yang ON tetap bisa dilihat. Yang
+diblokir hanya board per server.
 - d lcount [halaman] — leaderboard Lucy harian.
 - d lcountall [halaman] — leaderboard Lucy all-time.
 - d ltarget [halaman] — leaderboard progres Target Lucy (alias: d ltargetlb, d lucytarget leaderboard).

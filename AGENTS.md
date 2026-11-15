@@ -170,8 +170,11 @@
   dashboard). `d s count on|off` (alias `count`) mengubahnya; admin server ATAU
   developer bot. Saat OFF: `handleAction` tidak mencatat & tidak menjadwalkan, mention
   Lucy tidak dihitung, dan SEMUA perintah leaderboard (`top`/`global`/`lcount`/
-  `lcountall`/`ltarget`/`lservers` + tombol navigasi) membalas `counterOffNotice()`
+  `lcountall`/`ltarget` + tombol navigasi per server) membalas `counterOffNotice()`
   ("No data found! ... `d s count`"). Pakai helper itu, jangan tulis pesan baru.
+  PENGECUALIAN: board LINTAS SERVER tetap tampil walau server ini OFF, karena
+  menggabungkan data server lain — `d g`/`d global` (cek `global` sebelum memblokir)
+  dan `d lservers` + tombol navigasi type `servers`.
 - Perintah leaderboard: `top`/`t` (per server) dan `global`/`g` (lintas server), dengan
   alias lama `llb`/`llbboard`/`lboard`. `global`/`g` = `top` dengan flag global dipaksa,
   jadi tidak ada penghitung baru. `tglobal`/`tall` juga memaksa global. Token `semua`

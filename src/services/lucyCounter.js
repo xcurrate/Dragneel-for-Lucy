@@ -288,7 +288,8 @@ async function handleNavigation(i, deps = {}) {
   const date = dateToken && dateToken !== '-' ? dateToken : null;
   const getSettings = deps.getSettings || getGuildSettings;
   const config = getSettings(i.guildId).lucyCounter;
-  if (!config.enabled) {
+  // Leaderboard lintas server (`servers`) tetap bisa dinavigasi walau server ini OFF.
+  if (!config.enabled && type !== 'servers') {
     const prefix = getSettings(i.guildId).prefix || DEFAULT_PREFIX;
     await i.update({ content: counterOffNotice(prefix), embeds: [], components: [] });
     return true;
@@ -355,8 +356,9 @@ async function handleCommand(message) {
     await message.reply({ embeds: [view.embed], components: [navRow('target', cycle)], allowedMentions: { parse: [] } });
     return true;
   }
+  // `lservers` menampilkan data LINTAS server, jadi tidak diblokir oleh sakelar
+  // server ini: server lain yang ON tetap boleh dilihat hasilnya.
   if (['lservers', 'lserver', 'lserverlb'].includes(command)) {
-    if (!config.enabled) { await message.reply(counterOffNotice(prefix)); return true; }
     const { date, rest, invalid } = extractDateArg(commandParts.slice(1));
     if (invalid) return badDate(invalid);
     const view = serverLeaderboardView(store.getAllData(), message.client, parsePage(rest[0]), date);

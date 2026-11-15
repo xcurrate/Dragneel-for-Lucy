@@ -1143,7 +1143,8 @@ describe('counter switch per server', () => {
   it('answers `top` and `global` with the enable notice while OFF', async () => {
     const svc = require('../src/services/lucyReminder');
     setCounter(false);
-    for (const command of ['d top', 'd t', 'd top pray', 'd g', 'd global']) {
+    // `d g`/`d global` sengaja tidak termasuk: board lintas server tetap tampil.
+    for (const command of ['d top', 'd t', 'd top pray']) {
       const msg = makeMessage(command);
       assert.equal(await svc.handleMessage(msg), true, command);
       assert.match(msg.replies[0], /No data found!/, command);
@@ -1162,6 +1163,32 @@ describe('counter switch per server', () => {
     assert.equal(store.topByDay('guild1', day, ['pray']).length, 0, 'guild1 OFF');
     assert.equal(store.topByDay('guild9', day, ['pray'])[0].count, 1, 'guild9 ON');
     for (const t of svc.timers.values()) clearTimeout(t);
+  });
+
+  it('still shows the cross-server board while this server is OFF', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    const day = svc.dayKey();
+    // Data ada di server LAIN; server ini OFF.
+    store.recordAction({ guildId: 'guild9', userId: 'u1', name: 'Ani', day, action: 'pray' });
+    store.recordAction({ guildId: 'guild9', userId: 'u1', name: 'Ani', day, action: 'pray' });
+    setCounter(false, 'guild1');
+    setCounter(true, 'guild9');
+
+    for (const command of ['d g', 'd global', 'd g pray']) {
+      const msg = makeMessage(command);
+      assert.equal(await svc.handleMessage(msg), true, command);
+      assert.ok(msg.replies[0].embeds, command + ' harus menampilkan board, bukan pesan OFF');
+      assert.match(msg.replies[0].embeds[0].data.footer.text, /Global/, command);
+    }
+    const pray = makeMessage('d g pray');
+    await svc.handleMessage(pray);
+    assert.match(pray.replies[0].embeds[0].data.description, /\*\*2\*\* — Ani/, 'data server lain ikut tampil');
+
+    // Board per server tetap diblokir.
+    const local = makeMessage('d top pray');
+    await svc.handleMessage(local);
+    assert.match(local.replies[0], /No data found!/);
   });
 
   it('shows the board again after the switch is turned back ON', async () => {

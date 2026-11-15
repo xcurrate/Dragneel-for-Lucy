@@ -134,13 +134,57 @@ describe('lucy counter command routing', () => {
     const lucyCounter = require('../src/services/lucyCounter');
     updateGuildSettings('guild1', s => ({ ...s, prefix: '!', lucyCounter: { ...s.lucyCounter, enabled: false } }));
 
-    for (const content of ['!lcount', '!lcountall', '!ltarget', '!lservers']) {
+    // `lservers` sengaja tidak termasuk: board lintas server tetap tampil.
+    for (const content of ['!lcount', '!lcountall', '!ltarget']) {
       const message = makeMessage(content);
       assert.strictEqual(await lucyCounter.handleCommand(message), true, content);
       assert.match(message.replies[0], /No data found!/, content);
       assert.match(message.replies[0], /using `! s count`/, content);
       assert.strictEqual(message.payloads[0].embeds, undefined, content + ': tanpa embed');
     }
+  });
+
+  it('still shows the cross-server board (`lservers`) while this server is OFF', async () => {
+    const { updateGuildSettings } = require('../src/utils/storage');
+    const lucyCounter = require('../src/services/lucyCounter');
+    const store = require('../src/utils/lucyCounterStorage');
+    const day = lucyCounter.dayKey(new Date());
+    // Data hanya ada di server lain.
+    store.recordLucy({ guildId: 'serverB', userId: 'u1', name: 'Ani', day, cycleKey: day, targetActive: false, goal: 0 });
+    updateGuildSettings('guild1', s => ({ ...s, prefix: '!', lucyCounter: { ...s.lucyCounter, enabled: false } }));
+
+    const message = makeMessage('!lservers');
+    assert.strictEqual(await lucyCounter.handleCommand(message), true);
+    assert.ok(message.payloads[0].embeds, 'harus mengirim embed');
+    // Board lintas server menampilkan nama SERVER, bukan nama anggota.
+    assert.match(message.payloads[0].embeds[0].data.description, /serverB/);
+  });
+
+  it('still navigates the cross-server board while this server is OFF', async () => {
+    const { updateGuildSettings } = require('../src/utils/storage');
+    const lucyCounter = require('../src/services/lucyCounter');
+    const store = require('../src/utils/lucyCounterStorage');
+    const day = lucyCounter.dayKey(new Date());
+    for (let i = 1; i <= 12; i++) {
+      store.recordLucy({ guildId: 'g' + i, userId: 'u1', name: 'Ani', day, cycleKey: day, targetActive: false, goal: 0 });
+    }
+    updateGuildSettings('guild1', s => ({ ...s, prefix: '!', lucyCounter: { ...s.lucyCounter, enabled: false } }));
+
+    const updates = [];
+    const makeInteraction = type => ({
+      customId: 'lcnav:' + type + ':-:next',
+      guildId: 'guild1',
+      client: { guilds: { cache: new Map() } },
+      message: { embeds: [{ footer: { text: 'Harian • Halaman 1/1 • 12 peserta' } }] },
+      update: async payload => { updates.push(payload); }
+    });
+
+    await lucyCounter.handleNavigation(makeInteraction('servers'));
+    assert.ok(updates[0].embeds, 'tombol servers tetap menampilkan board');
+    assert.match(updates[0].embeds[0].data.footer.text, /Halaman 2\/2/);
+
+    await lucyCounter.handleNavigation(makeInteraction('daily'));
+    assert.match(updates[1].content, /No data found!/, 'tombol per server tetap diblokir');
   });
 
   it('stops counting Lucy messages while the counter is OFF, and resumes when ON', async () => {
