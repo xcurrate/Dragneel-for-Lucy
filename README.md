@@ -264,7 +264,7 @@ Inventory **hanya** menampilkan Reminder ID, bukan template atau claim ID.
 `<prefix> r` menampilkan **inventory** (judul memakai nama dan avatar kamu) beserta dua tombol:
 **Cara menggunakan** dan **Variabel**, dengan tombol **Kembali** di tiap halaman.
 
-Sembilan perintah pengguna:
+Delapan perintah pengguna:
 
 | Perintah | Fungsi |
 |----------|--------|
@@ -276,28 +276,30 @@ Sembilan perintah pengguna:
 | `<prefix> r media <URL>` | Ambil URL media dari Tenor atau Klipy. |
 | `<prefix> r enable <ID>` | Nyalakan satu reminder. |
 | `<prefix> r disable <ID>` | Matikan satu reminder (otomatis kembali ke default server). |
-| `<prefix> r delete <ID>` | **Hapus permanen** reminder (perlu konfirmasi). |
 
 Pendukung: `<prefix> r shareable <ID> on|off` (menandai boleh dipindahbukukan), `setcollectible`,
 `reset` (perlu konfirmasi), serta `active`/`info` sebagai alias tampilan. Semua balasan berupa embed.
 
-#### Menghapus reminder
+#### Menghapus reminder (khusus developer)
 
-`<prefix> r delete <ID>` (alias `hapus`/`buang`) menghapus reminder secara **permanen**. Karena
-tindakan ini tidak bisa dibatalkan, bot meminta konfirmasi lebih dulu:
+`<prefix> r delete <ID>` (alias `hapus`/`buang`) menghapus reminder secara **permanen**. Perintah ini
+**hanya untuk developer bot** — pemilik reminder dan admin server **tidak** bisa menghapus, supaya
+tidak ada yang kehilangan reminder karena salah hapus. Anggota yang ingin berhenti sementara pakai
+`<prefix> r disable <ID>` (reminder tetap tersimpan).
+
+Karena permanen, bot meminta konfirmasi lebih dulu:
 
 ```
 d r delete R-F5Y9C
-→ Hapus reminder `R-F5Y9C` (Pray/Curse Reminder)?
+→ Hapus reminder `R-F5Y9C` (Pray/Curse Reminder) milik @pemilik?
   Tindakan ini permanen dan tidak bisa dibatalkan.
   Konfirmasi dengan `d r confirm` atau batalkan dengan `d r cancel` (berlaku 60 detik).
 d r confirm
 → 🗑️ Reminder Dihapus
 ```
 
-Yang boleh menghapus: **pemilik reminder**, **admin server**, atau **developer bot**. Cari ID-nya
-lewat `<prefix> r inventory`. Butuh berhenti sementara saja? Pakai `<prefix> r disable <ID>` —
-reminder tetap tersimpan. Riwayat award yang sudah diklaim tetap tercatat meski reminder dihapus.
+Developer bisa menghapus reminder milik siapa pun (mis. data uji atau salah beri). Cari ID-nya lewat
+`<prefix> r inventory`. Riwayat award yang sudah diklaim tetap tercatat meski reminder dihapus.
 
 Legenda inventory: ✅ aktif • 🎉 shareable • 🔒 tidak shareable • ❌ nonaktif (tetap bisa diubah).
 Aktif dan shareable **independen** — reminder bisa aktif tanpa shareable. Reminder nonaktif tetap bisa

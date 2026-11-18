@@ -312,11 +312,12 @@ siap untuk integrasi giveaway nanti.
   chat jadi "Lucy terdeteksi".
 - **`d reminder`/`d r` = Custom Reminder; `d lreminder`/`d lrem` = engine pengingat lama.** Jangan
   menambahkan `reminder` ke daftar head `lucyReminder` — itu membuat balasan ganda.
-- **Hapus reminder**: `d r delete|hapus|buang <ID>` memakai alur konfirmasi yang sudah ada
-  (`askConfirm` + `runConfirmed`, `kind: 'delete'`). Hak: pemilik, admin server, atau developer
-  (`canManage`). Storage: `reminderStorage.deleteReminder({ reminderId, ownerId, actorId })` —
-  memakai `ownerId` sebagai pengaman dan menulis audit `reminder_delete`. Tidak ada foreign key ke
-  tabel `reminders`, jadi penghapusan aman; award yang sudah diklaim tetap tersimpan sebagai riwayat.
+- **Hapus reminder = KHUSUS DEVELOPER.** `d r delete|hapus|buang <ID>` memakai alur konfirmasi yang
+  sudah ada (`askConfirm` + `runConfirmed`, `kind: 'delete'`) dan memeriksa `isDeveloper` DUA KALI
+  (saat prompt dan saat eksekusi). Pemilik/admin sengaja TIDAK boleh. Storage:
+  `reminderStorage.deleteReminder({ reminderId, ownerId, actorId })` menulis audit `reminder_delete`;
+  `ownerId` adalah pengaman opsional, bukan syarat — dev boleh menghapus milik siapa pun. Tidak ada
+  foreign key ke tabel `reminders`, jadi penghapusan aman; award yang sudah diklaim tetap tersimpan.
 - **Satu pengirim saja**: pengiriman pengingat HANYA di `lucyReminder.deliverReminder`
   (menghormati pingMode + durasi kategori). Jangan menambah pengirim kedua di `index.js`.
 - **Test**: `test/reminders.test.js` (106 test).

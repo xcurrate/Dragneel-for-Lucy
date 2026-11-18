@@ -236,7 +236,6 @@ function userCommandList(prefix) {
     { cmd: prefix + ' r redeem <CLAIM_ID>', desc: 'Klaim reminder dari claim ID yang dikirim developer.' },
     { cmd: prefix + ' r view <ID>', desc: 'Lihat pratinjau pesan/embed reminder milikmu.' },
     { cmd: prefix + ' r send <@user> <ID>', desc: 'Pindahbukukan reminder shareable (perlu konfirmasi).' },
-    { cmd: prefix + ' r delete <ID>', desc: 'Hapus reminder milikmu (perlu konfirmasi).' },
     { cmd: prefix + ' r update <ID> <pesan>', desc: 'Ubah pesan biasa reminder.' },
     { cmd: prefix + ' r embed <ID> <JSON>', desc: 'Atur embed (JSON hasil salin dari discohook juga diterima).' },
     { cmd: prefix + ' r media <URL>', desc: 'Ambil URL media dari Tenor atau Klipy.' },
@@ -255,7 +254,7 @@ function helpText(prefix) {
     '**Developer**',
     '`' + prefix + ' r create <KATEGORI> <FORMAT>` — buat template; bot membalas kode template',
     '`' + prefix + ' r give <@user> <KODE>` — beri reminder ke pemenang',
-    '`' + prefix + ' r delete <ID>` — hapus reminder milikmu',
+    '`' + prefix + ' r delete <ID>` — hapus reminder siapa pun (perlu konfirmasi)',
     '`' + prefix + ' r templates` — daftar kode template',
     '`' + prefix + ' r awards` / `' + prefix + ' r revoke <CLAIM_ID>` — kelola claim',
     '',
@@ -432,15 +431,18 @@ async function handleMessage(message, deps = {}) {
       'Kirim `' + store.normalizeId(id) + '` ke <@' + targetId + '>? Ini **memindahkan kepemilikan** — kamu tidak bisa lagi mengubahnya.');
   }
 
-  // --- delete (hapus reminder milik sendiri) ---
+  // --- delete (khusus developer) ---
+  // Developer perlu bisa membersihkan reminder kapan saja — mis. data uji atau
+  // reminder yang salah diberikan. Sengaja TIDAK dibuka untuk pemilik/admin
+  // supaya tidak ada yang kehilangan reminder karena salah hapus.
   if (sub === 'delete' || sub === 'hapus' || sub === 'buang') {
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa menghapus reminder.'); return true; }
     const id = args[0];
     if (!store.isValidReminderId(id)) { await sendError(message, 'Format: `' + prefix + ' r delete <ID>`.\nLihat ID-nya dengan `' + prefix + ' r inventory`.'); return true; }
     const reminder = store.getReminder(id);
     if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!canManage(message, reminder)) { await sendError(message, 'Hanya pemilik, admin server, atau developer yang bisa menghapus reminder ini.'); return true; }
     return askConfirm(message, prefix, { kind: 'delete', reminderId: store.normalizeId(id) },
-      'Hapus reminder `' + store.normalizeId(id) + '` (' + cats.categoryLabel(reminder.category) + ')?\nTindakan ini **permanen** dan tidak bisa dibatalkan.');
+      'Hapus reminder `' + store.normalizeId(id) + '` (' + cats.categoryLabel(reminder.category) + ') milik <@' + reminder.ownerId + '>?\nTindakan ini **permanen** dan tidak bisa dibatalkan.');
   }
 
   // --- shareable (pendukung aturan transfer) ---
@@ -679,15 +681,15 @@ async function runConfirmed(message, prefix, action, deps) {
     return true;
   }
   if (action.kind === 'delete') {
+    if (!(deps.isDeveloper || isDeveloper)(message)) { await sendError(message, 'Hanya developer bot yang bisa menghapus reminder.'); return true; }
     const reminder = store.getReminder(action.reminderId);
     if (!reminder) { await sendError(message, 'Reminder itu sudah tidak ada.'); return true; }
-    if (!canManage(message, reminder)) { await sendError(message, 'Kamu tidak lagi berhak menghapus reminder itu.'); return true; }
     const removed = store.deleteReminder({ reminderId: action.reminderId, actorId: message.author.id });
     if (!removed) { await sendError(message, 'Penghapusan gagal — reminder mungkin sudah hilang.'); return true; }
     await sendEmbed(message, {
       title: '🗑️ Reminder Dihapus',
       color: COLOR.ok,
-      description: '`' + removed.reminderId + '` (' + cats.categoryLabel(removed.category) + ') sudah dihapus.\nKalau kamu masih butuh, minta claim baru ke developer.',
+      description: '`' + removed.reminderId + '` (' + cats.categoryLabel(removed.category) + ') milik <@' + removed.ownerId + '> sudah dihapus.',
       footer: 'Award yang sudah diklaim tetap tercatat sebagai riwayat.'
     });
     return true;

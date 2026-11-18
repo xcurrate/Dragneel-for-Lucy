@@ -1506,68 +1506,97 @@ describe('custom reminder — variabel waktu aman untuk embed', () => {
   });
 });
 
-describe('custom reminder — menghapus reminder', () => {
-  it('meminta konfirmasi dulu, lalu menghapus saat dikonfirmasi', async () => {
-    const owner = '111222333444555666';
-    const { reminderId } = await awardAndRedeem(owner);
+describe('custom reminder — menghapus reminder (khusus developer)', () => {
+  const OWNER = '111222333444555666';
+  const STRANGER = '999888777666555444';
+
+  it('developer meminta konfirmasi dulu, lalu menghapus saat dikonfirmasi', async () => {
+    const { reminderId } = await awardAndRedeem(OWNER);
     const store = require('../src/utils/reminderStorage');
     assert.ok(store.getReminder(reminderId), 'reminder ada sebelum dihapus');
 
-    const ask = makeMessage('d r delete ' + reminderId, { userId: owner });
+    const ask = makeMessage('d r delete ' + reminderId, { userId: 'dev1', dev: true });
     await svc().handleMessage(ask);
     assert.match(textOf(ask), /permanen/i, 'minta konfirmasi');
+    assert.match(textOf(ask), new RegExp(OWNER), 'menyebut pemiliknya');
     assert.ok(store.getReminder(reminderId), 'belum dihapus sebelum konfirmasi');
 
-    const confirm = makeMessage('d r confirm', { userId: owner });
+    const confirm = makeMessage('d r confirm', { userId: 'dev1', dev: true });
     await svc().handleMessage(confirm);
     assert.match(textOf(confirm), /Dihapus/i);
     assert.equal(store.getReminder(reminderId), null, 'reminder sudah hilang dari penyimpanan');
   });
 
   it('membatalkan lewat `d r cancel` tanpa menghapus', async () => {
-    const owner = '111222333444555666';
-    const { reminderId } = await awardAndRedeem(owner);
+    const { reminderId } = await awardAndRedeem(OWNER);
     const store = require('../src/utils/reminderStorage');
-    await svc().handleMessage(makeMessage('d r hapus ' + reminderId, { userId: owner }));
-    const cancel = makeMessage('d r cancel', { userId: owner });
+    await svc().handleMessage(makeMessage('d r hapus ' + reminderId, { userId: 'dev1', dev: true }));
+    const cancel = makeMessage('d r cancel', { userId: 'dev1', dev: true });
     await svc().handleMessage(cancel);
     assert.match(textOf(cancel), /dibatalkan/i);
     assert.ok(store.getReminder(reminderId), 'reminder tetap ada');
   });
 
-  it('menolak orang lain yang bukan pemilik/admin/developer', async () => {
-    const owner = '111222333444555666';
-    const { reminderId } = await awardAndRedeem(owner);
+  it('pemilik reminder sendiri TIDAK bisa menghapus', async () => {
+    const { reminderId } = await awardAndRedeem(OWNER);
     const store = require('../src/utils/reminderStorage');
-    const stranger = makeMessage('d r hapus ' + reminderId, { userId: '999888777666555444' });
+    const owner = makeMessage('d r hapus ' + reminderId, { userId: OWNER });
+    await svc().handleMessage(owner);
+    assert.match(textOf(owner), /Hanya developer/i);
+    assert.ok(store.getReminder(reminderId), 'reminder tidak terhapus oleh pemilik');
+  });
+
+  it('admin server pun tidak bisa menghapus', async () => {
+    const { reminderId } = await awardAndRedeem(OWNER);
+    const store = require('../src/utils/reminderStorage');
+    const admin = makeMessage('d r hapus ' + reminderId, { userId: STRANGER, admin: true });
+    await svc().handleMessage(admin);
+    assert.match(textOf(admin), /Hanya developer/i);
+    assert.ok(store.getReminder(reminderId), 'reminder tidak terhapus oleh admin');
+  });
+
+  it('menolak pengguna lain tanpa hak apa pun', async () => {
+    const { reminderId } = await awardAndRedeem(OWNER);
+    const store = require('../src/utils/reminderStorage');
+    const stranger = makeMessage('d r hapus ' + reminderId, { userId: STRANGER });
     await svc().handleMessage(stranger);
-    assert.match(textOf(stranger), /Hanya pemilik/i);
+    assert.match(textOf(stranger), /Hanya developer/i);
     assert.ok(store.getReminder(reminderId), 'reminder tidak terhapus');
   });
 
-  it('menerima alias `hapus`, `buang`, dan `delete`', async () => {
-    const owner = '111222333444555666';
+  it('developer bisa menghapus reminder milik orang lain lewat alias apa pun', async () => {
     const store = require('../src/utils/reminderStorage');
     for (const alias of ['delete', 'hapus', 'buang']) {
-      const { reminderId } = await awardAndRedeem(owner);
-      await svc().handleMessage(makeMessage('d r ' + alias + ' ' + reminderId, { userId: owner }));
-      await svc().handleMessage(makeMessage('d r confirm', { userId: owner }));
+      const { reminderId } = await awardAndRedeem(OWNER);
+      await svc().handleMessage(makeMessage('d r ' + alias + ' ' + reminderId, { userId: 'dev1', dev: true }));
+      await svc().handleMessage(makeMessage('d r confirm', { userId: 'dev1', dev: true }));
       assert.equal(store.getReminder(reminderId), null, 'alias ' + alias + ' menghapus reminder');
     }
   });
 
+  it('konfirmasi terikat pada pengguna yang meminta, jadi orang lain tidak bisa menghapus', async () => {
+    const { reminderId } = await awardAndRedeem(OWNER);
+    const store = require('../src/utils/reminderStorage');
+    // Prompt dibuat oleh developer...
+    await svc().handleMessage(makeMessage('d r hapus ' + reminderId, { userId: 'dev1', dev: true }));
+    // ...lalu orang lain mencoba mengonfirmasi di channel yang sama.
+    const confirm = makeMessage('d r confirm', { userId: STRANGER });
+    await svc().handleMessage(confirm);
+    assert.match(textOf(confirm), /Tidak ada tindakan/i);
+    assert.ok(store.getReminder(reminderId), 'reminder tetap ada');
+  });
+
   it('menolak format tanpa ID yang valid', async () => {
-    const message = makeMessage('d r hapus', { userId: '111222333444555666' });
+    const message = makeMessage('d r hapus', { userId: 'dev1', dev: true });
     await svc().handleMessage(message);
     assert.match(textOf(message), /Format/i);
   });
 
   it('mencatat audit penghapusan', async () => {
-    const owner = '111222333444555666';
-    const { reminderId } = await awardAndRedeem(owner);
+    const { reminderId } = await awardAndRedeem(OWNER);
     const store = require('../src/utils/reminderStorage');
-    await svc().handleMessage(makeMessage('d r delete ' + reminderId, { userId: owner }));
-    await svc().handleMessage(makeMessage('d r confirm', { userId: owner }));
+    await svc().handleMessage(makeMessage('d r delete ' + reminderId, { userId: 'dev1', dev: true }));
+    await svc().handleMessage(makeMessage('d r confirm', { userId: 'dev1', dev: true }));
     const audit = store.listAudit({ reminderId });
     assert.ok(audit.some(entry => entry.action === 'reminder_delete'), 'audit reminder_delete tercatat');
   });
