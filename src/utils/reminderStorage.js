@@ -466,6 +466,23 @@ function transferReminder({ reminderId, fromUserId, toUserId, actorId = null, no
   return getReminder(id);
 }
 
+// Hapus reminder milik user. Mengembalikan reminder yang dihapus (untuk pesan
+// konfirmasi) atau null bila tidak ada / bukan miliknya. Award yang sudah
+// diklaim tetap disimpan sebagai riwayat; hanya baris reminder-nya yang hilang.
+function deleteReminder({ reminderId, ownerId, actorId = null, now = Date.now() }) {
+  const id = normalizeId(reminderId);
+  const existing = getReminder(id);
+  if (!existing) return null;
+  if (ownerId && existing.ownerId !== ownerId) return null;
+  const result = getDb().prepare('DELETE FROM reminders WHERE reminder_id = ? AND owner_id = ?').run(id, existing.ownerId);
+  if (result.changes === 0) return null;
+  addAudit({
+    action: 'reminder_delete', reminderId: id, actorId: actorId || existing.ownerId,
+    fromUserId: existing.ownerId, templateId: existing.templateId, at: now
+  });
+  return existing;
+}
+
 function listAudit({ reminderId = null, claimId = null, limit = 50 } = {}) {
   const clauses = [];
   const params = [];
@@ -546,7 +563,7 @@ module.exports = {
   isValidTemplateId, isValidClaimId, isValidReminderId, isValidUserId, normalizeId,
   createTemplate, getTemplate, listTemplates, setTemplateAvailable,
   createAward, getAward, listAwards, revokeAward, markAwardRedeemed,
-  createReminder, getReminder, listRemindersByOwner, listAllActive, updateReminder, transferReminder,
+  createReminder, getReminder, listRemindersByOwner, listAllActive, updateReminder, transferReminder, deleteReminder,
   setGuildReminderSetting, getGuildReminderSetting, listGuildReminderSettings, deleteGuildReminderSetting,
   addAudit, listAudit, inTransaction
 };
