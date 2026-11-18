@@ -290,7 +290,18 @@ siap untuk integrasi giveaway nanti.
 - **Izin**: developer (`isDeveloper` lama) untuk template/give/awards/revoke. Admin/pemilik server
   untuk `s <aksi>`; developer **tidak** otomatis boleh. Pemilik saja untuk edit/enable/shareable.
 - **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.
-- **Test**: `test/reminders.test.js` (88 test).
+- **Panel interaktif**: `d r` = inventory (judul = nama user, thumbnail = avatar) + tombol
+  `rempanel:help`, `rempanel:vars`, `rempanel:back`. Router tombol ada di `src/index.js`.
+- **Semua balasan** dalam lingkup reminder dikirim sebagai embed (`sendEmbed`/`sendOk`/`sendError`/`sendWarn`).
+- **Perintah pengguna (8)**: `redeem`, `view`, `send`, `update`, `embed`, `media`, `enable`, `disable`.
+  Pendukung: `shareable`, `setcollectible`, `reset`, alias `active`/`info`.
+- **`r create <KATEGORI> <FORMAT>`** tanpa nama/isi; balas kode template. Kategori menerima nama aksi
+  (`battle` → `HUNT_BATTLE`) lewat `resolveCategoryInput`.
+- **Counter OFF tidak mematikan reminder**: `handleAction` tetap memasang pengingat (hanya berhenti
+  menghitung), dan `lucyCounter.handleMessage` tetap memanggil hook `onCounted` lewat `notifyCounted`.
+- **Embed menerima payload discohook/webhook**: `unwrapWebhookPayload` mengambil `embeds[0]`;
+  `resolveEmbedMedia` mengubah halaman Tenor/Klipy jadi URL media langsung.
+- **Test**: `test/reminders.test.js` (100 test).
 
 ## Prefix command (`<prefix> <perintah>`)
 - **Prefix bawaan = `d`** (inisial bot Dragneel), konstanta `DEFAULT_PREFIX` di

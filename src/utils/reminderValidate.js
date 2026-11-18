@@ -46,8 +46,60 @@ function validateColor(value) {
 
 // Validasi embed tunggal. Mengembalikan embed yang sudah dinormalisasi
 // (warna jadi integer, hanya key yang diizinkan yang diteruskan).
+// Kunci yang muncul pada payload webhook/discohook. Kalau SEMUA kunci input
+// adalah kunci ini, input dianggap payload webhook dan embed-nya diambil.
+const WEBHOOK_KEYS = [
+  'content', 'embeds', 'attachments', 'username', 'avatar_url', 'tts',
+  'allowed_mentions', 'components', 'flags', 'thread_name', 'poll', 'sticker_items'
+];
+
+// Terima hasil salin-tempel dari discohook.org (atau payload webhook Discord)
+// lalu ambil embed-nya. Hanya satu embed yang didukung.
+function unwrapWebhookPayload(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const keys = Object.keys(input);
+  if (!keys.length) return input;
+  if (!keys.every(k => WEBHOOK_KEYS.includes(k))) return input;
+
+  if (Array.isArray(input.embeds)) {
+    if (input.embeds.length > 1) {
+      return { __error: 'Payload berisi ' + input.embeds.length + ' embed; hanya satu embed yang didukung. Sisakan satu.' };
+    }
+    if (input.embeds.length === 1) {
+      if (!input.embeds[0] || typeof input.embeds[0] !== 'object' || Array.isArray(input.embeds[0])) {
+        return { __error: 'embeds[0] harus berupa objek embed.' };
+      }
+      return input.embeds[0];
+    }
+  }
+  // Payload tanpa embed tapi ada content -> pakai content sebagai description.
+  if (typeof input.content === 'string' && input.content.trim()) return { description: input.content };
+  return { __error: 'Payload tidak berisi embed. Sertakan objek embed, mis. {"title":"...","description":"..."}.' };
+}
+
+// Resolusi URL media pada field embed. Halaman penyedia (mis.
+// https://klipy.com/gifs/...) BUKAN URL media langsung, jadi diambil dulu URL
+// medianya. URL non-penyedia dibiarkan agar validator yang memutuskan.
+async function resolveEmbedMedia(embed, options = {}) {
+  if (!embed || typeof embed !== 'object') return embed;
+  const out = { ...embed };
+  for (const key of ['image', 'thumbnail']) {
+    const url = out[key]?.url;
+    if (typeof url !== 'string') continue;
+    let host = '';
+    try { host = new URL(url.trim()).hostname.toLowerCase(); } catch { continue; }
+    const isProvider = TENOR_HOSTS.includes(host) || KLIPY_HOSTS.includes(host);
+    if (!isProvider) continue;
+    const result = await resolveAnyMedia(url, options);
+    if (result.ok) out[key] = { url: result.value };
+  }
+  return out;
+}
+
 function validateEmbed(input) {
   if (input == null) return fail(['Embed kosong.']);
+  input = unwrapWebhookPayload(input);
+  if (input && typeof input === 'object' && !Array.isArray(input) && input.__error) return fail([input.__error]);
   if (typeof input !== 'object' || Array.isArray(input)) return fail(['Embed harus berupa objek JSON.']);
   const errors = [];
   const out = {};
@@ -262,5 +314,6 @@ module.exports = {
   TENOR_HOSTS, KLIPY_HOSTS,
   isSafeUrl, validateUrl, validateEmbed, parseAndValidateEmbed,
   collectibleRegistry, validateCollectible,
-  resolveMedia, resolveTenor, resolveKlipy, resolveAnyMedia, sanitizeContent
+  resolveMedia, resolveTenor, resolveKlipy, resolveAnyMedia, resolveEmbedMedia,
+  unwrapWebhookPayload, WEBHOOK_KEYS, sanitizeContent
 };

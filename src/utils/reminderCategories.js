@@ -77,6 +77,11 @@ function normalizeAction(value) {
 function categoryForAction(action) {
   return ACTION_TO_CATEGORY[String(action || '').toLowerCase()] || null;
 }
+// Terima masukan kategori dari pengguna: nama kategori resmi, atau nama aksi
+// yang lazim ditulis developer (`battle` -> HUNT_BATTLE, `pray` -> PRAY_CURSE).
+function resolveCategoryInput(value) {
+  return normalizeCategory(value) || categoryForAction(value);
+}
 // Semua kombinasi kategori x format (enam buah).
 function combinations() {
   const out = [];
@@ -105,5 +110,5 @@ module.exports = {
   CATEGORIES, CATEGORY_KEYS, FORMATS, FORMAT_KEYS,
   ACTIONS, ACTION_LABELS, ACTION_TO_CATEGORY,
   normalizeCategory, normalizeFormat, normalizeAction,
-  categoryForAction, combinations, categoryLabel, formatLabel, displayNameFor
+  categoryForAction, resolveCategoryInput, combinations, categoryLabel, formatLabel, displayNameFor
 };

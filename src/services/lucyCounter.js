@@ -410,6 +410,17 @@ async function handleCommand(message) {
   }
   return message.reply('Perintah Target: ' + prefix + ' lucytarget on|off|target on|off|set <jumlah>|message <pesan>|status|leaderboard [tanggal] [halaman]\nLeaderboard: ' + prefix + ' lcount [tanggal] [halaman] (harian), ' + prefix + ' lcountall [halaman] (all-time), ' + prefix + ' ltarget [tanggal] [halaman] (alias: ' + prefix + ' ltargetlb / ' + prefix + ' lucytarget leaderboard), ' + prefix + ' lservers [tanggal] [halaman] (alias: ' + prefix + ' lserver).\nTanggal: `5 nov`, `5 november 2026`, `5/11/2026`, atau `2026-11-05` — contoh: `' + prefix + ' lcount 5 nov`.');
 }
+// Beri tahu modul reminder bahwa pesan Lucy terlihat, supaya pengingat "Say
+// Lucy" bisa dipasang. Dipisah supaya tetap jalan walau counter dimatikan.
+function notifyCounted(message, displayName, onCounted) {
+  try {
+    if (typeof onCounted === 'function') onCounted(message, displayName);
+    else require('./lucyReminder').onLucyCounted(message, displayName);
+  } catch (e) {
+    console.error('[LucyCounter] onCounted:', e.message);
+  }
+}
+
 async function handleMessage(message, { onCounted } = {}) {
   if (!message.guildId || message.author?.bot || !message.content) return;
   if (await handleCommand(message)) return;
@@ -421,7 +432,13 @@ async function handleMessage(message, { onCounted } = {}) {
   const config = settings.lucyCounter;
   const blacklistedChannelIds = config.blacklistedChannelIds || [];
   const whitelistedChannelIds = config.whitelistedChannelIds || [];
-  if (!config.enabled || blacklistedChannelIds.includes(message.channelId)) return;
+  if (blacklistedChannelIds.includes(message.channelId)) return;
+  if (!config.enabled) {
+    // Counter off: tidak menghitung, tapi reminder "Say Lucy" tetap punya aturan
+    // sendiri (`lreminder`) sehingga hook tetap dipanggil.
+    notifyCounted(message, message.member?.displayName || message.author.username, onCounted);
+    return;
+  }
   if (whitelistedChannelIds.length > 0 && !whitelistedChannelIds.includes(message.channelId)) return;
   // Pesan aksi (mis. `lucy battle`, `lb`, `l hunt`) adalah perintah, bukan
   // mention Lucy biasa. Tanpa ini satu pesan bisa memicu dua pengingat
@@ -450,12 +467,7 @@ async function handleMessage(message, { onCounted } = {}) {
   // kategori "Lucy" (10 detik) bisa dipasang. Muat lucyReminder secara lazy
   // sebagai cadangan bila pemanggil tidak menyediakan hook (menghindari
   // require melingkar di tingkat modul).
-  try {
-    if (typeof onCounted === 'function') onCounted(message, displayName);
-    else require('./lucyReminder').onLucyCounted(message, displayName);
-  } catch (e) {
-    console.error('[LucyCounter] onCounted:', e.message);
-  }
+  notifyCounted(message, displayName, onCounted);
 
   // Target progress is tracked independently for each person and resets at the start of each cycle.
   // It only counts accepted Lucy messages within the configured daily start/stop window.

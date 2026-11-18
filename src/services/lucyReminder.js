@@ -615,16 +615,20 @@ async function handleAction(message, action) {
   const kind = TRIGGER_KIND_TO_REMINDER[action] || action;
   const info = KINDS[kind];
   if (!info) return false;
-  // Counter server OFF: aksi tidak dihitung, tidak dicatat, tanpa balasan.
-  if (!counterEnabled(message.guildId)) return true;
+  // Counter OFF TIDAK mematikan reminder: pengingat punya aturan sendiri lewat
+  // `lreminder`. Saat counter off, aksi tidak dihitung/dicatat dan tidak ada
+  // balasan, tapi pengingat tetap dipasang.
+  const counting = counterEnabled(message.guildId);
   const userId = message.author.id;
   const name = message.member?.displayName || message.author?.username || 'Pemain';
   const now = Date.now();
 
   // Cooldown per JENIS reminder (battle/hunt berbagi satu jendela), sementara
   // penghitungan tetap per AKSI supaya leaderboard battle dan hunt terpisah.
-  store.recordAction({ guildId: message.guildId, userId, name, day: dayKey(new Date(now)), action });
-  store.setCooldown(message.guildId, userId, kind, now + info.waitMs);
+  if (counting) {
+    store.recordAction({ guildId: message.guildId, userId, name, day: dayKey(new Date(now)), action });
+    store.setCooldown(message.guildId, userId, kind, now + info.waitMs);
+  }
 
   // Aksi user TIDAK dibalas. Balasan sebelumnya memakai teks yang sama persis
   // dengan teks pengingat, sehingga tiap aksi terlihat menghasilkan dua pesan

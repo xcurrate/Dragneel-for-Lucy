@@ -1136,8 +1136,11 @@ describe('counter switch per server', () => {
     assert.equal(await svc.handleMessage(msg), true, 'tetap dianggap ditangani');
     const day = svc.dayKey();
     assert.equal(store.topByDay('guild1', day, ['pray']).length, 0, 'tidak ada yang tercatat');
-    assert.equal(svc.timers.size, 0, 'tidak ada pengingat dipasang');
+    // Reminder punya aturan sendiri (`lreminder`): pengingat TETAP dipasang
+    // walau counter dimatikan, hanya penghitungannya yang berhenti.
+    assert.equal(svc.timers.size, 1, 'pengingat tetap dipasang saat counter OFF');
     assert.equal(msg.publicSent.length, 0, 'tidak ada balasan');
+    svc.timers.clear();
   });
 
   it('counts again once the counter is turned back ON', async () => {

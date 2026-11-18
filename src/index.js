@@ -110,6 +110,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && family100.isF100Nav(i.customId)) { await family100.handleNavigation(i); return; }
     if (i.isButton() && mathRace.isMathNav(i.customId)) { await mathRace.handleNavigation(i); return; }
     if (i.isButton() && lucyReminder.isReminderNav(i.customId)) { await lucyReminder.handleComponent(i); return; }
+    if (i.isButton() && reminders.isPanelNav(i.customId)) { await reminders.handleComponent(i); return; }
     if (i.isButton() || i.isStringSelectMenu()) { await command.handleComponent(i, tracker); return; }
   } catch (e) {
     console.error(e);

@@ -18,7 +18,7 @@ const variables = require('../utils/reminderVariables');
 const cats = require('../utils/reminderCategories');
 const resolver = require('../utils/reminderResolve');
 const { isDeveloper } = require('../commands/prefix');
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 // Konfirmasi tindakan destruktif/transfer. Disimpan di memori karena hanya
 // berlaku singkat; yang penting (kepemilikan) tetap di SQLite.
@@ -29,6 +29,20 @@ const CANCEL_COMMANDS = new Set(['cancel', 'batal', 'tidak', 'no']);
 const DELIVERY_COOLDOWN_MS = 60000;
 const pendingConfirms = new Map();
 const lastDelivery = new Map();
+
+// Panel interaktif `d r`: tombol untuk bantuan dan daftar variabel.
+const PANEL_PREFIX = 'rempanel';
+const PANEL_HELP = PANEL_PREFIX + ':help';
+const PANEL_VARS = PANEL_PREFIX + ':vars';
+const PANEL_BACK = PANEL_PREFIX + ':back';
+
+// Palet warna dan ikon agar semua balasan seragam dan mudah dipindai.
+const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E };
+const ICON = {
+  ok: '✅', error: '❌', warn: '⚠️', info: 'ℹ️',
+  active: '🟢', inactive: '⚪', share: '🎉', lock: '🔒',
+  reminder: '📦', category: '🏷️', format: '🎨', media: '🎞️', variable: '🧩', help: '📋'
+};
 
 function confirmKey(message) { return message.guildId + ':' + message.channelId + ':' + message.author.id; }
 
@@ -59,8 +73,31 @@ function canManage(message, reminder) {
 async function send(message, payload) {
   return message.reply({ ...payload, allowedMentions: { repliedUser: false, parse: [] } });
 }
-async function sendText(message, content) {
-  return send(message, { content });
+
+// Semua balasan dalam lingkup reminder memakai embed.
+async function sendEmbed(message, { title = null, description = null, color = COLOR.info, footer = null, fields = null, components = null } = {}) {
+  const embed = new EmbedBuilder().setColor(color);
+  if (title) embed.setTitle(title);
+  if (description) embed.setDescription(description);
+  if (fields) embed.addFields(fields);
+  if (footer) embed.setFooter({ text: footer });
+  const payload = { embeds: [embed] };
+  if (components) payload.components = components;
+  return send(message, payload);
+}
+function sendOk(message, description, title = ICON.ok + ' Berhasil') {
+  return sendEmbed(message, { title, description, color: COLOR.ok });
+}
+function sendError(message, description, title = ICON.error + ' Gagal') {
+  return sendEmbed(message, { title, description, color: COLOR.error });
+}
+function sendWarn(message, description, title = ICON.warn + ' Perhatian') {
+  return sendEmbed(message, { title, description, color: COLOR.warn });
+}
+// Pembungkus ringkas: tetap dikirim sebagai embed supaya seluruh lingkup
+// reminder konsisten.
+function sendText(message, content) {
+  return sendEmbed(message, { title: ICON.reminder + ' Custom Reminder', description: String(content ?? ''), color: COLOR.info });
 }
 
 function parseUserArg(arg) {
@@ -100,19 +137,49 @@ function reminderEmbed(reminder, context) {
   return resolver.buildEmbed({ color: 0x5865F2, ...config }, rendered);
 }
 
-// Baris ringkas untuk inventory: ID, nama, kategori, format, status.
+// Baris ringkas untuk inventory: status, ID, nama kategori+format, shareable.
 function inventoryLine(reminder) {
-  const active = reminder.active ? '✅' : '❌';
-  const share = reminder.shareable ? '🎉' : '🔒';
-  return `${active} \`${reminder.reminderId}\` — ${cats.displayNameFor(reminder.category, reminder.format)} ${share}`;
+  const active = reminder.active ? ICON.active : ICON.inactive;
+  const share = reminder.shareable ? ICON.share : ICON.lock;
+  const collectible = reminder.collectible ? ' • 🏅 ' + reminder.collectible : '';
+  return active + ' `' + reminder.reminderId + '` — ' + cats.displayNameFor(reminder.category, reminder.format) + ' ' + share + collectible;
 }
 
 const INVENTORY_LEGEND = [
-  '✅ Aktif: pengingat dinyalakan.',
-  '🎉 Shareable: boleh dipindahbukukan ke user lain.',
-  '🔒 Tidak shareable: hanya bisa dipakai sendiri.',
-  '❌ Tidak aktif, tapi tetap bisa diubah.'
+  ICON.active + ' **Aktif** — pengingat dinyalakan.',
+  ICON.share + ' **Shareable** — boleh dipindahbukukan ke user lain.',
+  ICON.lock + ' **Tidak shareable** — hanya bisa dipakai sendiri.',
+  ICON.inactive + ' **Tidak aktif** — tetap bisa diubah.'
 ].join('\n');
+
+// Embed inventory. Judul memakai nama pengguna dan avatar-nya sebagai ikon.
+function inventoryEmbed(message, user, list) {
+  const embed = new EmbedBuilder().setColor(COLOR.panel).setTitle('Custom Reminders — ' + user.displayName);
+  const icon = user.avatarUrl;
+  if (icon) embed.setThumbnail(icon);
+  if (list.length) {
+    embed.setDescription(list.map(inventoryLine).join('\n'));
+    embed.addFields({ name: 'Legenda', value: INVENTORY_LEGEND });
+    embed.setFooter({ text: list.length + ' reminder • pakai tombol di bawah untuk bantuan & variabel' });
+  } else {
+    embed.setDescription('Kamu belum punya reminder.\nKlaim award dari developer dengan `' + prefixOf(message) + ' r redeem <CLAIM_ID>`.');
+  }
+  return embed;
+}
+
+// Baris tombol panel: "Cara menggunakan" dan "Variabel".
+function panelRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(PANEL_HELP).setLabel('Cara menggunakan').setEmoji(ICON.help).setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(PANEL_VARS).setLabel('Variabel').setEmoji(ICON.variable).setStyle(ButtonStyle.Secondary)
+  );
+}
+// Baris tombol kembali dari halaman bantuan/variabel.
+function panelBackRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(PANEL_BACK).setLabel('Kembali').setEmoji('↩️').setStyle(ButtonStyle.Secondary)
+  );
+}
 
 function collectibleSuffix(reminder) {
   return reminder.collectible ? ' • 🏅 ' + reminder.collectible : '';
@@ -221,53 +288,57 @@ async function askConfirm(message, prefix, action, prompt) {
 }
 
 // ----------------------------------------------------------------- commands --
-function helpText(prefix) {
+// Delapan perintah pengguna untuk kategori reminder, plus perintah developer.
+function userCommandList(prefix) {
   return [
-    '**Custom Reminder** — reminder pribadi dengan variabel dinamis.',
+    { cmd: prefix + ' r redeem <CLAIM_ID>', desc: 'Klaim reminder dari claim ID yang dikirim developer.' },
+    { cmd: prefix + ' r view <ID>', desc: 'Lihat pratinjau pesan/embed reminder milikmu.' },
+    { cmd: prefix + ' r send <@user> <ID>', desc: 'Pindahbukukan reminder shareable (perlu konfirmasi).' },
+    { cmd: prefix + ' r update <ID> <pesan>', desc: 'Ubah pesan biasa reminder.' },
+    { cmd: prefix + ' r embed <ID> <JSON>', desc: 'Atur embed (JSON hasil salin dari discohook juga diterima).' },
+    { cmd: prefix + ' r media <URL>', desc: 'Ambil URL media dari Tenor atau Klipy.' },
+    { cmd: prefix + ' r enable <ID>', desc: 'Nyalakan satu reminder.' },
+    { cmd: prefix + ' r disable <ID>', desc: 'Matikan satu reminder (otomatis kembali ke default server).' }
+  ];
+}
+
+// Teks bantuan (dipakai tombol "Cara menggunakan").
+function helpText(prefix) {
+  const rows = userCommandList(prefix).map(c => '`' + c.cmd + '`\n┗ ' + c.desc).join('\n');
+  return [
+    '**Perintah reminder**',
+    rows,
     '',
-    '**Punya sendiri**',
-    '`' + prefix + ' r inventory` — daftar reminder milikmu',
-    '`' + prefix + ' r redeem <CLAIM_ID>` — klaim award dari developer (contoh: `' + prefix + ' r redeem C-ABC123`)',
-    '`' + prefix + ' r view <ID>` — pratinjau reminder',
-    '`' + prefix + ' r info <ID>` — detail reminder (pemilik, status, collectible, sumber)',
-    '`' + prefix + ' r active` — daftar reminder aktifmu',
+    '**Developer**',
+    '`' + prefix + ' r create <KATEGORI> <FORMAT>` — buat template; bot membalas kode template',
+    '`' + prefix + ' r give <@user> <KODE>` — beri reminder ke pemenang',
+    '`' + prefix + ' r templates` — daftar kode template',
+    '`' + prefix + ' r awards` / `' + prefix + ' r revoke <CLAIM_ID>` — kelola claim',
     '',
-    '**Ubah milikmu**',
-    '`' + prefix + ' r update <ID> <pesan>` — ubah pesan',
-    '`' + prefix + ' r embed <ID> <JSON>` — atur embed (contoh: `{"title":"Halo {USER}","color":"#5865F2"}`)',
-    '`' + prefix + ' r setcollectible <ID> <tipe>` — atur tipe collectible',
-    '`' + prefix + ' r reset <ID>` — kembalikan ke bawaan template (perlu konfirmasi)',
-    '`' + prefix + ' r enable <ID>` / `' + prefix + ' r disable <ID>` — aktifkan/matikan',
-    '`' + prefix + ' r shareable <ID> on|off` — tandai boleh dipindahbukukan',
-    '`' + prefix + ' r send <@user> <ID>` — hadiahkan reminder shareable ke orang lain (perlu konfirmasi)',
+    '**Server (admin/pemilik)**',
+    '`' + prefix + ' s <aksi> set text <teks>` / `' + prefix + ' s <aksi> reset`',
+    'Aksi: ' + cats.ACTIONS.join(', ') + '.',
     '',
-    '**Utilitas**',
-    '`' + prefix + ' r media <URL>` — ubah URL Tenor/Klipy jadi URL media langsung',
-    '`' + prefix + ' r tenor <URL>` / `' + prefix + ' r klipy <URL>` — khusus satu penyedia',
-    '`' + prefix + ' r variables` — daftar variabel',
-    '`' + prefix + ' r help` — bantuan ini',
-    '',
-    '**Developer saja**',
-    '`' + prefix + ' r create <KATEGORI> <FORMAT> <nama> | <pesan> [| <embed JSON>]` — buat template',
-    '  kategori: ' + cats.CATEGORY_KEYS.join(', '),
-    '  format: ' + cats.FORMAT_KEYS.join(', ') + ' (kombinasi: 3 kategori × 2 format)',
-    '`' + prefix + ' r templates` — daftar template',
-    '`' + prefix + ' r give <@user> <TEMPLATE_ID>` — beri reminder ke user',
-    '`' + prefix + ' r awards` — daftar award & status klaim',
-    '`' + prefix + ' r revoke <CLAIM_ID>` — cabut award yang belum diklaim (perlu konfirmasi)',
-    '',
-    '**Pengaturan server (admin/pemilik server)**',
-    '`' + prefix + ' s <aksi> set text <teks>` — default pengingat server (aksi: ' + cats.ACTIONS.join(', ') + ')',
-    '`' + prefix + ' s <aksi> reset` — kembalikan ke bawaan Dragneel',
-    'Pengingat memakai urutan: Custom Reminder aktif → default server → bawaan bot.'
+    'Urutan pemakaian: Custom Reminder aktif → default server → bawaan bot.'
   ].join('\n');
 }
 
+function usageEmbed(prefix) {
+  return new EmbedBuilder()
+    .setColor(COLOR.panel)
+    .setTitle(ICON.help + ' Cara Menggunakan Custom Reminder')
+    .setDescription(helpText(prefix));
+}
+
 function variablesText() {
-  const rows = variables.variableReference().map(v => '`' + v.name + '` — ' + v.description);
-  return ['**Variabel** (bisa dipakai di pesan dan embed)', ...rows,
-    '',
-    'Contoh timestamp relatif: `Halo {USER}, reset <t:{DAILY_TOMORROW}:R>`'].join('\n');
+  return variables.variableReference().map(v => '`' + v.name + '` — ' + v.description).join('\n');
+}
+
+function variablesEmbed() {
+  return new EmbedBuilder()
+    .setColor(COLOR.panel)
+    .setTitle(ICON.variable + ' Variabel yang Tersedia')
+    .setDescription(variablesText() + '\n\nContoh timestamp relatif:\n`Halo {USER}, reset <t:{DAILY_TOMORROW}:R>`');
 }
 
 // Handler utama. Mengembalikan true bila pesan ini adalah perintah reminder.
@@ -279,157 +350,124 @@ async function handleMessage(message, deps = {}) {
   const parts = matched.trim().split(/\s+/);
   const head = (parts[0] || '').toLowerCase();
   if (!['reminder', 'r'].includes(head)) return false;
-  const sub = (parts[1] || 'help').toLowerCase();
+  const sub = (parts[1] || '').toLowerCase();
   const args = parts.slice(2);
   const dev = (deps.isDeveloper || isDeveloper)(message);
-  const client = message.client;
 
   // --- konfirmasi / batal ---
   if (CONFIRM_COMMANDS.has(sub) || CANCEL_COMMANDS.has(sub)) {
     if (CANCEL_COMMANDS.has(sub)) {
       const had = clearConfirm(message);
-      await sendText(message, had ? '❌ Dibatalkan.' : 'Tidak ada tindakan yang menunggu konfirmasi.');
+      await sendWarn(message, had ? 'Tindakan dibatalkan.' : 'Tidak ada tindakan yang menunggu konfirmasi.', '↩️ Dibatalkan');
       return true;
     }
     const action = takeConfirm(message);
-    if (!action) { await sendText(message, 'Tidak ada tindakan yang menunggu konfirmasi (atau sudah kedaluwarsa).'); return true; }
+    if (!action) { await sendWarn(message, 'Tidak ada tindakan yang menunggu konfirmasi, atau sudah kedaluwarsa.'); return true; }
     return runConfirmed(message, prefix, action, deps);
   }
 
-  if (sub === 'help' || sub === 'bantuan') { await sendText(message, helpText(prefix)); return true; }
-  if (sub === 'variables' || sub === 'variabel') { await sendText(message, variablesText()); return true; }
-
-  // --- inventory / active ---
-  if (sub === 'inventory' || sub === 'inv' || sub === 'daftar') {
-    const list = store.listRemindersByOwner(message.author.id);
-    if (!list.length) {
-      await send(message, {
-        embeds: [new EmbedBuilder().setColor(0x5865F2)
-          .setTitle('Dragneel\'s Custom Reminders')
-          .setDescription('Kamu belum punya reminder.\nKlaim award dari developer dengan `' + prefix + ' r redeem <CLAIM_ID>`.')]
-      });
-      return true;
-    }
-    await send(message, {
-      embeds: [new EmbedBuilder().setColor(0x5865F2)
-        .setTitle('Dragneel\'s Custom Reminders')
-        .setDescription(list.map(inventoryLine).join('\n'))
-        .setFooter({ text: list.length + ' reminder • Legend: ✅ aktif • 🎉 shareable • ❌ nonaktif (masih bisa diubah)' })]
-    });
-    return true;
-  }
-
-  if (sub === 'active' || sub === 'aktif') {
-    const list = store.listRemindersByOwner(message.author.id, { activeOnly: true });
-    if (!list.length) { await sendText(message, 'Tidak ada reminder aktif. Aktifkan dengan `' + prefix + ' r enable <ID>`.'); return true; }
-    await sendText(message, '**Reminder aktif (' + list.length + ')**\n' + list.map(r => '`' + r.reminderId + '` ' + r.message.slice(0, 60)).join('\n'));
+  // --- panel (tanpa argumen / inventory) ---
+  if (!sub || sub === 'help' || sub === 'bantuan' || sub === 'inventory' || sub === 'inv' || sub === 'daftar'
+      || sub === 'active' || sub === 'aktif') {
+    const user = await panelUser(message);
+    const activeOnly = sub === 'active' || sub === 'aktif';
+    const list = store.listRemindersByOwner(message.author.id, activeOnly ? { activeOnly: true } : undefined);
+    await send(message, { embeds: [inventoryEmbed(message, user, list)], components: [panelRow()] });
     return true;
   }
 
   // --- redeem ---
   if (sub === 'redeem' || sub === 'klaim') {
     const result = redeemAward({ claimId: args[0], userId: message.author.id });
-    if (!result.ok) { await sendText(message, '⚠️ ' + result.errors.join(' ')); return true; }
-    await sendText(message, '✅ Award diklaim! Reminder kamu: `' + result.reminder.reminderId + '` (dari template `' + result.template.name + '`).\n' +
-      'Lihat dengan `' + prefix + ' r view ' + result.reminder.reminderId + '`, aktifkan dengan `' + prefix + ' r enable ' + result.reminder.reminderId + '`.');
+    if (!result.ok) { await sendError(message, result.errors.join(' ')); return true; }
+    await sendEmbed(message, {
+      title: ICON.ok + ' Reminder Diklaim',
+      color: COLOR.ok,
+      description: 'Reminder kamu: `' + result.reminder.reminderId + '`\nDari template `' + result.template.name + '`.',
+      fields: [
+        { name: 'Kategori', value: cats.categoryLabel(result.reminder.category), inline: true },
+        { name: 'Format', value: cats.formatLabel(result.reminder.format), inline: true }
+      ],
+      footer: 'Nyalakan dengan ' + prefix + ' r enable ' + result.reminder.reminderId
+    });
     return true;
   }
 
-  // --- view / info ---
+  // --- view ---
   if (sub === 'view' || sub === 'lihat' || sub === 'info') {
-    if (!store.isValidReminderId(args[0])) { await sendText(message, 'Format: `' + prefix + ' r ' + sub + ' <ID>` — contoh `' + prefix + ' r view R-ABC123`.'); return true; }
+    if (!store.isValidReminderId(args[0])) { await sendError(message, 'Format: `' + prefix + ' r view <ID>` — contoh `' + prefix + ' r view R-ABC12`.'); return true; }
     const reminder = store.getReminder(args[0]);
-    if (!reminder) { await sendText(message, 'Reminder `' + store.normalizeId(args[0]) + '` tidak ditemukan.'); return true; }
-    if (!canManage(message, reminder)) { await sendText(message, 'Reminder itu bukan milikmu.'); return true; }
-    if (sub === 'info') {
-      const template = store.getTemplate(reminder.templateId);
-      await sendText(message, [
-        '**Info ' + reminder.reminderId + '**',
-        'Nama: ' + cats.displayNameFor(reminder.category, reminder.format),
-        'Kategori: ' + cats.categoryLabel(reminder.category) + ' • Format: ' + cats.formatLabel(reminder.format),
-        'Pemilik: <@' + reminder.ownerId + '>',
-        'Status: ' + (reminder.active ? '🟢 aktif' : '⚪ nonaktif') + ' • Shareable: ' + (reminder.shareable ? '🎉 ya' : '🔒 tidak'),
-        'Collectible: ' + (reminder.collectible || '(belum diatur)'),
-        'Sumber: template `' + reminder.templateId + '`' + (template ? ' (' + template.name + ')' : ''),
-        'Dibuat: <t:' + Math.floor(reminder.createdAt / 1000) + ':R>',
-        'Diperbarui: <t:' + Math.floor(reminder.updatedAt / 1000) + ':R>'
-      ].join('\n'));
-      return true;
-    }
-    const user = await client.users.fetch(reminder.ownerId).catch(() => null);
+    if (!reminder) { await sendError(message, 'Reminder `' + store.normalizeId(args[0]) + '` tidak ditemukan.'); return true; }
+    if (!canManage(message, reminder)) { await sendError(message, 'Reminder itu bukan milikmu.'); return true; }
+    const user = await message.client.users.fetch(reminder.ownerId).catch(() => null);
     const context = contextFor(message, user || message.author, message.guild);
-    await send(message, { content: '🔎 Pratinjau `' + reminder.reminderId + '`', embeds: [reminderEmbed(reminder, context)] });
+    const embed = reminderEmbed(reminder, context);
+    embed.setTitle(embed.data.title || (ICON.info + ' ' + reminder.reminderId + ' — ' + cats.displayNameFor(reminder.category, reminder.format)));
+    embed.setFooter({ text: (reminder.active ? ICON.active + ' aktif' : ICON.inactive + ' nonaktif') + ' • ' + (reminder.shareable ? ICON.share + ' shareable' : ICON.lock + ' tidak shareable') + ' • ' + reminder.reminderId });
+    await send(message, { embeds: [embed] });
     return true;
   }
 
-  // --- customization ---
+  // --- update ---
   if (sub === 'update' || sub === 'ubah') {
     const id = args[0];
     const newMessage = args.slice(1).join(' ');
-    if (!store.isValidReminderId(id) || !newMessage) { await sendText(message, 'Format: `' + prefix + ' r update <ID> <pesan baru>`. Pakai variabel seperti {USER}.'); return true; }
+    if (!store.isValidReminderId(id) || !newMessage) { await sendError(message, 'Format: `' + prefix + ' r update <ID> <pesan baru>`. Pakai variabel seperti `{USER}`.'); return true; }
     const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
-    if (newMessage.length > validate.LIMITS.totalEmbed) { await sendText(message, 'Pesan terlalu panjang (maks ' + validate.LIMITS.totalEmbed + ' karakter).'); return true; }
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    if (newMessage.length > validate.LIMITS.totalEmbed) { await sendError(message, 'Pesan terlalu panjang (maks ' + validate.LIMITS.totalEmbed + ' karakter).'); return true; }
     store.updateReminder(id, { message: newMessage });
-    await sendText(message, '✅ Pesan `' + store.normalizeId(id) + '` diperbarui.');
+    await sendOk(message, 'Pesan `' + store.normalizeId(id) + '` diperbarui.', ICON.ok + ' Pesan Diperbarui');
     return true;
   }
 
+  // --- embed ---
   if (sub === 'embed') {
     const id = args[0];
     const json = args.slice(1).join(' ');
-    if (!store.isValidReminderId(id) || !json) { await sendText(message, 'Format: `' + prefix + ' r embed <ID> <JSON>` — contoh `{"title":"Halo {USER}","color":"#5865F2"}`.'); return true; }
-    const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
-    const result = validate.parseAndValidateEmbed(json);
-    if (!result.ok) { await sendText(message, '❌ Embed ditolak:\n• ' + result.errors.join('\n• ')); return true; }
-    store.updateReminder(id, { embed: result.value });
-    await sendText(message, '✅ Embed `' + store.normalizeId(id) + '` tersimpan.');
-    return true;
-  }
-
-  if (sub === 'setcollectible' || sub === 'collectible') {
-    const id = args[0];
-    if (!store.isValidReminderId(id) || !args[1]) {
-      await sendText(message, 'Format: `' + prefix + ' r setcollectible <ID> <tipe>`. Pilihan: ' + validate.collectibleRegistry(getGuildSettings(message.guildId)).join(', ') + '.');
+    if (!store.isValidReminderId(id) || !json) {
+      await sendError(message, 'Format: `' + prefix + ' r embed <ID> <JSON>`.\nContoh: `{"title":"Halo {USER}","color":"#5865F2"}`\nJSON hasil salin dari discohook.org juga diterima.');
       return true;
     }
     const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
-    const result = validate.validateCollectible(args[1], getGuildSettings(message.guildId));
-    if (!result.ok) { await sendText(message, '❌ ' + result.errors.join(' ')); return true; }
-    store.updateReminder(id, { collectible: result.value });
-    await sendText(message, '✅ Collectible `' + store.normalizeId(id) + '` disetel ke **' + result.value + '**.');
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    const result = validate.parseAndValidateEmbed(json);
+    if (!result.ok) { await sendError(message, 'Embed ditolak:\n• ' + result.errors.join('\n• '), ICON.error + ' Embed Ditolak'); return true; }
+    const resolved = await validate.resolveEmbedMedia(result.value);
+    store.updateReminder(id, { embed: resolved });
+    await sendEmbed(message, {
+      title: ICON.ok + ' Embed Tersimpan',
+      color: COLOR.ok,
+      description: 'Embed `' + store.normalizeId(id) + '` diperbarui.',
+      fields: [{ name: 'Pratinjau', value: 'Lihat dengan `' + prefix + ' r view ' + store.normalizeId(id) + '`.' }]
+    });
     return true;
-  }
-
-  if (sub === 'reset' || sub === 'aturulang') {
-    const id = args[0];
-    if (!store.isValidReminderId(id)) { await sendText(message, 'Format: `' + prefix + ' r reset <ID>`. Perlu konfirmasi.'); return true; }
-    const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
-    const template = store.getTemplate(reminder.templateId);
-    if (!template) { await sendText(message, 'Template sumber tidak ditemukan, tidak bisa reset.'); return true; }
-    return askConfirm(message, prefix, { kind: 'reset', reminderId: store.normalizeId(id) },
-      '⚠️ Reset `' + store.normalizeId(id) + '` akan mengembalikan pesan, embed, dan collectible ke bawaan template `' + template.name + '`.');
   }
 
   // --- enable / disable ---
   if (sub === 'enable' || sub === 'aktifkan' || sub === 'disable' || sub === 'matikan') {
     const enable = sub === 'enable' || sub === 'aktifkan';
     const id = args[0];
-    if (!store.isValidReminderId(id)) { await sendText(message, 'Format: `' + prefix + ' r ' + (enable ? 'enable' : 'disable') + ' <ID>`.'); return true; }
+    if (!store.isValidReminderId(id)) { await sendError(message, 'Format: `' + prefix + ' r ' + (enable ? 'enable' : 'disable') + ' <ID>`.'); return true; }
     const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Hanya pemilik yang bisa mengubah status reminder ini.'); return true; }
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Hanya pemilik yang bisa mengubah status reminder ini.'); return true; }
     store.updateReminder(id, { active: enable, activatedAt: enable ? Date.now() : reminder.activatedAt });
-    await sendText(message, enable
-      ? '🟢 Reminder `' + store.normalizeId(id) + '` diaktifkan. Akan tampil saat kamu melakukan aktivitas Lucy.'
-      : '⚪ Reminder `' + store.normalizeId(id) + '` dimatikan.');
+    if (enable) {
+      await sendEmbed(message, {
+        title: ICON.active + ' Reminder Diaktifkan',
+        color: COLOR.ok,
+        description: '`' + store.normalizeId(id) + '` aktif. Pengingat dikirim saat kamu melakukan aksi ' + cats.categoryLabel(reminder.category) + '.'
+      });
+    } else {
+      await sendEmbed(message, {
+        title: ICON.inactive + ' Reminder Dimatikan',
+        color: COLOR.warn,
+        description: '`' + store.normalizeId(id) + '` dimatikan.\nOtomatis kembali ke **default server** untuk aksi ini; kalau server belum mengatur, dipakai bawaan bot.'
+      });
+    }
     return true;
   }
 
@@ -437,31 +475,35 @@ async function handleMessage(message, deps = {}) {
   if (sub === 'send' || sub === 'kirim' || sub === 'gift') {
     const targetId = parseUserArg(args[0]);
     const id = args[1];
-    if (!targetId || !store.isValidReminderId(id)) { await sendText(message, 'Format: `' + prefix + ' r send <@user> <ID>`.'); return true; }
-    if (targetId === message.author.id) { await sendText(message, 'Kamu sudah memiliki reminder itu.'); return true; }
+    if (!targetId || !store.isValidReminderId(id)) { await sendError(message, 'Format: `' + prefix + ' r send <@user> <ID>`.'); return true; }
+    if (targetId === message.author.id) { await sendError(message, 'Kamu sudah memiliki reminder itu.'); return true; }
     const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa menghadiahkan reminder milikmu sendiri.'); return true; }
-    if (!reminder.shareable) { await sendText(message, 'Reminder ini tidak shareable, jadi tidak bisa dipindahbukukan. Nyalakan dulu dengan `' + prefix + ' r shareable ' + store.normalizeId(id) + ' on`.'); return true; }
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa menghadiahkan reminder milikmu sendiri.'); return true; }
+    if (!reminder.shareable) {
+      await sendError(message, 'Reminder ini tidak shareable, jadi tidak bisa dipindahbukukan.\nAktifkan dulu dengan `' + prefix + ' r shareable ' + store.normalizeId(id) + ' on`.');
+      return true;
+    }
     return askConfirm(message, prefix, { kind: 'transfer', reminderId: store.normalizeId(id), toUserId: targetId },
-      '⚠️ Kirim `' + store.normalizeId(id) + '` ke <@' + targetId + '>? Ini **memindahkan kepemilikan** — kamu tidak bisa lagi mengubahnya.');
+      'Kirim `' + store.normalizeId(id) + '` ke <@' + targetId + '>? Ini **memindahkan kepemilikan** — kamu tidak bisa lagi mengubahnya.');
   }
 
-  // --- shareable ---
+  // --- shareable (pendukung aturan transfer) ---
   if (sub === 'shareable' || sub === 'bagikan') {
     const id = args[0];
     const action = (args[1] || '').toLowerCase();
     if (!store.isValidReminderId(id) || !['on', 'off'].includes(action)) {
-      await sendText(message, 'Format: `' + prefix + ' r shareable <ID> on|off`.');
+      await sendError(message, 'Format: `' + prefix + ' r shareable <ID> on|off`.');
       return true;
     }
     const reminder = store.getReminder(id);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
     store.updateReminder(id, { shareable: action === 'on' });
-    await sendText(message, action === 'on'
-      ? '🎉 Reminder `' + store.normalizeId(id) + '` sekarang shareable (boleh dipindahbukukan).'
-      : '🔒 Reminder `' + store.normalizeId(id) + '` sekarang tidak shareable.');
+    await sendOk(message, action === 'on'
+      ? ICON.share + ' Reminder `' + store.normalizeId(id) + '` sekarang shareable (boleh dipindahbukukan).'
+      : ICON.lock + ' Reminder `' + store.normalizeId(id) + '` sekarang tidak shareable.',
+      action === 'on' ? ICON.share + ' Shareable Aktif' : ICON.lock + ' Shareable Dimatikan');
     return true;
   }
 
@@ -471,132 +513,225 @@ async function handleMessage(message, deps = {}) {
     const result = provider === 'any' ? await validate.resolveAnyMedia(args[0])
       : provider === 'klipy' ? await validate.resolveKlipy(args[0])
       : await validate.resolveTenor(args[0]);
-    if (!result.ok) { await sendText(message, '❌ ' + result.errors.join(' ')); return true; }
-    await sendText(message, '✅ URL media: ' + result.value);
+    if (!result.ok) { await sendError(message, result.errors.join(' '), ICON.error + ' Media Tidak Valid'); return true; }
+    await sendEmbed(message, {
+      title: ICON.media + ' URL Media',
+      color: COLOR.ok,
+      description: result.value,
+      fields: [{ name: 'Penyedia', value: /klipy\.com/i.test(result.value) ? 'Klipy' : 'Tenor', inline: true }],
+      footer: 'Tempel URL ini ke pesan atau field image/thumbnail embed.'
+    });
     return true;
+  }
+
+  // --- setcollectible / reset (pengelolaan lanjutan) ---
+  if (sub === 'setcollectible' || sub === 'collectible') {
+    const id = args[0];
+    if (!store.isValidReminderId(id) || !args[1]) {
+      await sendError(message, 'Format: `' + prefix + ' r setcollectible <ID> <tipe>`. Pilihan: ' + validate.collectibleRegistry(getGuildSettings(message.guildId)).join(', ') + '.');
+      return true;
+    }
+    const reminder = store.getReminder(id);
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    const result = validate.validateCollectible(args[1], getGuildSettings(message.guildId));
+    if (!result.ok) { await sendError(message, result.errors.join(' ')); return true; }
+    store.updateReminder(id, { collectible: result.value });
+    await sendOk(message, 'Collectible `' + store.normalizeId(id) + '` disetel ke **' + result.value + '**.');
+    return true;
+  }
+
+  if (sub === 'reset' || sub === 'aturulang') {
+    const id = args[0];
+    if (!store.isValidReminderId(id)) { await sendError(message, 'Format: `' + prefix + ' r reset <ID>`. Perlu konfirmasi.'); return true; }
+    const reminder = store.getReminder(id);
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    const template = store.getTemplate(reminder.templateId);
+    if (!template) { await sendError(message, 'Template sumber tidak ditemukan, tidak bisa reset.'); return true; }
+    return askConfirm(message, prefix, { kind: 'reset', reminderId: store.normalizeId(id) },
+      'Reset `' + store.normalizeId(id) + '` akan mengembalikan pesan, embed, dan collectible ke bawaan template `' + template.name + '`.');
   }
 
   // --- developer ---
   if (sub === 'create' || sub === 'buat') {
-    if (!dev) { await sendText(message, 'Hanya developer bot yang bisa membuat template.'); return true; }
-    const raw = matched.trim().slice(parts[0].length + parts[1].length + 2).trim();
-    const segments = raw.split('|').map(s => s.trim());
-    // Kategori dan format WAJIB disebut agar keenam kombinasi eksplisit dan
-    // tidak ada tebakan. Kategori = apa yang diingatkan, format = cara tampil.
-    const head = segments[0] || '';
-    const tokens = head.split(/\s+/).filter(Boolean);
-    const category = cats.normalizeCategory(tokens[0]);
-    const format = cats.normalizeFormat(tokens[1]);
-    const name = tokens.slice(2).join(' ');
-    const templateMessage = segments[1];
-    const embedJson = segments[2];
-    if (!category || !format || !name || !templateMessage) {
-      await sendText(message, 'Format: `' + prefix + ' r create <KATEGORI> <FORMAT> <nama> | <pesan default> [| <embed JSON>]`.\n' +
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa membuat template.'); return true; }
+    // Terima nama kategori resmi atau nama aksi (`battle`, `hunt`, `pray`).
+    const category = cats.resolveCategoryInput(args[0]);
+    const format = cats.normalizeFormat(args[1]);
+    if (!category || !format) {
+      await sendError(message, 'Format: `' + prefix + ' r create <KATEGORI> <FORMAT>`.\n' +
         'Kategori: ' + cats.CATEGORY_KEYS.join(', ') + '\nFormat: ' + cats.FORMAT_KEYS.join(', ') + '\n' +
-        'Contoh: `' + prefix + ' r create PRAY_CURSE NORMAL Doa Harian | {mention} jangan lupa doa!`');
+        'Contoh: `' + prefix + ' r create battle embed` atau `' + prefix + ' r create PRAY_CURSE NORMAL`.');
       return true;
     }
+    // Tanpa nama/isi: template dibuat kosong dan isinya diatur penerima lewat
+    // `r update` / `r embed`. Kalau developer menyertakan isi, tetap dipakai.
+    const rest = args.slice(2).join(' ');
+    const segments = rest.split('|').map(x => x.trim());
+    const explicitName = segments[0] || '';
+    const templateMessage = segments.length > 1 ? segments[1] : '';
+    const embedJson = segments.length > 2 ? segments[2] : null;
+    const name = explicitName || cats.displayNameFor(category, format);
     let embed = null;
     if (embedJson) {
       const result = validate.parseAndValidateEmbed(embedJson);
-      if (!result.ok) { await sendText(message, '❌ Embed ditolak:\n• ' + result.errors.join('\n• ')); return true; }
+      if (!result.ok) { await sendError(message, 'Embed ditolak:\n• ' + result.errors.join('\n• ')); return true; }
       embed = result.value;
     }
     const template = store.createTemplate({ name, message: templateMessage, embed, creatorId: message.author.id, category, format });
-    await sendText(message, '✅ Template dibuat: `' + template.templateId + '` — **' + template.name + '** (' + cats.displayNameFor(category, format) + ').\n' +
-      'Beri ke user dengan `' + prefix + ' r give @user ' + template.templateId + '`.');
+    await sendEmbed(message, {
+      title: ICON.ok + ' Template Dibuat',
+      color: COLOR.ok,
+      description: '**' + cats.displayNameFor(category, format) + '**',
+      fields: [
+        { name: 'Kode template', value: '`' + template.templateId + '`', inline: true },
+        { name: 'Kategori', value: cats.categoryLabel(category), inline: true },
+        { name: 'Format', value: cats.formatLabel(format), inline: true }
+      ],
+      footer: 'Beri ke pemenang: ' + prefix + ' r give @user ' + template.templateId
+    });
     return true;
   }
 
   if (sub === 'templates' || sub === 'template') {
-    if (!dev) { await sendText(message, 'Hanya developer bot yang bisa melihat daftar template.'); return true; }
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa melihat daftar template.'); return true; }
     const list = store.listTemplates({ includeUnavailable: true });
-    if (!list.length) { await sendText(message, 'Belum ada template. Buat dengan `' + prefix + ' r create <nama> | <pesan>`.') ; return true; }
-    await sendText(message, '**Template (' + list.length + ')**\n' + list.map(t =>
-      '`' + t.templateId + '` ' + (t.available ? '🟢' : '🔴') + ' **' + t.name + '** — ' + cats.displayNameFor(t.category, t.format) + (t.collectible ? ' • ' + t.collectible : '') + '\n   ' + t.message.slice(0, 80)
-    ).join('\n'));
+    if (!list.length) { await sendWarn(message, 'Belum ada template. Buat dengan `' + prefix + ' r create <KATEGORI> <FORMAT>`.', ICON.reminder + ' Belum Ada Template'); return true; }
+    const lines = list.map(t => (t.available ? ICON.active : ICON.inactive) + ' `' + t.templateId + '` — **' + t.name + '** • ' + cats.displayNameFor(t.category, t.format) + (t.collectible ? ' • 🏅 ' + t.collectible : ''));
+    await sendEmbed(message, { title: ICON.reminder + ' Template (' + list.length + ')', color: COLOR.panel, description: lines.join('\n') });
     return true;
   }
 
   if (sub === 'give' || sub === 'beri') {
-    if (!dev) { await sendText(message, 'Hanya developer bot yang bisa memberi reminder.'); return true; }
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa memberi reminder.'); return true; }
     const targetId = parseUserArg(args[0]);
     const templateId = args[1];
     if (!targetId || !store.isValidTemplateId(templateId)) {
-      await sendText(message, 'Format: `' + prefix + ' r give <@user> <TEMPLATE_ID>` — contoh `' + prefix + ' r give @user T-ABC123`.');
+      await sendError(message, 'Format: `' + prefix + ' r give <@user> <KODE>` — contoh `' + prefix + ' r give @user T-ABC12`.');
       return true;
     }
     const result = awardReminder({ templateId, recipientId: targetId, issuerId: message.author.id });
-    if (!result.ok) { await sendText(message, '❌ ' + result.errors.join(' ')); return true; }
+    if (!result.ok) { await sendError(message, result.errors.join(' ')); return true; }
     const { award, created } = result;
     if (!created) {
-      await sendText(message, 'ℹ️ Award untuk <@' + targetId + '> dari template ini sudah ada: `' + award.claimId + '` (status: ' + award.status + ').');
+      await sendWarn(message, 'Award untuk <@' + targetId + '> dari template ini sudah ada: `' + award.claimId + '` (status: ' + award.status + ').');
       return true;
     }
-    const dm = await dmAward(client, targetId, award, result.template, prefix);
-    await sendText(message, dm.ok
-      ? '✅ Award dibuat: `' + award.claimId + '` untuk <@' + targetId + '>. DM terkirim berisi instruksi klaim.'
-      : '✅ Award dibuat: `' + award.claimId + '` untuk <@' + targetId + '>.\n⚠️ DM gagal (' + dm.error + '). Sampaikan claim ID ini secara manual: `' + award.claimId + '`');
+    const dm = await dmAward(client(message), targetId, award, result.template, prefix);
+    await sendEmbed(message, {
+      title: ICON.ok + ' Award Dibuat',
+      color: dm.ok ? COLOR.ok : COLOR.warn,
+      description: 'Untuk <@' + targetId + '>',
+      fields: [
+        { name: 'Claim ID', value: '`' + award.claimId + '`', inline: true },
+        { name: 'Template', value: '`' + result.template.templateId + '`', inline: true },
+        { name: 'DM', value: dm.ok ? ICON.ok + ' terkirim' : ICON.warn + ' gagal — sampaikan claim ID manual', inline: false }
+      ],
+      footer: dm.ok ? undefined : 'DM gagal: ' + dm.error
+    });
     return true;
   }
 
   if (sub === 'awards') {
-    if (!dev) { await sendText(message, 'Hanya developer bot yang bisa melihat daftar award.'); return true; }
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa melihat daftar award.'); return true; }
     const list = store.listAwards({ limit: 50 });
-    if (!list.length) { await sendText(message, 'Belum ada award.'); return true; }
-    const icon = { pending: '⏳', redeemed: '✅', revoked: '🚫' };
-    await sendText(message, '**Award terakhir (' + list.length + ')**\n' + list.map(a =>
-      (icon[a.status] || '•') + ' `' + a.claimId + '` → <@' + a.recipientId + '> • ' + a.status + ' • `' + a.templateId + '` • <t:' + Math.floor(a.createdAt / 1000) + ':R>'
-    ).join('\n'));
+    if (!list.length) { await sendWarn(message, 'Belum ada award.', ICON.reminder + ' Belum Ada Award'); return true; }
+    const icon = { pending: '⏳', redeemed: '✅', revoked: '🚫', expired: '⌛' };
+    const lines = list.map(a => (icon[a.status] || '•') + ' `' + a.claimId + '` → <@' + a.recipientId + '> • ' + a.status + ' • `' + a.templateId + '` • <t:' + Math.floor(a.createdAt / 1000) + ':R>');
+    await sendEmbed(message, { title: ICON.reminder + ' Award Terakhir (' + list.length + ')', color: COLOR.panel, description: lines.join('\n') });
     return true;
   }
 
   if (sub === 'revoke' || sub === 'cabut') {
-    if (!dev) { await sendText(message, 'Hanya developer bot yang bisa mencabut award.'); return true; }
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa mencabut award.'); return true; }
     const id = args[0];
-    if (!store.isValidClaimId(id)) { await sendText(message, 'Format: `' + prefix + ' r revoke <CLAIM_ID>`. Perlu konfirmasi.'); return true; }
+    if (!store.isValidClaimId(id)) { await sendError(message, 'Format: `' + prefix + ' r revoke <CLAIM_ID>`. Perlu konfirmasi.'); return true; }
     const award = store.getAward(id);
-    if (!award) { await sendText(message, 'Award tidak ditemukan.'); return true; }
-    if (award.status !== 'pending') { await sendText(message, 'Award `' + store.normalizeId(id) + '` berstatus **' + award.status + '**, hanya award `pending` yang bisa dicabut.'); return true; }
+    if (!award) { await sendError(message, 'Award tidak ditemukan.'); return true; }
+    if (award.status !== 'pending') { await sendError(message, 'Award `' + store.normalizeId(id) + '` berstatus **' + award.status + '**, hanya award `pending` yang bisa dicabut.'); return true; }
     return askConfirm(message, prefix, { kind: 'revoke', claimId: store.normalizeId(id) },
-      '⚠️ Cabut award `' + store.normalizeId(id) + '` milik <@' + award.recipientId + '>?');
+      'Cabut award `' + store.normalizeId(id) + '` milik <@' + award.recipientId + '>?');
   }
 
-  await sendText(message, 'Subperintah tidak dikenal. Gunakan `' + prefix + ' r help`.');
+  await sendWarn(message, 'Perintah tidak dikenal. Buka `' + prefix + ' r` untuk melihat daftar perintah.');
   return true;
 }
+
+// Tombol panel: bantuan, variabel, dan kembali ke inventory.
+function isPanelNav(customId) {
+  return typeof customId === 'string' && customId.startsWith(PANEL_PREFIX + ':');
+}
+
+async function handleComponent(i) {
+  if (!isPanelNav(i.customId)) return false;
+  const id = i.customId;
+  const user = await panelUser(i);
+  if (id === PANEL_HELP) {
+    await i.update({ embeds: [usageEmbed(prefixOf(i))], components: [panelBackRow()] });
+    return true;
+  }
+  if (id === PANEL_VARS) {
+    await i.update({ embeds: [variablesEmbed()], components: [panelBackRow()] });
+    return true;
+  }
+  if (id === PANEL_BACK) {
+    const list = store.listRemindersByOwner(i.user.id);
+    await i.update({ embeds: [inventoryEmbed(i, user, list)], components: [panelRow()] });
+    return true;
+  }
+  return false;
+}
+
+// Data pengguna untuk judul + avatar inventory (pesan maupun interaksi).
+async function panelUser(source) {
+  const author = source.author || source.user;
+  const displayName = source.member?.displayName || author?.globalName || author?.username || 'Kamu';
+  let avatarUrl = author?.displayAvatarURL?.({ size: 256 }) || author?.avatarURL?.({ size: 256 }) || null;
+  if (!avatarUrl && author?.id && source.client?.users?.fetch) {
+    const fetched = await source.client.users.fetch(author.id).catch(() => null);
+    avatarUrl = fetched?.displayAvatarURL?.({ size: 256 }) || null;
+  }
+  return { displayName, avatarUrl };
+}
+
+function client(message) { return message.client; }
 
 // Jalankan tindakan yang sudah dikonfirmasi.
 async function runConfirmed(message, prefix, action, deps) {
   if (action.kind === 'transfer') {
     const reminder = store.getReminder(action.reminderId);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan lagi.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu bukan lagi pemilik reminder itu.'); return true; }
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan lagi.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu bukan lagi pemilik reminder itu.'); return true; }
     const moved = store.transferReminder({ reminderId: action.reminderId, fromUserId: message.author.id, toUserId: action.toUserId });
-    if (!moved) { await sendText(message, 'Transfer gagal — kepemilikan mungkin sudah berubah.'); return true; }
-    await sendText(message, '✅ `' + action.reminderId + '` kini milik <@' + action.toUserId + '>. Kamu tidak bisa lagi mengubahnya.');
+    if (!moved) { await sendError(message, 'Transfer gagal — kepemilikan mungkin sudah berubah.'); return true; }
+    await sendEmbed(message, {
+      title: '🎉 Reminder Dipindahbukukan',
+      color: COLOR.ok,
+      description: '`' + action.reminderId + '` kini milik <@' + action.toUserId + '>.',
+      footer: 'Kamu tidak bisa lagi mengubahnya.'
+    });
     return true;
   }
   if (action.kind === 'reset') {
     const reminder = store.getReminder(action.reminderId);
-    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan lagi.'); return true; }
-    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu bukan lagi pemilik reminder itu.'); return true; }
+    if (!reminder) { await sendError(message, 'Reminder tidak ditemukan lagi.'); return true; }
+    if (!isOwner(message, reminder)) { await sendError(message, 'Kamu bukan lagi pemilik reminder itu.'); return true; }
     const template = store.getTemplate(reminder.templateId);
-    if (!template) { await sendText(message, 'Template sumber tidak ditemukan.'); return true; }
+    if (!template) { await sendError(message, 'Template sumber tidak ditemukan.'); return true; }
     store.updateReminder(action.reminderId, { message: template.message, embed: template.embed, collectible: template.collectible });
-    await sendText(message, '✅ `' + action.reminderId + '` dikembalikan ke bawaan template `' + template.name + '`.');
+    await sendOk(message, '`' + action.reminderId + '` dikembalikan ke bawaan template `' + template.name + '`.', '♻️ Reminder Direset');
     return true;
   }
   if (action.kind === 'revoke') {
     const dev = (deps.isDeveloper || isDeveloper)(message);
-    if (!dev) { await sendText(message, 'Hanya developer bot yang bisa mencabut award.'); return true; }
+    if (!dev) { await sendError(message, 'Hanya developer bot yang bisa mencabut award.'); return true; }
     const revoked = store.revokeAward({ claimId: action.claimId, actorId: message.author.id });
-    await sendText(message, revoked
-      ? '🚫 Award `' + action.claimId + '` dicabut.'
-      : 'Award itu sudah tidak berstatus pending.');
+    if (revoked) await sendEmbed(message, { title: '🚫 Award Dicabut', color: COLOR.warn, description: 'Award `' + action.claimId + '` dicabut.' });
+    else await sendWarn(message, 'Award itu sudah tidak berstatus pending.');
     return true;
   }
-  await sendText(message, 'Tindakan tidak dikenal.');
+  await sendError(message, 'Tindakan tidak dikenal.');
   return true;
 }
 
@@ -605,16 +740,17 @@ async function runConfirmed(message, prefix, action, deps) {
 async function dmAward(client, recipientId, award, template, prefix) {
   try {
     const user = await client.users.fetch(recipientId);
-    await user.send({
-      content: [
-        '🎁 **Kamu menerima Custom Reminder!**',
-        'Template: **' + template.name + '**',
-        'Claim ID: `' + award.claimId + '`',
-        '',
-        'Klaim dengan: `' + prefix + ' r redeem ' + award.claimId + '`',
-        'Setelah diklaim, lihat dengan `' + prefix + ' r inventory`.'
-      ].join('\n')
-    });
+    const embed = new EmbedBuilder()
+      .setColor(COLOR.panel)
+      .setTitle('🎁 Kamu Menerima Custom Reminder!')
+      .setDescription('Template: **' + template.name + '**')
+      .addFields(
+        { name: 'Claim ID', value: '`' + award.claimId + '`', inline: true },
+        { name: 'Kategori', value: cats.categoryLabel(template.category), inline: true },
+        { name: 'Format', value: cats.formatLabel(template.format), inline: true }
+      )
+      .setFooter({ text: 'Klaim dengan: ' + prefix + ' r redeem ' + award.claimId });
+    await user.send({ embeds: [embed] });
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error?.message || 'tidak diketahui' };
@@ -634,8 +770,9 @@ async function onGiveawayWinner({ client, guildId, giveawayId, winnerId, templat
 }
 
 module.exports = {
-  handleMessage, awardReminder, redeemAward, deliverForActivity, onGiveawayWinner,
-  helpText, variablesText, reminderEmbed, contextFor, dmAward,
+  handleMessage, handleComponent, awardReminder, redeemAward, deliverForActivity, onGiveawayWinner,
+  helpText, variablesText, usageEmbed, variablesEmbed, reminderEmbed, contextFor, dmAward,
+  inventoryEmbed, inventoryLine, panelRow, panelBackRow, isPanelNav, panelUser,
   isAdmin, isOwner, canManage,
   // untuk pengujian
   pendingConfirms, lastDelivery, CONFIRM_TTL_MS, DELIVERY_COOLDOWN_MS

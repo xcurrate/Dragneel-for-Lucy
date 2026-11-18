@@ -204,6 +204,9 @@ Custom Reminder **memakai engine pengingat yang sudah ada** (`src/services/lucyR
 penjadwal atau pendeteksi aksi kedua: sistem ini hanya menambah **layer pemilihan pesan** pada engine
 itu, sehingga trigger, durasi, cooldown, dan perilaku Lucy yang lama tetap sama.
 
+Pengingat punya aturan sendiri (`lreminder`): **mematikan counter Lucy tidak mematikan pengingat**.
+Saat counter off, aksi tidak dihitung dan tidak masuk leaderboard, tapi pengingat tetap dikirim.
+
 ### Tiga kategori dan dua format
 
 Kategori = **apa** yang diingatkan. Format = **bagaimana** ditampilkan. Keduanya properti terpisah;
@@ -258,20 +261,24 @@ Inventory **hanya** menampilkan Reminder ID, bukan template atau claim ID.
 
 ### Untuk penerima reminder
 
-- `<prefix> r redeem <CLAIM_ID>` — klaim reminder dari claim ID yang dikirim developer.
-- `<prefix> r inventory` — daftar reminder milikmu (embed): ID, nama, kategori, format, status.
-- `<prefix> r view <ID>` — pratinjau pesan/embed (variabel sudah ter-render).
-- `<prefix> r info <ID>` — detail: nama, kategori, format, pemilik, status, shareable, sumber.
-- `<prefix> r active` — daftar reminder aktif.
-- `<prefix> r update <ID> <pesan>` — ubah pesan Normal.
-- `<prefix> r embed <ID> <JSON>` — atur embed (lihat contoh di bawah).
-- `<prefix> r setcollectible <ID> <tipe>` — atur tipe collectible.
-- `<prefix> r reset <ID>` — kembalikan ke bawaan template (perlu konfirmasi).
-- `<prefix> r enable <ID>` / `<prefix> r disable <ID>` — aktifkan/matikan satu reminder.
-- `<prefix> r shareable <ID> on|off` — tandai reminder boleh dipindahbukukan.
-- `<prefix> r send <@user> <ID>` — pindahbukukan reminder **shareable** (perlu konfirmasi).
-- `<prefix> r media <URL>` — ubah URL Tenor/Klipy jadi URL media langsung.
-- `<prefix> r variables` / `<prefix> r help`.
+`<prefix> r` menampilkan **inventory** (judul memakai nama dan avatar kamu) beserta dua tombol:
+**Cara menggunakan** dan **Variabel**, dengan tombol **Kembali** di tiap halaman.
+
+Delapan perintah pengguna:
+
+| Perintah | Fungsi |
+|----------|--------|
+| `<prefix> r redeem <CLAIM_ID>` | Klaim reminder dari claim ID yang dikirim developer. |
+| `<prefix> r view <ID>` | Pratinjau pesan/embed (variabel sudah ter-render). |
+| `<prefix> r send <@user> <ID>` | Pindahbukukan reminder **shareable** (perlu konfirmasi). |
+| `<prefix> r update <ID> <pesan>` | Ubah pesan biasa. |
+| `<prefix> r embed <ID> <JSON>` | Atur embed. JSON hasil salin dari discohook.org juga diterima. |
+| `<prefix> r media <URL>` | Ambil URL media dari Tenor atau Klipy. |
+| `<prefix> r enable <ID>` | Nyalakan satu reminder. |
+| `<prefix> r disable <ID>` | Matikan satu reminder (otomatis kembali ke default server). |
+
+Pendukung: `<prefix> r shareable <ID> on|off` (menandai boleh dipindahbukukan), `setcollectible`,
+`reset` (perlu konfirmasi), serta `active`/`info` sebagai alias tampilan. Semua balasan berupa embed.
 
 Legenda inventory: ✅ aktif • 🎉 shareable • 🔒 tidak shareable • ❌ nonaktif (tetap bisa diubah).
 Aktif dan shareable **independen** — reminder bisa aktif tanpa shareable. Reminder nonaktif tetap bisa
@@ -282,7 +289,9 @@ disunting. Mengubah pesan/embed/collectible **tidak** mengubah Reminder ID, kate
 Memakai sistem Developer ID yang sudah ada (`isDeveloper`): `DEVELOPER_IDS`, pemilik aplikasi bot, atau
 pemilik server. Tidak ada daftar developer kedua.
 
-- `<prefix> r create <KATEGORI> <FORMAT> <nama> | <pesan> [| <embed JSON>]` — buat template.
+- `<prefix> r create <KATEGORI> <FORMAT>` — buat template kosong; bot membalas kode template.
+  Kategori bisa ditulis sebagai nama aksi (`battle`, `hunt`, `pray`, `curse`, `lucy`) atau nama
+  kategori resmi (`HUNT_BATTLE`, `PRAY_CURSE`, `LUCY`). Contoh: `<prefix> r create battle embed`.
 - `<prefix> r templates` — daftar template (kategori + format tampil).
 - `<prefix> r give <@user> <TEMPLATE_ID>` — beri reminder; bot DM penerima berisi claim ID.
 - `<prefix> r awards` — daftar claim + status (`pending`, `redeemed`, `revoked`).
@@ -291,10 +300,11 @@ pemilik server. Tidak ada daftar developer kedua.
 Alur pemberian:
 
 ```
-d r create PRAY_CURSE NORMAL Doa Harian | {mention} jangan lupa doa <t:{DAILY_TOMORROW}:R>!
+d r create battle embed
 d r give @pemenang T-NHHKT
-# penerima:
-d r redeem C-B8DW6
+# penerima mengatur isinya sendiri:
+d r embed R-F5Y9C {"title":"Battle Reminder","description":"{USER_MENTION} ayo battle!"}
+d r enable R-F5Y9C
 ```
 
 Kalau DM gagal, bot memberi tahu developer dan menampilkan claim ID untuk disampaikan manual.
@@ -343,7 +353,12 @@ d r embed R-F5Y9C {"title":"Pengingat {USER}","description":"Reset <t:{DAILY_TOM
 ```
 
 Field: `title`, `description`, `url`, `color`, `timestamp`, `footer`, `image`, `thumbnail`, `author`,
-`fields`. Batas Discord ditegakkan sebelum disimpan: `title` 256, `description` 4096, `footer.text`
+`fields`.
+
+Payload hasil salin dari **discohook.org** juga diterima langsung: bot mengambil `embeds[0]` dari
+payload webhook (`{content, embeds, attachments, ...}`). Hanya satu embed yang didukung. Untuk field
+`image`/`thumbnail`, halaman penyedia (`tenor.com/...`, `klipy.com/...`) otomatis diubah ke URL media
+langsung. Batas Discord ditegakkan sebelum disimpan: `title` 256, `description` 4096, `footer.text`
 2048, `author.name` 256, `fields` maks 25 (nama 256, nilai 1024), total 6000. Hanya `https` — skema
 `javascript:`, `data:`, `file:` ditolak, field tak dikenal ditolak.
 

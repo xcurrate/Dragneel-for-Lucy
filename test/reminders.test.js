@@ -65,10 +65,30 @@ function makeMessage(content, {
   };
 }
 
-// Gabungkan semua teks balasan (bisa berupa string atau payload embed).
+// Gabungkan semua teks balasan, termasuk isi embed (semua balasan reminder
+// dikirim sebagai embed).
+function embedText(embed) {
+  const data = embed?.data || embed || {};
+  const parts = [data.title, data.description, data.footer?.text];
+  for (const field of data.fields || []) parts.push(field.name, field.value);
+  return parts.filter(Boolean).join('\n');
+}
+
 function textOf(message) {
   return message.sent
-    .map(payload => (typeof payload === 'string' ? payload : payload.content || ''))
+    .map(payload => {
+      if (typeof payload === 'string') return payload;
+      const embeds = (payload.embeds || []).map(embedText).join('\n');
+      return [payload.content || '', embeds].filter(Boolean).join('\n');
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+// Teks dari DM (payload embed) untuk assertion.
+function dmText(message) {
+  return message.dms
+    .map(payload => (typeof payload === 'string' ? payload : (payload.embeds || []).map(embedText).join('\n')))
     .filter(Boolean)
     .join('\n');
 }
@@ -173,7 +193,7 @@ describe('custom reminder — developer authorization', () => {
   it('rejects unknown subcommands with a helpful message', async () => {
     const message = makeMessage('d r tidakada');
     await svc().handleMessage(message);
-    assert.match(textOf(message), /Subperintah tidak dikenal/);
+    assert.match(textOf(message), /Perintah tidak dikenal/);
   });
 });
 
@@ -185,8 +205,8 @@ describe('custom reminder — award and redeem flow', () => {
     const claimId = idOf(give, 'C');
     assert.ok(claimId);
     assert.equal(give.dms.length, 1, 'DM instruksi terkirim');
-    assert.match(give.dms[0].content, new RegExp(claimId));
-    assert.match(give.dms[0].content, /r redeem/);
+    assert.match(dmText(give), new RegExp(claimId));
+    assert.match(dmText(give), /r redeem/);
     const award = storage().getAward(claimId);
     assert.equal(award.recipientId, '111222333444555666');
     assert.equal(award.issuerId, 'dev1', 'developer penerbit tercatat');
@@ -439,10 +459,11 @@ describe('custom reminder — customization commands', () => {
     const embed = view.sent.at(-1).embeds[0].data;
     assert.match(embed.description, /<@111222333444555666>/, 'variabel USER ter-render');
 
+    // `r info` adalah alias `r view`.
     const info = makeMessage('d r info ' + reminderId, { userId: owner });
     await svc().handleMessage(info);
-    assert.match(textOf(info), /Pemilik/);
-    assert.match(textOf(info), /template/);
+    assert.match(textOf(info), new RegExp(reminderId));
+    assert.match(textOf(info), /Pray\/Curse Reminder/);
   });
 
   it('keeps view and info away from non-owners', async () => {
@@ -480,7 +501,7 @@ describe('custom reminder — embed validation', () => {
     const owner = '111222333444555666';
     const message = makeMessage('d r embed ' + reminderId + ' {"title":"Halo","color":"#ff0000","footer":{"text":"{SERVER_NAME}"}}', { userId: owner });
     await svc().handleMessage(message);
-    assert.match(textOf(message), /tersimpan/);
+    assert.match(textOf(message), /Tersimpan/);
     const embed = storage().getReminder(reminderId).embed;
     assert.equal(embed.color, 0xff0000, 'hex dinormalkan ke integer');
   });
@@ -1058,7 +1079,7 @@ describe('custom reminder — media providers', () => {
     // Perintah khusus penyedia tetap ada.
     const tenorOnly = makeMessage('d r tenor https://media.tenor.com/a/b.gif');
     await svc().handleMessage(tenorOnly);
-    assert.match(textOf(tenorOnly), /URL media/);
+    assert.match(textOf(tenorOnly), /URL Media/);
 
     const klipyOnly = makeMessage('d r klipy https://cdn.klipy.com/a/b.gif');
     await svc().handleMessage(klipyOnly);
@@ -1173,5 +1194,175 @@ describe('custom reminder — engine integration (no second scheduler)', () => {
       guildId: 'guild1', channelId: 'chan1', userId: 'userY', kind: 'pray', action: 'pray', name: 'Y', messageId: 'm4'
     });
     assert.match(sent[0].content, /memanjatkan doa/, 'teks bawaan Dragneel dipertahankan');
+  });
+});
+
+describe('custom reminder — revisi: counter off, discohook, panel, create ringkas', () => {
+  it('tetap memasang pengingat walau counter Lucy OFF', async () => {
+    const engine = require('../src/services/lucyReminder');
+    const storageUtils = require('../src/utils/storage');
+    storageUtils.updateGuildSettings('guild1', s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: false } }));
+    engine.timers.clear();
+
+    const message = makeMessage('lpray');
+    assert.equal(await engine.handleMessage(message), true);
+    assert.equal(engine.timers.size, 1, 'pengingat dipasang walau counter off');
+    assert.equal(message.sent.length, 0, 'tetap tanpa balasan');
+    engine.timers.clear();
+  });
+
+  it('mengirim hook Say Lucy walau counter OFF', async () => {
+    const counter = require('../src/services/lucyCounter');
+    const storageUtils = require('../src/utils/storage');
+    storageUtils.updateGuildSettings('guild1', s => ({ ...s, lucyCounter: { ...s.lucyCounter, enabled: false } }));
+    const seen = [];
+    await counter.handleMessage(makeMessage('halo lucy apa kabar'), { onCounted: (m, name) => seen.push(name) });
+    assert.equal(seen.length, 1, 'onCounted tetap dipanggil saat counter off');
+  });
+
+  it('menerima payload gaya discohook', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    const payload = JSON.stringify({
+      content: null,
+      embeds: [{
+        title: 'Battle Reminder', description: 'tes', color: 16059404,
+        fields: [{ name: 'ok tes', value: 'tes masuk', inline: true }],
+        author: { name: 'neon' }, footer: { text: 'embed reminder tes' },
+        image: { url: 'https://media.tenor.com/a/b.gif' },
+        thumbnail: { url: 'https://media.tenor.com/a/b.gif' }
+      }],
+      attachments: []
+    });
+    const message = makeMessage('d r embed ' + reminderId + ' ' + payload, { userId: owner });
+    await svc().handleMessage(message);
+    assert.match(textOf(message), /Tersimpan/);
+    const embed = storage().getReminder(reminderId).embed;
+    assert.equal(embed.title, 'Battle Reminder');
+    assert.equal(embed.color, 16059404);
+    assert.equal(embed.author.name, 'neon');
+    assert.equal(embed.image.url, 'https://media.tenor.com/a/b.gif');
+  });
+
+  it('menolak payload dengan lebih dari satu embed', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    const message = makeMessage('d r embed ' + reminderId + ' {"embeds":[{"title":"a"},{"title":"b"}]}', { userId: owner });
+    await svc().handleMessage(message);
+    assert.match(textOf(message), /hanya satu embed/i);
+  });
+
+  it('menolak field asing pada embed biasa', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    const message = makeMessage('d r embed ' + reminderId + ' {"title":"x","bogus":1}', { userId: owner });
+    await svc().handleMessage(message);
+    assert.match(textOf(message), /tidak dikenal/);
+  });
+
+  it('menampilkan inventory sebagai embed dengan nama dan avatar pengguna', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    const message = makeMessage('d r inventory', { userId: owner, name: 'Ani' });
+    await svc().handleMessage(message);
+    const embed = message.sent.at(-1).embeds[0].data;
+    assert.match(embed.title, /Custom Reminders/);
+    assert.match(embed.title, /Ani/, 'judul memuat nama pengguna');
+    assert.match(embed.thumbnail.url, /avatars\/111222333444555666/, 'avatar sebagai thumbnail');
+    assert.match(embed.description, new RegExp(reminderId));
+    assert.ok(embed.fields.some(f => /Legenda/.test(f.name)), 'ada legenda');
+  });
+
+  it('menyertakan tombol "Cara menggunakan" dan "Variabel" pada panel', async () => {
+    const message = makeMessage('d r', { userId: '111222333444555666' });
+    await svc().handleMessage(message);
+    const components = message.sent.at(-1).components;
+    const labels = components[0].components.map(c => c.data.label);
+    assert.deepEqual(labels, ['Cara menggunakan', 'Variabel']);
+    assert.equal(svc().isPanelNav(components[0].components[0].data.custom_id), true);
+  });
+
+  it('menampilkan bantuan dan variabel lewat tombol, lalu kembali ke inventory', async () => {
+    const svcMod = svc();
+    const owner = '111222333444555666';
+    const makeInteraction = customId => {
+      const updates = [];
+      return {
+        customId,
+        user: { id: owner, username: 'user' + owner, globalName: 'Global', displayAvatarURL: () => 'https://cdn.discordapp.com/avatars/' + owner + '/x.png' },
+        member: { displayName: 'Ani' },
+        client: { users: { fetch: async id => ({ id, displayAvatarURL: () => null }) } },
+        updates,
+        update: async payload => { updates.push(payload); }
+      };
+    };
+
+    const help = makeInteraction('rempanel:help');
+    assert.equal(await svcMod.handleComponent(help), true);
+    const helpText = help.updates[0].embeds[0].data.description;
+    for (const cmd of ['redeem', 'view', 'send', 'update', 'embed', 'media', 'enable', 'disable']) {
+      assert.match(helpText, new RegExp(cmd), 'bantuan memuat ' + cmd);
+    }
+    assert.ok(help.updates[0].components[0].components[0].data.custom_id.endsWith(':back'), 'ada tombol kembali');
+
+    const vars = makeInteraction('rempanel:vars');
+    assert.equal(await svcMod.handleComponent(vars), true);
+    assert.match(vars.updates[0].embeds[0].data.description, /\{USER\}/);
+    assert.match(vars.updates[0].embeds[0].data.description, /\{DAILY_TOMORROW\}/);
+
+    const back = makeInteraction('rempanel:back');
+    assert.equal(await svcMod.handleComponent(back), true);
+    assert.match(back.updates[0].embeds[0].data.title, /Custom Reminders/);
+    assert.ok(back.updates[0].components[0].components[0].data.custom_id.endsWith(':help'), 'tombol panel kembali');
+
+    assert.equal(await svcMod.handleComponent({ customId: 'lain:1' }), false, 'abaikan tombol asing');
+  });
+
+  it('membuat template tanpa nama/isi: `r create battle embed`', async () => {
+    const message = makeMessage('d r create battle embed', { userId: 'dev1', dev: true });
+    await svc().handleMessage(message);
+    const text = textOf(message);
+    assert.match(text, /Template Dibuat/);
+    const code = (text.match(/`(T-[A-Z0-9]+)`/) || [])[1];
+    assert.ok(code, 'bot membalas kode template');
+    const template = storage().getTemplate(code);
+    assert.equal(template.category, 'HUNT_BATTLE', 'battle dipetakan ke HUNT_BATTLE');
+    assert.equal(template.format, 'EMBED');
+    assert.equal(template.message, '', 'tanpa isi default');
+    assert.match(template.name, /Hunt\/Battle Reminder/);
+  });
+
+  it('menerima nama aksi sebagai kategori pada create', async () => {
+    for (const [input, expected] of [['pray', 'PRAY_CURSE'], ['lucy', 'LUCY'], ['hunt', 'HUNT_BATTLE']]) {
+      const message = makeMessage('d r create ' + input + ' normal', { userId: 'dev1', dev: true });
+      await svc().handleMessage(message);
+      const code = (textOf(message).match(/`(T-[A-Z0-9]+)`/) || [])[1];
+      assert.ok(code, input + ' dibuat');
+      assert.equal(storage().getTemplate(code).category, expected, input + ' -> ' + expected);
+    }
+  });
+
+  it('menampilkan format baru pada error create tanpa kategori', async () => {
+    const message = makeMessage('d r create', { userId: 'dev1', dev: true });
+    await svc().handleMessage(message);
+    assert.match(textOf(message), /KATEGORI/);
+    assert.match(textOf(message), /battle embed/, 'contoh yang diminta user ada');
+  });
+
+  it('semua balasan reminder dikirim sebagai embed', async () => {
+    const cases = [
+      ['d r', { userId: 'u1' }],
+      ['d r view R-AAAAA', { userId: 'u1' }],
+      ['d r enable R-AAAAA', { userId: 'u1' }],
+      ['d r media https://media.tenor.com/a/b.gif', { userId: 'u1' }],
+      ['d r tidakada', { userId: 'u1' }],
+      ['d r redeem C-AAAAA', { userId: 'u1' }]
+    ];
+    for (const [content, opts] of cases) {
+      const message = makeMessage(content, opts);
+      await svc().handleMessage(message);
+      const last = message.sent.at(-1);
+      assert.ok(last && Array.isArray(last.embeds) && last.embeds.length === 1, content + ' harus berupa embed');
+    }
   });
 });
