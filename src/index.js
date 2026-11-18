@@ -12,6 +12,7 @@ const mathRace = require('./services/mathRace');
 const lucyReminder = require('./services/lucyReminder');
 const bossRewards = require('./services/bossRewardNotifications');
 const animalDex = require('./services/animalDex');
+const reminders = require('./services/reminders');
 
 logBuffer.install();
 if (!process.env.DISCORD_TOKEN || !process.env.LUCY_BOT_ID) {
@@ -71,11 +72,19 @@ client.once(Events.ClientReady, async c => {
   syncAnimalDexEmojis();
 });
 client.on(Events.MessageCreate, async message => {
-  lucyCounter.handleMessage(message, { onCounted: (m, name) => lucyReminder.onLucyCounted(m, name) })
+  lucyCounter.handleMessage(message, {
+    onCounted: (m, name) => {
+      lucyReminder.onLucyCounted(m, name);
+      // Titik integrasi aktivitas/grinding Lucy -> pengiriman reminder aktif.
+      reminders.deliverForActivity({ client, guildId: m.guildId, userId: m.author?.id, channelId: m.channelId })
+        .catch(e => console.error('[Reminders]', e));
+    }
+  })
     .catch(e => console.error('[LucyCounter]', e));
   lucyReminder.handleMessage(message).catch(e => console.error('[LucyReminder]', e));
   family100.handleMessage(message).catch(e => console.error('[Family100]', e));
   mathRace.handleMessage(message).catch(e => console.error('[MathRace]', e));
+  reminders.handleMessage(message).catch(e => console.error('[Reminders]', e));
   tracker.handleMessage(message).catch(console.error);
   bossRewards.enqueue(message);
   captureAnimalDex(message);

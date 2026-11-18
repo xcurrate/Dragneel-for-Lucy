@@ -20,7 +20,10 @@ const defaults = () => ({
   family100: { enabled: true, channelId: null, durationSeconds: 0 },
   mathRace: { enabled: true, channelId: null, durationSeconds: 30 },
   lucyReminder: { enabled: true, premium: false, replies: {}, lucyPrefixes: null },
-  autoThreadRep: { enabled: true, channelId: null, targetUserId: '1515658233174294569', amount: '50k', threadNamePrefix: 'Rep', autoArchiveDuration: 1440 }
+  autoThreadRep: { enabled: true, channelId: null, targetUserId: '1515658233174294569', amount: '50k', threadNamePrefix: 'Rep', autoArchiveDuration: 1440 },
+  // Custom Reminder. `collectibles` menambah tipe collectible per server;
+  // `randomImages` menyediakan sumber untuk variabel {CAT}/{DOG}.
+  reminders: { collectibles: [], randomImages: { cats: [], dogs: [] } }
 });
 function readAll() {
   fs.mkdirSync(dir, { recursive: true });
@@ -42,6 +45,14 @@ function mergeSettings(saved = {}) {
     mathRace: { ...base.mathRace, ...(saved.mathRace || {}) },
     lucyReminder: { ...base.lucyReminder, ...(saved.lucyReminder || {}), replies: { ...(saved.lucyReminder?.replies || {}) } },
     autoThreadRep: { ...base.autoThreadRep, ...(saved.autoThreadRep || {}) },
+    reminders: {
+      ...base.reminders, ...(saved.reminders || {}),
+      collectibles: [...(saved.reminders?.collectibles || base.reminders.collectibles)],
+      randomImages: {
+        cats: [...(saved.reminders?.randomImages?.cats || [])],
+        dogs: [...(saved.reminders?.randomImages?.dogs || [])]
+      }
+    },
     userModes: { ...(saved.userModes || {}) },
     userWarnSeconds: { ...(saved.userWarnSeconds || {}) },
     dmUsers: [...(saved.dmUsers || [])]

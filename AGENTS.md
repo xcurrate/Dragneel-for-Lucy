@@ -262,6 +262,31 @@
   dengan Family 100. Kolom `best_ms` menyimpan waktu tercepat menjawab.
 - Pengaturan per server: `settings.mathRace` (`enabled`, `channelId`, `durationSeconds` default 30).
 
+## Custom Reminder (`src/services/reminders.js`)
+
+Distribusi rilis ini **manual oleh developer** (tanpa giveaway otomatis/voting/pembayaran), tapi model
+datanya sudah siap untuk integrasi giveaway.
+
+- **Modul**: `src/utils/reminderStorage.js` (SQLite `data/reminders.db`), `src/utils/reminderVariables.js`
+  (registry variabel), `src/utils/reminderValidate.js` (embed/collectible/URL/Tenor),
+  `src/services/reminders.js` (perintah + runtime). Wiring: `src/index.js` (`reminders.handleMessage`
+  dan hook `onCounted`), blok `reminders` di `defaults()`/`mergeSettings()` `src/utils/storage.js`.
+- **Tiga ID**: `T-` template, `C-` claim/award, `R-` reminder milik user. `createAward` idempoten lewat
+  `UNIQUE(source, source_ref, recipient_id)` untuk sumber berulang (giveaway) dan lewat cek
+  `template_id + recipient_id + status='pending'` untuk pemberian manual. `markAwardRedeemed` memakai
+  guard SQL (`status='pending' AND recipient_id=? AND belum kedaluwarsa`) sehingga klaim ganda mustahil.
+- **Otorisasi**: memakai ulang `isDeveloper` dari `src/commands/prefix.js` (env `DEVELOPER_IDS`, pemilik
+  aplikasi, pemilik server). Tidak ada daftar developer kedua. Perintah template/give/awards/revoke
+  khusus developer; edit reminder khusus pemilik.
+- **Transfer** = pindah kepemilikan (`reminders.owner_id` satu sumber kebenaran), perlu konfirmasi
+  (`pendingConfirms` di memori, TTL 60 detik). Bukan berbagi akses.
+- **Runtime**: `deliverForActivity()` dipanggil dari hook `onCounted` (aktivitas Lucy) dengan jeda 60
+  detik per pengguna. Tidak ada event grinding baru yang dikarang — kalau hook ini berubah, adapter
+  ikut berubah.
+- **Integrasi giveaway masa depan**: `onGiveawayWinner({ client, guildId, giveawayId, winnerId, templateId })`.
+- **Test**: `test/reminders.test.js` (52 test) menutup prefix, otorisasi developer, award/redeem,
+  idempotensi, kepemilikan, validasi embed, variabel, runtime, dan persistensi.
+
 ## Prefix command (`<prefix> <perintah>`)
 - **Prefix bawaan = `d`** (inisial bot Dragneel), konstanta `DEFAULT_PREFIX` di
   `src/utils/storage.js`. Semua fallback `|| '!'` sudah memakai konstanta ini, jadi jangan

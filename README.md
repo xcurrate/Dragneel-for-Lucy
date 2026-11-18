@@ -194,6 +194,146 @@ Emoji juga bisa di-upload **manual** di Developer Portal (aplikasi → Emoji) de
 
 Setiap leaderboard memiliki tombol navigasi ⏮️ ◀️ ▶️ ⏭️ (awal, sebelumnya, berikutnya, akhir). Tombol membaca ulang data dari SQLite setiap kali ditekan, sehingga jumlah Lucy yang tampil selalu sinkron dengan data terbaru. Tombol tetap aktif di halaman pertama/terakhir (halaman otomatis di-clamp ke rentang yang valid).
 
+## Custom Reminder
+
+Reminder pribadi dengan variabel dinamis, dibuat dan dibagikan **secara manual oleh developer bot**.
+Distribusi rilis ini sengaja **tanpa giveaway otomatis, voting, tier supporter, atau pembayaran** —
+developer memberi reminder setelah menentukan pemenang di luar sistem ini. Integrasi giveaway otomatis
+bisa ditambahkan nanti lewat `onGiveawayWinner()` tanpa mengubah kepemilikan.
+
+Semua perintah mengikuti prefix server. Contoh memakai prefix bawaan `d`; kalau prefix server diubah,
+perintah otomatis ikut (`<prefix> r ...`). Alias pendek `r` sama dengan `reminder`.
+
+### Tiga jenis ID (jangan tertukar)
+
+| ID | Bentuk | Arti |
+|----|--------|------|
+| Template ID | `T-XXXXXX` | Cetakan reminder yang dibuat developer. Satu template bisa diberikan ke banyak orang. |
+| Claim ID | `C-XXXXXX` | Tiket pemberian untuk satu penerima. Dipakai penerima saat `redeem`. |
+| Reminder ID | `R-XXXXXX` | Reminder milik user (hasil redeem). Ini yang diatur, diaktifkan, dan dihadiahkan. |
+
+Hubungannya: satu **template** diberikan lewat satu **claim** kepada satu penerima; setelah diklaim,
+claim menghasilkan satu **reminder** milik penerima itu. Mengirim ulang `give` untuk template dan
+penerima yang sama yang claimnya belum diklaim tidak membuat claim baru.
+
+### Untuk penerima reminder
+
+- `<prefix> r redeem <CLAIM_ID>` — klaim reminder dari claim ID yang dikirim developer lewat DM.
+- `<prefix> r inventory` — daftar reminder milikmu.
+- `<prefix> r view <ID>` — pratinjau reminder (variabel sudah ter-render).
+- `<prefix> r info <ID>` — detail: pemilik, status, collectible, sumber template.
+- `<prefix> r active` — daftar reminder aktif.
+- `<prefix> r update <ID> <pesan>` — ubah pesan. Variabel seperti `{USER}` didukung.
+- `<prefix> r embed <ID> <JSON>` — atur embed (lihat contoh di bawah).
+- `<prefix> r setcollectible <ID> <tipe>` — atur tipe collectible.
+- `<prefix> r reset <ID>` — kembalikan ke bawaan template (perlu konfirmasi).
+- `<prefix> r enable <ID>` / `<prefix> r disable <ID>` — aktifkan atau matikan.
+- `<prefix> r send <@user> <ID>` — hadiahkan ke orang lain. Ini **memindahkan kepemilikan**
+  (bukan sekadar berbagi akses) dan perlu konfirmasi; setelah itu kamu tidak bisa mengubahnya lagi.
+- `<prefix> r tenor <URL>` — ubah halaman Tenor jadi URL GIF langsung.
+- `<prefix> r variables` / `<prefix> r help` — daftar variabel dan bantuan.
+
+Tindakan destruktif memakai konfirmasi: setelah `send` atau `reset`, balas
+`<prefix> r confirm` (atau `<prefix> r cancel`) dalam 60 detik.
+
+### Untuk developer bot
+
+Otorisasi memakai sistem Developer ID yang sudah ada (`isDeveloper`): ID di `DEVELOPER_IDS`, pemilik
+aplikasi bot, atau pemilik server. Tidak ada daftar developer terpisah.
+
+- `<prefix> r create <nama> | <pesan default> [| <embed JSON>]` — buat template, dapat `T-...`.
+- `<prefix> r templates` — daftar template.
+- `<prefix> r give <@user> <TEMPLATE_ID>` — beri reminder; bot mengirim DM berisi claim ID.
+- `<prefix> r awards` — daftar claim beserta status (`pending`, `redeemed`, `revoked`).
+- `<prefix> r revoke <CLAIM_ID>` — cabut claim yang belum diklaim (perlu konfirmasi).
+
+Contoh alur pemberian:
+
+```
+d r create Reminder Harian | Halo {USER}, jangan lupa reset <t:{DAILY_TOMORROW}:R> ya! | {"title":"Pengingat","color":"#5865F2"}
+d r give @pemenang T-NHHKTY
+# penerima:
+d r redeem C-B8DW6P
+```
+
+Kalau DM ke penerima gagal (DM ditutup), bot memberi tahu developer dan menampilkan claim ID supaya
+bisa disampaikan manual.
+
+### Variabel
+
+| Kelompok | Variabel |
+|----------|----------|
+| User | `{USER}`, `{EMOJI}`, `{USER_ID}`, `{USER_MENTION}`, `{USER_NAME}`, `{USER_DISPLAYNAME}`, `{USER_NICKNAME}`, `{USER_AVATAR}`, `{USER_SERVERAVATAR}` |
+| Goal | `{GOAL}`, `{GOAL_PROGRESS}`, `{GOAL_PROGRESS_INVERTED}`, `{GOAL_END}` |
+| Acak | `{FLAG}`, `{CAT}`, `{DOG}` |
+| Waktu | `{DAILY}`, `{DAILY_TOMORROW}`, `{DAILY_YESTERDAY}`, `{TIME}` |
+| Server | `{SERVER_NAME}`, `{SERVER_ICON}` |
+
+Catatan perilaku:
+
+- Variabel goal dibaca dari **sistem Target Lucy** yang sudah ada. Kalau target server belum
+  diaktifkan atau goal belum diatur, nilai diganti `(tidak tersedia)` — bukan angka karangan.
+- `{CAT}` dan `{DOG}` membaca daftar gambar di `reminders.randomImages` (lihat di bawah). Kalau daftar
+  kosong, muncul pesan bahwa gambar belum dikonfigurasi.
+- Nilai acak (`{EMOJI}`, `{FLAG}`, `{CAT}`, `{DOG}`) dipilih **sekali per pesan**, jadi `{EMOJI}` dua
+  kali menampilkan emoji yang sama dalam satu pesan.
+- Timestamp harian mengikuti reset harian WIB (`Asia/Jakarta`), sama dengan sistem target Lucy.
+- Variabel tak dikenal dibiarkan apa adanya, dan nilai hasil tidak dipindai ulang (tanpa ekspansi rekursif).
+
+Contoh timestamp relatif:
+
+```
+d r update R-F5Y9CR Halo {USER}, reset <t:{DAILY_TOMORROW}:R>!
+```
+
+### Contoh embed JSON
+
+```
+d r embed R-F5Y9CR {"title":"Pengingat {USER}","description":"Reset <t:{DAILY_TOMORROW}:R>","color":"#5865F2","footer":{"text":"{SERVER_NAME}"},"fields":[{"name":"Target","value":"{GOAL}","inline":true}]}
+```
+
+Field yang didukung: `title`, `description`, `url`, `color`, `timestamp`, `footer`, `image`,
+`thumbnail`, `author`, `fields`. Batas Discord ditegakkan sebelum disimpan: `title` 256,
+`description` 4096, `footer.text` 2048, `author.name` 256, `fields` maksimal 25 (nama 256, nilai 1024),
+total 6000 karakter. Hanya URL `https` yang diterima — skema `javascript:`, `data:`, dan `file:`
+ditolak, begitu juga field yang tidak dikenal.
+
+### Konfigurasi
+
+`data/guild-settings.json` per server menyimpan blok `reminders`:
+
+```json
+{ "reminders": { "collectibles": ["event_khusus"], "randomImages": { "cats": ["https://..."], "dogs": ["https://..."] } } }
+```
+
+`collectibles` menambah tipe collectible di luar bawaan (`common`, `uncommon`, `rare`, `epic`,
+`legendary`, `mythic`). Semua tipe divalidasi saat dipakai.
+
+### Data dan penyimpanan
+
+Semua data ada di SQLite `data/reminders.db` (`node:sqlite`, tabel `reminder_templates`,
+`reminder_awards`, `reminders`, `reminder_audit`) sehingga tetap utuh setelah bot restart. Riwayat
+pemberian dan transfer dicatat di `reminder_audit`. Tidak ada kepemilikan penting yang hanya ada di memori.
+
+### Kapan reminder aktif dikirim
+
+Reminder yang aktif dikirim saat pemiliknya melakukan **aktivitas Lucy** (aksi yang dihitung counter
+Lucy). Pengiriman diberi jeda minimal 60 detik per pengguna agar tidak spam, dan mention massal selalu
+dinetralkan.
+
+### Migrasi dan rollback
+
+- **Tanpa migrasi data**: fitur ini adalah penambahan baru. Saat pertama dijalankan, `data/reminders.db`
+  dibuat otomatis dengan `CREATE TABLE IF NOT EXISTS`, jadi server yang sudah berjalan tidak perlu
+  langkah apa pun.
+- **Kolom baru di masa depan** bersifat aditif dan penanda versi disimpan di tabel `schema_meta`
+  (`schema_version`).
+- **Rollback**: cukup kembalikan kode ke versi sebelumnya. File `data/reminders.db` boleh dibiarkan
+  (tidak dibaca kode lama) atau dihapus. Blok `reminders` di `data/guild-settings.json` juga aman
+  dibiarkan — pengaturan lama tidak dihapus oleh penambahan ini.
+- **Cadangkan sebelum upgrade besar**: salin `data/reminders.db` (beserta `-wal`/`-shm` bila ada) dan
+  `data/guild-settings.json`.
+
 ## Untuk moderator/admin
 Membutuhkan izin Discord Manage Server (Administrator juga diizinkan):
 - /boss setup channel:#channel role:@role — atur channel dan role yang akan ditag.
