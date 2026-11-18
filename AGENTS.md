@@ -292,7 +292,7 @@ siap untuk integrasi giveaway nanti.
   mustahil.
 - **Izin**: developer (`isDeveloper` lama) untuk template/give/awards/revoke. Admin/pemilik server
   untuk `s <aksi>`; developer **tidak** otomatis boleh. Pemilik saja untuk edit/enable/shareable.
-- **Jangan pakai backtick di dalam komentar SQL** pada template literal `db.exec(\`...\`)` di
+- **Jangan pakai backtick di dalam komentar SQL** pada template literal `db.exec(...)` di
   `reminderStorage.js` — backtick menutup literal dan bikin SyntaxError.
 - **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.
   Aturan format: reminder `EMBED` **tidak pernah** bisa dibagikan — `r shareable ... on` ditolak sejak
