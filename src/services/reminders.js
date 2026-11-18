@@ -136,18 +136,31 @@ function reminderEmbed(reminder, context) {
   return resolver.buildEmbed({ color: 0x5865F2, ...config }, rendered);
 }
 
+// Reminder boleh dipindahbukukan hanya bila formatnya NORMAL dan pemiliknya
+// sudah menyalakan `shareable`. Format EMBED tidak pernah bisa dibagikan.
+function isShareable(reminder) {
+  return Boolean(reminder) && reminder.format !== 'EMBED' && Boolean(reminder.shareable);
+}
+// Alasan penolakan, dipakai bersama oleh `r shareable`, `r send`, dan eksekusi
+// transfer supaya pesannya konsisten.
+function shareBlockReason(reminder) {
+  if (!reminder) return null;
+  if (reminder.format === 'EMBED') return 'Reminder berformat **Embed** tidak bisa dibagikan — hanya reminder **Normal** yang bisa dipindahbukukan.';
+  return null;
+}
+
 // Baris ringkas untuk inventory: status, ID, nama kategori+format, shareable.
 function inventoryLine(reminder) {
   const active = reminder.active ? ICON.active : ICON.inactive;
-  const share = reminder.shareable ? ICON.share : ICON.lock;
+  const share = isShareable(reminder) ? ICON.share : ICON.lock;
   const collectible = reminder.collectible ? ' • 🏅 ' + reminder.collectible : '';
   return active + ' `' + reminder.reminderId + '` — ' + cats.displayNameFor(reminder.category, reminder.format) + ' ' + share + collectible;
 }
 
 const INVENTORY_LEGEND = [
   ICON.active + ' **Aktif** — pengingat dinyalakan.',
-  ICON.share + ' **Shareable** — boleh dipindahbukukan ke user lain.',
-  ICON.lock + ' **Tidak shareable** — hanya bisa dipakai sendiri.',
+  ICON.share + ' **Shareable** — reminder Normal yang boleh dipindahbukukan ke user lain.',
+  ICON.lock + ' **Tidak shareable** — hanya bisa dipakai sendiri (semua reminder Embed).',
   ICON.inactive + ' **Tidak aktif** — tetap bisa diubah.'
 ].join('\n');
 
@@ -211,16 +224,28 @@ function redeemAward({ claimId, userId, now = Date.now() }) {
   const template = store.getTemplate(award.templateId);
   if (!template) return { ok: false, errors: ['Template sumber tidak ditemukan lagi.'] };
 
-  return store.inTransaction(() => {
-    const reminder = store.createReminder({
-      ownerId: userId, templateId: template.templateId, message: template.message,
-      embed: template.embed, collectible: template.collectible, active: false, now,
-      category: template.category, format: template.format, name: template.name
+  try {
+    return store.inTransaction(() => {
+      const reminder = store.createReminder({
+        ownerId: userId, templateId: template.templateId, message: template.message,
+        embed: template.embed, collectible: template.collectible, active: false, now,
+        category: template.category, format: template.format, name: template.name
+      });
+      const won = store.markAwardRedeemed({ claimId: id, recipientId: userId, reminderId: reminder.reminderId, now });
+      // Balapan klaim: award sudah diklaim/dicabut di antara pemeriksaan awal dan
+      // transaksi ini. Harus DILEMPAR supaya transaksi di-ROLLBACK — kalau hanya
+      // mengembalikan hasil gagal, transaksi justru COMMIT dan reminder yang baru
+      // dibuat tertinggal. Hasilnya ditangkap di bawah sebagai kegagalan biasa
+      // agar pengguna tetap menerima pesan yang jelas.
+      if (!won) throw new Error('CLAIM_RACE');
+      return { ok: true, reminder, template };
     });
-    const won = store.markAwardRedeemed({ claimId: id, recipientId: userId, reminderId: reminder.reminderId, now });
-    if (!won) throw new Error('CLAIM_RACE');
-    return { ok: true, reminder, template };
-  });
+  } catch (error) {
+    if (error?.message === 'CLAIM_RACE') {
+      return { ok: false, errors: ['Award ini baru saja diklaim. Kode hanya bisa dipakai sekali.'], race: true };
+    }
+    throw error;
+  }
 }
 
 // ------------------------------------------------------------ confirmation --
@@ -235,7 +260,7 @@ function userCommandList(prefix) {
   return [
     { cmd: prefix + ' r redeem <CLAIM_ID>', desc: 'Klaim reminder dari claim ID yang dikirim developer.' },
     { cmd: prefix + ' r view <ID>', desc: 'Lihat pratinjau pesan/embed reminder milikmu.' },
-    { cmd: prefix + ' r send <@user> <ID>', desc: 'Pindahbukukan reminder shareable (perlu konfirmasi).' },
+    { cmd: prefix + ' r send <@user> <ID>', desc: 'Bagikan reminder Normal ke user lain (perlu konfirmasi).' },
     { cmd: prefix + ' r update <ID> <pesan>', desc: 'Ubah pesan biasa reminder.' },
     { cmd: prefix + ' r embed <ID> <JSON>', desc: 'Atur embed (JSON hasil salin dari discohook juga diterima).' },
     { cmd: prefix + ' r media <URL>', desc: 'Ambil URL media dari Tenor atau Klipy.' },
@@ -321,7 +346,13 @@ async function handleMessage(message, deps = {}) {
 
   // --- redeem ---
   if (sub === 'redeem' || sub === 'klaim') {
-    const result = redeemAward({ claimId: args[0], userId: message.author.id });
+    let result;
+    try {
+      result = redeemAward({ claimId: args[0], userId: message.author.id });
+    } catch (error) {
+      result = { ok: false, errors: ['Klaim gagal diproses. Coba lagi sebentar lagi.'] };
+      console.error('[Reminders] redeem gagal:', error?.message);
+    }
     if (!result.ok) { await sendError(message, result.errors.join(' ')); return true; }
     await sendEmbed(message, {
       title: ICON.ok + ' Reminder Diklaim',
@@ -346,7 +377,7 @@ async function handleMessage(message, deps = {}) {
     const context = contextFor(message, user || message.author, message.guild);
     const embed = reminderEmbed(reminder, context);
     embed.setTitle(embed.data.title || (ICON.info + ' ' + reminder.reminderId + ' — ' + cats.displayNameFor(reminder.category, reminder.format)));
-    embed.setFooter({ text: (reminder.active ? ICON.active + ' aktif' : ICON.inactive + ' nonaktif') + ' • ' + (reminder.shareable ? ICON.share + ' shareable' : ICON.lock + ' tidak shareable') + ' • ' + reminder.reminderId });
+    embed.setFooter({ text: (reminder.active ? ICON.active + ' aktif' : ICON.inactive + ' nonaktif') + ' • ' + (isShareable(reminder) ? ICON.share + ' shareable' : ICON.lock + ' tidak shareable') + ' • ' + reminder.reminderId });
     await send(message, { embeds: [embed] });
     return true;
   }
@@ -423,8 +454,10 @@ async function handleMessage(message, deps = {}) {
     const reminder = store.getReminder(id);
     if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
     if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa menghadiahkan reminder milikmu sendiri.'); return true; }
+    const blocked = shareBlockReason(reminder);
+    if (blocked) { await sendError(message, blocked); return true; }
     if (!reminder.shareable) {
-      await sendError(message, 'Reminder ini tidak shareable, jadi tidak bisa dipindahbukukan.\nAktifkan dulu dengan `' + prefix + ' r shareable ' + store.normalizeId(id) + ' on`.');
+      await sendError(message, 'Reminder ini belum ditandai shareable, jadi tidak bisa dipindahbukukan.\nAktifkan dulu dengan `' + prefix + ' r shareable ' + store.normalizeId(id) + ' on`.');
       return true;
     }
     return askConfirm(message, prefix, { kind: 'transfer', reminderId: store.normalizeId(id), toUserId: targetId },
@@ -456,6 +489,12 @@ async function handleMessage(message, deps = {}) {
     const reminder = store.getReminder(id);
     if (!reminder) { await sendError(message, 'Reminder tidak ditemukan.'); return true; }
     if (!isOwner(message, reminder)) { await sendError(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    // Reminder Embed tidak pernah bisa dibagikan, jadi menyalakan shareable
+    // ditolak sejak awal — bukan hanya diabaikan saat `r send`.
+    if (action === 'on') {
+      const blocked = shareBlockReason(reminder);
+      if (blocked) { await sendError(message, blocked); return true; }
+    }
     store.updateReminder(id, { shareable: action === 'on' });
     await sendOk(message, action === 'on'
       ? ICON.share + ' Reminder `' + store.normalizeId(id) + '` sekarang shareable (boleh dipindahbukukan).'
@@ -660,6 +699,8 @@ async function runConfirmed(message, prefix, action, deps) {
     const reminder = store.getReminder(action.reminderId);
     if (!reminder) { await sendError(message, 'Reminder tidak ditemukan lagi.'); return true; }
     if (!isOwner(message, reminder)) { await sendError(message, 'Kamu bukan lagi pemilik reminder itu.'); return true; }
+    const blocked = shareBlockReason(reminder);
+    if (blocked) { await sendError(message, blocked); return true; }
     const moved = store.transferReminder({ reminderId: action.reminderId, fromUserId: message.author.id, toUserId: action.toUserId });
     if (!moved) { await sendError(message, 'Transfer gagal — kepemilikan mungkin sudah berubah.'); return true; }
     await sendEmbed(message, {
@@ -744,7 +785,7 @@ module.exports = {
   handleMessage, handleComponent, awardReminder, redeemAward, onGiveawayWinner,
   helpText, variablesText, usageEmbed, variablesEmbed, reminderEmbed, contextFor, dmAward,
   inventoryEmbed, inventoryLine, panelRow, panelBackRow, isPanelNav, panelUser,
-  isAdmin, isOwner, canManage,
+  isAdmin, isOwner, canManage, isShareable, shareBlockReason,
   // untuk pengujian
   pendingConfirms, CONFIRM_TTL_MS
 };

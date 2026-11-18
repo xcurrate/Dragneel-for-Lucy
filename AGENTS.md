@@ -290,6 +290,16 @@ siap untuk integrasi giveaway nanti.
 - **Izin**: developer (`isDeveloper` lama) untuk template/give/awards/revoke. Admin/pemilik server
   untuk `s <aksi>`; developer **tidak** otomatis boleh. Pemilik saja untuk edit/enable/shareable.
 - **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.
+  Aturan format: reminder `EMBED` **tidak pernah** bisa dibagikan — `r shareable ... on` ditolak sejak
+  awal, dan `r send` serta eksekusi transfer memakai `shareBlockReason()` supaya kolom `shareable`
+  yang sempat `true` (data lama) tidak bisa dipakai lolos. Helper: `isShareable()` untuk tampilan,
+  `shareBlockReason()` untuk pesan penolakan.
+- **Kode redeem (`C-XXXXXX`) sekali pakai dan hanya penerimanya.** `markAwardRedeemed` memakai guard
+  `status = 'pending'` + `recipient_id` di SQL. Balapan klaim **harus** dilempar (`CLAIM_RACE`) di
+  dalam `inTransaction` agar ROLLBACK menghapus reminder setengah jadi; kalau hanya mengembalikan
+  hasil gagal, transaksi COMMIT dan reminder tertinggal. `redeemAward` menangkapnya jadi
+  `{ ok: false, errors: [...] }`, dan handler `redeem` membungkus pemanggilan dengan try/catch agar
+  pengguna selalu menerima balasan.
 - **Panel interaktif**: `d r` = inventory (judul = nama user, thumbnail = avatar) + tombol
   `rempanel:help`, `rempanel:vars`, `rempanel:back`. Router tombol ada di `src/index.js`.
 - **Semua balasan** dalam lingkup reminder dikirim sebagai embed (`sendEmbed`/`sendOk`/`sendError`/`sendWarn`).

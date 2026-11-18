@@ -342,7 +342,7 @@ describe('custom reminder — ownership and permissions', () => {
     // Transfer hanya boleh untuk reminder yang ditandai shareable.
     const notShareable = makeMessage('d r send <@' + target + '> ' + reminderId, { userId: owner });
     await svc().handleMessage(notShareable);
-    assert.match(textOf(notShareable), /tidak shareable/);
+    assert.match(textOf(notShareable), /belum ditandai shareable/);
     await svc().handleMessage(makeMessage('d r shareable ' + reminderId + ' on', { userId: owner }));
 
     const send = makeMessage('d r send <@' + target + '> ' + reminderId, { userId: owner });
@@ -973,7 +973,7 @@ describe('custom reminder — shareable and transfer rules', () => {
     const { reminderId } = await awardAndRedeem();
     const send = makeMessage('d r send <@999888777666555444> ' + reminderId, { userId: '111222333444555666' });
     await svc().handleMessage(send);
-    assert.match(textOf(send), /tidak shareable/);
+    assert.match(textOf(send), /belum ditandai shareable/);
     assert.equal(storage().getReminder(reminderId).ownerId, '111222333444555666');
   });
 
@@ -1599,5 +1599,141 @@ describe('custom reminder — menghapus reminder (khusus developer)', () => {
     await svc().handleMessage(makeMessage('d r confirm', { userId: 'dev1', dev: true }));
     const audit = store.listAudit({ reminderId });
     assert.ok(audit.some(entry => entry.action === 'reminder_delete'), 'audit reminder_delete tercatat');
+  });
+});
+
+describe('custom reminder — aturan berbagi per format', () => {
+  const OWNER = '111222333444555666';
+  const TARGET = '999888777666555444';
+
+  it('reminder Normal bisa dibagikan ke user lain', async () => {
+    const { reminderId } = await awardAndRedeem(OWNER); // template NORMAL
+    const reminder = storage().getReminder(reminderId);
+    assert.equal(reminder.format, 'NORMAL');
+
+    // Tanpa shareable: ditolak, tapi alasannya "belum ditandai", bukan soal format.
+    const early = makeMessage('d r send <@' + TARGET + '> ' + reminderId, { userId: OWNER });
+    await svc().handleMessage(early);
+    assert.match(textOf(early), /belum ditandai shareable/);
+
+    // Nyalakan shareable -> berhasil setelah konfirmasi.
+    const on = makeMessage('d r shareable ' + reminderId + ' on', { userId: OWNER });
+    await svc().handleMessage(on);
+    assert.doesNotMatch(textOf(on), /tidak bisa dibagikan/);
+    assert.equal(storage().getReminder(reminderId).shareable, true);
+
+    await svc().handleMessage(makeMessage('d r send <@' + TARGET + '> ' + reminderId, { userId: OWNER }));
+    await svc().handleMessage(makeMessage('d r confirm', { userId: OWNER }));
+    assert.equal(storage().getReminder(reminderId).ownerId, TARGET, 'kepemilikan berpindah ke target');
+  });
+
+  it('reminder Embed tidak bisa di-share', async () => {
+    const { templateId } = await makeTemplate('Embed Satu', 'x', { category: 'HUNT_BATTLE', format: 'EMBED' });
+    const give = makeMessage('d r give <@' + OWNER + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: OWNER });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+    assert.equal(storage().getReminder(reminderId).format, 'EMBED');
+
+    // Menyalakan shareable ditolak.
+    const on = makeMessage('d r shareable ' + reminderId + ' on', { userId: OWNER });
+    await svc().handleMessage(on);
+    assert.match(textOf(on), /Embed.*tidak bisa dibagikan/i);
+    assert.equal(storage().getReminder(reminderId).shareable, false, 'shareable tetap false');
+
+    // `r send` pun ditolak, dengan alasan format.
+    const send = makeMessage('d r send <@' + TARGET + '> ' + reminderId, { userId: OWNER });
+    await svc().handleMessage(send);
+    assert.match(textOf(send), /Embed.*tidak bisa dibagikan/i);
+    assert.equal(storage().getReminder(reminderId).ownerId, OWNER, 'kepemilikan tidak berubah');
+  });
+
+  it('menolak transfer Embed walau kolom shareable sempat true', async () => {
+    // Kasus batas: data lama/kolom diubah langsung. Aturan format harus tetap menang.
+    const { templateId } = await makeTemplate('Embed Dua', 'x', { category: 'HUNT_BATTLE', format: 'EMBED' });
+    const give = makeMessage('d r give <@' + OWNER + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: OWNER });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+
+    storage().updateReminder(reminderId, { shareable: true });
+    const send = makeMessage('d r send <@' + TARGET + '> ' + reminderId, { userId: OWNER });
+    await svc().handleMessage(send);
+    assert.match(textOf(send), /Embed.*tidak bisa dibagikan/i);
+    assert.equal(storage().getReminder(reminderId).ownerId, OWNER);
+  });
+
+  it('inventory menandai reminder Embed sebagai tidak shareable', async () => {
+    const { templateId } = await makeTemplate('Embed Tiga', 'x', { category: 'HUNT_BATTLE', format: 'EMBED' });
+    const give = makeMessage('d r give <@' + OWNER + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    await svc().handleMessage(makeMessage('d r redeem ' + idOf(give, 'C'), { userId: OWNER }));
+    const inventory = makeMessage('d r inventory', { userId: OWNER });
+    await svc().handleMessage(inventory);
+    const text = JSON.stringify(inventory.sent.at(-1).embeds[0].data);
+    assert.match(text, /Tidak shareable/, 'legend menjelaskan tidak shareable');
+    assert.match(text, /🔒/, 'baris reminder Embed ditandai gembok');
+  });
+});
+
+describe('custom reminder — kode redeem sekali pakai & hanya penerima', () => {
+  const OWNER = '111222333444555666';
+  const OTHER = '999888777666555444';
+
+  it('kode hanya bisa di-redeem satu kali walau dicoba berkali-kali', async () => {
+    const { claimId } = await awardAndRedeem(OWNER);
+    assert.equal(storage().getAward(claimId).status, 'redeemed');
+    assert.equal(storage().listRemindersByOwner(OWNER).length, 1);
+
+    for (let i = 0; i < 3; i++) {
+      const again = makeMessage('d r redeem ' + claimId, { userId: OWNER });
+      await svc().handleMessage(again);
+      assert.match(textOf(again), /sudah diklaim/);
+    }
+    assert.equal(storage().listRemindersByOwner(OWNER).length, 1, 'tetap satu reminder');
+  });
+
+  it('kode tidak bisa di-redeem selain oleh penerimanya', async () => {
+    const { templateId } = await makeTemplate();
+    const give = makeMessage('d r give <@' + OWNER + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const claimId = idOf(give, 'C');
+
+    const wrong = makeMessage('d r redeem ' + claimId, { userId: OTHER });
+    await svc().handleMessage(wrong);
+    assert.match(textOf(wrong), /bukan milikmu/);
+    assert.equal(storage().getAward(claimId).status, 'pending', 'kode tetap bisa dipakai penerima');
+    assert.equal(storage().listRemindersByOwner(OTHER).length, 0, 'orang lain tidak dapat reminder');
+
+    // Penerima yang sah tetap bisa memakainya.
+    const right = makeMessage('d r redeem ' + claimId, { userId: OWNER });
+    await svc().handleMessage(right);
+    assert.match(textOf(right), /Diklaim/);
+    assert.equal(storage().getAward(claimId).status, 'redeemed');
+  });
+
+  it('balapan klaim dibalas dengan pesan jelas dan tidak meninggalkan reminder', async () => {
+    // Kasus ini hanya bisa terjadi saat dua klaim berbarengan. Untuk mengujinya,
+    // `markAwardRedeemed` dibuat gagal sekali — meniru award yang baru saja
+    // diklaim proses lain setelah pemeriksaan awal lolos.
+    const store = require('../src/utils/reminderStorage');
+    const { templateId } = await makeTemplate();
+    const award = store.createAward({ templateId, recipientId: OWNER, issuerId: 'dev1' }).award;
+
+    const real = store.markAwardRedeemed;
+    store.markAwardRedeemed = () => false;
+    let result;
+    try {
+      result = svc().redeemAward({ claimId: award.claimId, userId: OWNER });
+    } finally {
+      store.markAwardRedeemed = real;
+    }
+
+    assert.equal(result.ok, false, 'dilaporkan gagal, bukan exception');
+    assert.match(result.errors.join(' '), /sekali/);
+    assert.equal(store.listRemindersByOwner(OWNER).length, 0, 'reminder dari transaksi batal tidak tertinggal');
+    assert.equal(store.getAward(award.claimId).status, 'pending', 'award tidak berubah status');
   });
 });

@@ -270,7 +270,7 @@ Delapan perintah pengguna:
 |----------|--------|
 | `<prefix> r redeem <CLAIM_ID>` | Klaim reminder dari claim ID yang dikirim developer. |
 | `<prefix> r view <ID>` | Pratinjau pesan/embed (variabel sudah ter-render). |
-| `<prefix> r send <@user> <ID>` | Pindahbukukan reminder **shareable** (perlu konfirmasi). |
+| `<prefix> r send <@user> <ID>` | Bagikan reminder **Normal** yang sudah ditandai shareable (perlu konfirmasi). |
 | `<prefix> r update <ID> <pesan>` | Ubah pesan biasa. |
 | `<prefix> r embed <ID> <JSON>` | Atur embed. JSON hasil salin dari discohook.org juga diterima. |
 | `<prefix> r media <URL>` | Ambil URL media dari Tenor atau Klipy. |
@@ -279,6 +279,39 @@ Delapan perintah pengguna:
 
 Pendukung: `<prefix> r shareable <ID> on|off` (menandai boleh dipindahbukukan), `setcollectible`,
 `reset` (perlu konfirmasi), serta `active`/`info` sebagai alias tampilan. Semua balasan berupa embed.
+
+#### Aturan berbagi reminder
+
+| Format reminder | Bisa dibagikan? |
+|-----------------|-----------------|
+| **Normal** (`NORMAL`) | Bisa — selama pemilik menyalakan `shareable` |
+| **Embed** (`EMBED`) | **Tidak bisa**, selamanya |
+
+Alasannya: isi embed dibuat khusus untuk satu orang, jadi lebih rapi kalau tidak berpindah tangan.
+`r shareable <ID> on` untuk reminder Embed **ditolak sejak awal**, dan `r send` pun menolak dengan
+alasan format. Jadi tidak ada reminder Embed yang setengah-setengah statusnya.
+
+Cara membagikan reminder Normal:
+
+```
+d r shareable R-F5Y9C on      (pemilik menyalakan izin)
+d r send @teman R-F5Y9C       (bot minta konfirmasi)
+d r confirm
+→ 🎉 Reminder Dipindahbukukan
+```
+
+Ini **memindahkan kepemilikan** — setelah konfirmasi, pengirim tidak bisa lagi mengubah reminder itu.
+
+#### Kode redeem: sekali pakai, hanya untuk penerimanya
+
+Kode claim dari developer (`C-XXXXXX`) hanya bisa **di-redeem satu kali** dan **hanya oleh penerima
+yang ditunjuk**. Percobaan kedua dijawab `Award ini sudah diklaim sebelumnya`, dan orang lain dijawab
+`Award ini bukan milikmu.` Kode yang dicoba orang lain tetap berstatus `pending`, jadi penerima yang
+benar tidak kehilangan haknya.
+
+Saat dua klaim datang bersamaan, transaksi database memastikan hanya satu yang berhasil — yang kalah
+mendapat pesan `Award ini baru saja diklaim. Kode hanya bisa dipakai sekali.` dan reminder setengah
+jadi tidak tertinggal.
 
 #### Menghapus reminder (khusus developer)
 
@@ -302,8 +335,8 @@ Developer bisa menghapus reminder milik siapa pun (mis. data uji atau salah beri
 `<prefix> r inventory`. Riwayat award yang sudah diklaim tetap tercatat meski reminder dihapus.
 
 Legenda inventory: ✅ aktif • 🎉 shareable • 🔒 tidak shareable • ❌ nonaktif (tetap bisa diubah).
-Aktif dan shareable **independen** — reminder bisa aktif tanpa shareable. Reminder nonaktif tetap bisa
-disunting. Mengubah pesan/embed/collectible **tidak** mengubah Reminder ID, kategori, format, atau pemilik.
+Aktif dan shareable **independen** — reminder bisa aktif tanpa shareable. Semua reminder Embed selalu
+bertanda 🔒. Reminder nonaktif tetap bisa disunting. Mengubah pesan/embed/collectible **tidak** mengubah Reminder ID, kategori, format, atau pemilik.
 
 ### Untuk developer bot
 
