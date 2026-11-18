@@ -562,7 +562,9 @@ async function handleCommand(message) {
   const parts = rest.trim().split(/\s+/);
   const command = (parts[0] || '').toLowerCase();
 
-  if (['lreminder', 'lrem', 'reminder'].includes(command)) return handleReminderCommand(message, prefix, parts);
+  // `reminder` sengaja TIDAK di sini: itu milik Custom Reminder (`d r`/`d reminder`).
+  // Kalau ikut ditangani di sini, satu pesan `d reminder` membalas dua kali.
+  if (['lreminder', 'lrem'].includes(command)) return handleReminderCommand(message, prefix, parts);
   // `global`/`g` berdiri sendiri = leaderboard lintas server (default Lucy).
   if (['global', 'g'].includes(command)) return handleLeaderboardCommand(message, prefix, parts, { forceGlobal: true });
   if (['top', 't', 'tglobal', 'tall', 'llb', 'llbboard', 'lboard'].includes(command)) {

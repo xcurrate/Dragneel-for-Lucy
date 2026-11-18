@@ -1477,3 +1477,31 @@ describe('custom reminder — tag tunggal dan token {mention} di embed', () => {
     assert.equal(payload.reply.messageReference, 'm1');
   });
 });
+
+describe('custom reminder — variabel waktu aman untuk embed', () => {
+  const variables = () => require('../src/utils/reminderVariables');
+
+  it('menyediakan bentuk teks 00:00 WIB yang benar-benar dirender di embed', () => {
+    const now = Date.UTC(2026, 0, 14, 22, 30, 0); // 15 Jan 2026 05:30 WIB
+    const context = variables().createRenderContext({ user: { id: '1', name: 'ani' }, now });
+    assert.equal(variables().render('{DAILY_TIME}', context), '00.00');
+    assert.equal(variables().render('{DAILY_DATE}', context), '15 Januari 2026');
+    assert.equal(variables().render('{DAILY_FULL}', context), 'Kamis, 15 Januari 2026 pukul 00.00 WIB');
+    assert.match(variables().render('{DAILY_IN}', context), /(lalu|dalam)/);
+    assert.match(variables().render('{TOMORROW_FULL}', context), /16 Januari 2026 pukul 00\.00 WIB/);
+  });
+
+  it('menandai {DAILY} sebagai khusus content, bukan untuk embed', () => {
+    const reference = Object.fromEntries(variables().variableReference().map(v => [v.name, v.description]));
+    assert.match(reference['{DAILY}'], /tidak render di embed/i);
+    assert.match(reference['{DAILY_FULL}'], /aman di embed/i);
+  });
+
+  it('embed dengan {DAILY_FULL} berisi teks waktu, bukan angka mentah', () => {
+    const now = Date.UTC(2026, 0, 14, 22, 30, 0);
+    const context = variables().createRenderContext({ user: { id: '1', name: 'ani' }, now });
+    const embed = variables().renderEmbed({ title: 'Reset', description: 'Reset {DAILY_FULL}' }, context);
+    assert.equal(embed.description, 'Reset Kamis, 15 Januari 2026 pukul 00.00 WIB');
+    assert.doesNotMatch(embed.description, /<t:\d+/);
+  });
+});

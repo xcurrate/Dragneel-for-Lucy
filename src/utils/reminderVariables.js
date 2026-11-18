@@ -34,6 +34,24 @@ function wibDayStartUnix(dayOffset = 0, now = Date.now()) {
   return Math.floor((utcMidnightWib + dayOffset * 86400000) / 1000);
 }
 
+// Format WIB siap-teks. Dipakai variabel *_FULL/_DATE/_TIME/_IN yang aman
+// ditampilkan di dalam embed.
+function wibClock(unixSeconds) {
+  return new Intl.DateTimeFormat('id-ID', { timeZone: WIB, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(unixSeconds * 1000));
+}
+function wibDate(unixSeconds) {
+  return new Intl.DateTimeFormat('id-ID', { timeZone: WIB, day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(unixSeconds * 1000));
+}
+function wibFull(unixSeconds) {
+  return new Intl.DateTimeFormat('id-ID', { timeZone: WIB, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(unixSeconds * 1000)) + ' pukul ' + wibClock(unixSeconds) + ' WIB';
+}
+function relativeWib(unixSeconds, now) {
+  const deltaMinutes = Math.round((unixSeconds - Math.floor(now / 1000)) / 60);
+  const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'auto' });
+  if (Math.abs(deltaMinutes) < 60) return rtf.format(deltaMinutes, 'minute');
+  return rtf.format(Math.round(deltaMinutes / 60), 'hour');
+}
+
 function pick(list, random) {
   return list[Math.floor(random() * list.length) % list.length];
 }
@@ -105,10 +123,18 @@ const VARIABLES = {
   DOG: { description: 'Gambar anjing acak dari daftar yang dikonfigurasi', resolve: c => c.random.dog },
 
   // --- TIME ---
-  DAILY: { description: 'Timestamp 00:00 WIB hari ini', resolve: c => String(c.time.daily) },
-  DAILY_TOMORROW: { description: 'Timestamp 00:00 WIB besok', resolve: c => String(c.time.tomorrow) },
-  DAILY_YESTERDAY: { description: 'Timestamp 00:00 WIB kemarin', resolve: c => String(c.time.yesterday) },
-  TIME: { description: 'Timestamp sekarang', resolve: c => String(c.time.now) },
+  // Bentuk `<t:...>` (DAILY/TIME) hanya dirender Discord di CONTENT pesan, TIDAK
+  // di dalam embed — di embed angkanya tampil apa adanya. Karena itu bentuk
+  // siap-teks WIB disediakan dan itulah yang aman dipakai di embed.
+  DAILY: { description: 'Timestamp Discord 00:00 WIB hari ini (khusus content, tidak render di embed)', resolve: c => String(c.time.daily) },
+  DAILY_TOMORROW: { description: 'Timestamp Discord 00:00 WIB besok (khusus content, tidak render di embed)', resolve: c => String(c.time.tomorrow) },
+  DAILY_YESTERDAY: { description: 'Timestamp Discord 00:00 WIB kemarin (khusus content, tidak render di embed)', resolve: c => String(c.time.yesterday) },
+  TIME: { description: 'Timestamp Discord sekarang (khusus content, tidak render di embed)', resolve: c => String(c.time.now) },
+  DAILY_TIME: { description: 'Jam 00:00 WIB hari ini sebagai teks (aman di embed)', resolve: c => c.time.dailyClock },
+  DAILY_DATE: { description: 'Tanggal reset WIB hari ini sebagai teks (aman di embed)', resolve: c => c.time.dailyDate },
+  DAILY_FULL: { description: 'Tanggal + jam reset WIB hari ini sebagai teks (aman di embed)', resolve: c => c.time.dailyFull },
+  DAILY_IN: { description: 'Hitung mundur ke reset WIB hari ini (aman di embed)', resolve: c => c.time.dailyRelative },
+  TOMORROW_FULL: { description: 'Tanggal + jam reset WIB besok sebagai teks (aman di embed)', resolve: c => c.time.tomorrowFull },
 
   // --- SERVER ---
   SERVER_NAME: { description: 'Nama server', resolve: c => c.guild?.name || FALLBACK },
@@ -140,12 +166,21 @@ function createRenderContext({ user = {}, guild = null, guildId = null, now = Da
       cat: catList.length ? pick(catList, random) : '(gambar kucing belum dikonfigurasi)',
       dog: dogList.length ? pick(dogList, random) : '(gambar anjing belum dikonfigurasi)'
     },
-    time: {
-      now: Math.floor(now / 1000),
-      daily: wibDayStartUnix(0, now),
-      tomorrow: wibDayStartUnix(1, now),
-      yesterday: wibDayStartUnix(-1, now)
-    }
+    time: (() => {
+      const daily = wibDayStartUnix(0, now);
+      const tomorrow = wibDayStartUnix(1, now);
+      return {
+        now: Math.floor(now / 1000),
+        daily,
+        tomorrow,
+        yesterday: wibDayStartUnix(-1, now),
+        dailyClock: wibClock(daily),
+        dailyDate: wibDate(daily),
+        dailyFull: wibFull(daily),
+        dailyRelative: relativeWib(daily, now),
+        tomorrowFull: wibFull(tomorrow)
+      };
+    })()
   };
 }
 

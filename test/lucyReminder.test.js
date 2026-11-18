@@ -1306,3 +1306,55 @@ describe('leaderboard navigation buttons', () => {
     assert.equal(await svc.handleLeaderboardNav({ customId: 'lcnav:daily:-:next', guildId: 'guild1' }), false);
   });
 });
+
+describe('pengingat Lucy hanya saat benar-benar menyebut Lucy', () => {
+  it('tidak memasang pengingat Lucy untuk chat biasa', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const counterSvc = require('../src/services/lucyCounter');
+    svc.timers.clear();
+    await counterSvc.handleMessage(makeMessage('halo semua apa kabar'));
+    assert.equal(svc.timers.size, 0, 'chat tanpa kata lucy tidak memicu pengingat');
+    await counterSvc.handleMessage(makeMessage('besok kita main ya'));
+    assert.equal(svc.timers.size, 0);
+  });
+
+  it('memasang pengingat Lucy hanya untuk pesan yang menyebut lucy', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const counterSvc = require('../src/services/lucyCounter');
+    const prefStore = require('../src/utils/lucyActionStorage');
+    prefStore.setPref('user1', 'lucy', { enabled: true, pingMode: 'none' });
+    svc.timers.clear();
+    await counterSvc.handleMessage(makeMessage('halo lucy apa kabar'));
+    assert.equal(svc.timers.size, 1, 'pesan berisi lucy memicu pengingat Lucy');
+    assert.equal([...svc.reminders.values()][0].kind, 'lucy');
+    svc.timers.clear();
+  });
+
+  it('`lucy battle` hanya memicu pengingat kategori battle, bukan Lucy', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const prefStore = require('../src/utils/lucyActionStorage');
+    prefStore.setPref('user1', 'battle', { enabled: true, pingMode: 'none' });
+    prefStore.setPref('user1', 'lucy', { enabled: true, pingMode: 'none' });
+    svc.timers.clear();
+    await svc.handleMessage(makeMessage('lucy battle'));
+    assert.equal(svc.timers.size, 1, 'tepat satu pengingat');
+    assert.deepEqual([...svc.reminders.values()].map(r => r.kind), ['battle']);
+    svc.timers.clear();
+  });
+});
+
+describe('`d reminder` hanya ditangani Custom Reminder', () => {
+  it('engine pengingat Lucy tidak mengambil alih `d reminder`', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const message = makeMessage('d reminder');
+    assert.equal(await svc.handleMessage(message), false, 'bukan milik engine');
+    assert.equal(message.publicSent.length, 0, 'engine tidak membalas');
+  });
+
+  it('`d lreminder` tetap milik engine pengingat Lucy', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const message = makeMessage('d lreminder');
+    assert.equal(await svc.handleMessage(message), true, 'masih ditangani engine');
+    assert.ok(message.publicSent.length >= 1);
+  });
+});

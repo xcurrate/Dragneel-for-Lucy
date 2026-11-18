@@ -304,7 +304,14 @@ siap untuk integrasi giveaway nanti.
 - **`{USER}` = username, `{USER_MENTION}` = mention.** Tag hanya muncul saat pingMode `tag`/`both`;
   mode `reply`/`none` menetralkan mention di teks DAN embed (`neutraliseMentions`). Mode `tag` menandai
   sekali saja walau teks memuat mention. `renderLegacyEmbed` merender token lama (`{mention}`) di embed.
-- **`{DAILY}`/`{DAILY_TOMORROW}`/`{DAILY_YESTERDAY}` = 00:00 WIB** (`wibDayStartUnix`).
+- **`{DAILY}`/`{DAILY_TOMORROW}`/`{DAILY_YESTERDAY}` = 00:00 WIB** (`wibDayStartUnix`). Bentuk ini
+  adalah timestamp mentah dan **tidak dirender di embed** (Discord hanya merender `<t:...>` di content).
+  Untuk embed pakai `{DAILY_FULL}`/`{DAILY_TIME}`/`{DAILY_DATE}`/`{DAILY_IN}`/`{TOMORROW_FULL}`.
+- **Reminder "Lucy" hanya saat pesan memuat kata `lucy`**: `lucyCounter` mengecek
+  `trigger.isActionCommand` dulu (pesan aksi = milik lucyReminder) lalu `countLucy`. Tanpa itu semua
+  chat jadi "Lucy terdeteksi".
+- **`d reminder`/`d r` = Custom Reminder; `d lreminder`/`d lrem` = engine pengingat lama.** Jangan
+  menambahkan `reminder` ke daftar head `lucyReminder` — itu membuat balasan ganda.
 - **Satu pengirim saja**: pengiriman pengingat HANYA di `lucyReminder.deliverReminder`
   (menghormati pingMode + durasi kategori). Jangan menambah pengirim kedua di `index.js`.
 - **Test**: `test/reminders.test.js` (106 test).

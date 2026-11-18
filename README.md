@@ -332,11 +332,22 @@ user. Pengaturan tersimpan per guild dan tidak bocor antar server.
 | User | `{USER}`, `{USER_ID}`, `{USER_MENTION}`, `{USER_NAME}`, `{USER_DISPLAYNAME}`, `{USER_NICKNAME}`, `{USER_AVATAR}`, `{USER_SERVERAVATAR}` |
 | Goal | `{GOAL}`, `{GOAL_PROGRESS}`, `{GOAL_PROGRESS_INVERTED}`, `{GOAL_END}` |
 | Acak | `{EMOJI}`, `{FLAG}`, `{CAT}`, `{DOG}` |
-| Waktu | `{DAILY}`, `{DAILY_TOMORROW}`, `{DAILY_YESTERDAY}`, `{TIME}` |
+| Waktu (content) | `{DAILY}`, `{DAILY_TOMORROW}`, `{DAILY_YESTERDAY}`, `{TIME}` |
+| Waktu (aman di embed) | `{DAILY_TIME}`, `{DAILY_DATE}`, `{DAILY_FULL}`, `{DAILY_IN}`, `{TOMORROW_FULL}` |
 | Server | `{SERVER_NAME}`, `{SERVER_ICON}` |
 
 Token gaya lama engine tetap didukung di pesan **dan embed** pengingat: `{user}`, `{mention}`,
 `{kind}`, `{durasi}`, `{count}`.
+
+### Reminder "Say Lucy" vs perintah aksi
+
+Reminder kategori **Lucy** hanya menyala kalau pesanmu **benar-benar memuat kata `lucy`** sebagai chat
+(mis. `halo lucy`). Kalau pesan itu **perintah aksi** bot Lucy (`lucy battle`, `lb`, `l hunt`, dst.),
+yang jalan adalah reminder kategori aksi tersebut — bukan "Lucy terdeteksi". Jadi satu pesan tidak
+pernah memicu dua pengingat sekaligus.
+
+Perintah **`d reminder`** (dan `d r`) sepenuhnya milik **Custom Reminder**. Pengingat lama dipanggil
+dengan **`d lreminder`** (atau `d lrem`) supaya satu perintah tidak dibalas dua kali.
 
 - **`{USER}` = username, bukan mention.** Ini sengaja: tag bisa memicu notifikasi dan masuk log audit.
   Pakai `{USER_MENTION}` (atau token lama `{mention}`) bila memang ingin menandai.
@@ -347,6 +358,11 @@ Token gaya lama engine tetap didukung di pesan **dan embed** pengingat: `{user}`
 - `{CAT}`/`{DOG}` dari `reminders.randomImages`; fallback jelas bila kosong.
 - Nilai acak dipilih **sekali per pesan** (konsisten dalam satu render).
 - **`{DAILY}`/`{DAILY_TOMORROW}`/`{DAILY_YESTERDAY}` = tepat 00:00 WIB** (`Asia/Jakarta`, UTC+7 tanpa DST).
+- ⚠️ **`{DAILY}` dan `{TIME}` berisi angka timestamp mentah** (mis. `1794934800`). Discord hanya
+  merender `<t:...>` di **content** pesan, **tidak** di dalam embed — makanya di embed angkanya tampil
+  apa adanya. Untuk embed pakai variabel teks: `{DAILY_FULL}` (mis. `Rabu, 18 November 2026 pukul
+  00.00 WIB`), `{DAILY_TIME}` (`00.00`), `{DAILY_DATE}` (`18 November 2026`), `{DAILY_IN}` (hitung
+  mundur), `{TOMORROW_FULL}`. Pola `<t:{DAILY}:R>` hanya benar di content pesan.
 - Variabel tak dikenal dibiarkan apa adanya; nilai hasil tidak dipindai ulang (tanpa ekspansi rekursif).
 
 Contoh: `d r update R-F5Y9C Halo {USER}, reset <t:{DAILY_TOMORROW}:R>!`

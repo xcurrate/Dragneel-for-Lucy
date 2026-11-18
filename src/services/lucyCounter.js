@@ -433,18 +433,21 @@ async function handleMessage(message, { onCounted } = {}) {
   const blacklistedChannelIds = config.blacklistedChannelIds || [];
   const whitelistedChannelIds = config.whitelistedChannelIds || [];
   if (blacklistedChannelIds.includes(message.channelId)) return;
+  // Pesan aksi (mis. `lucy battle`, `lb`, `l hunt`) ditangani lucyReminder
+  // lewat pengingat kategorinya sendiri. Keluar di sini mencegah pengingat
+  // "Lucy" ikut terpasang dan mencegah pengingat ganda. Prefix bot Lucy
+  // mengikuti pengaturan server.
+  if (trigger.isActionCommand(message.content, config.lucyPrefixes)) return;
+  // Pengingat "Lucy" HANYA untuk pesan yang benar-benar menyebut Lucy. Tanpa
+  // penjaga ini setiap pesan apa pun dianggap "Lucy terdeteksi".
+  if (!countLucy(message.content)) return;
   if (!config.enabled) {
-    // Counter off: tidak menghitung, tapi reminder "Say Lucy" tetap punya aturan
-    // sendiri (`lreminder`) sehingga hook tetap dipanggil.
+    // Counter off: tidak menghitung, tapi pengingat "Say Lucy" tetap punya
+    // aturan sendiri (`lreminder`) sehingga hook tetap dipanggil.
     notifyCounted(message, message.member?.displayName || message.author.username, onCounted);
     return;
   }
   if (whitelistedChannelIds.length > 0 && !whitelistedChannelIds.includes(message.channelId)) return;
-  // Pesan aksi (mis. `lucy battle`, `lb`, `l hunt`) adalah perintah, bukan
-  // mention Lucy biasa. Tanpa ini satu pesan bisa memicu dua pengingat
-  // (aksi + Lucy) sekaligus. Prefix bot Lucy mengikuti pengaturan server.
-  if (trigger.isActionCommand(message.content, config.lucyPrefixes)) return;
-  if (!countLucy(message.content)) return;
 
   const currentSettings = getGuildSettings(message.guildId);
   const currentConfig = currentSettings.lucyCounter;
