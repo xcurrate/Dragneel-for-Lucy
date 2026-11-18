@@ -278,8 +278,11 @@ siap untuk integrasi giveaway nanti.
   `src/commands/prefix.js` (sub `reminder-setting`).
 - **Kategori × format**: 3 kategori (`PRAY_CURSE`, `HUNT_BATTLE`, `LUCY`) × 2 format (`NORMAL`,
   `EMBED`) = 6 kombinasi. Kategori memetakan banyak-ke-satu ke jenis engine (pray+curse satu jenis,
-  battle+hunt satu jenis), sementara **pengaturan server tetap per AKSI** (`s pray`, `s curse`,
-  `s hunt`, `s battle`, `s lucy`).
+  battle+hunt satu jenis). **Pengaturan server disimpan per KATEGORI**, memakai aksi KASAR sebagai
+  kunci baris (`pray` untuk PRAY_CURSE, `battle` untuk HUNT_BATTLE, `lucy` untuk LUCY), supaya
+  `s battle` dan `s hunt` tidak menulis dua baris yang membuat pengingat terbelah dua. Helper:
+  `settingKeyFor()` di storage, `canonicalAction()`/`isCoarseAction()`/`actionsForCategory()` di
+  `reminderCategories`. Migrasi skema v2→v3 menggabungkan baris lama per aksi menjadi per kategori.
 - **Urutan resolusi**: owned aktif → default server → bawaan Dragneel. Nonaktif otomatis jatuh ke
   default server. `pickActiveOwned` memilih yang paling awal dibuat bila ada beberapa (deterministik);
   semua tetap ada di inventory.
@@ -289,6 +292,8 @@ siap untuk integrasi giveaway nanti.
   mustahil.
 - **Izin**: developer (`isDeveloper` lama) untuk template/give/awards/revoke. Admin/pemilik server
   untuk `s <aksi>`; developer **tidak** otomatis boleh. Pemilik saja untuk edit/enable/shareable.
+- **Jangan pakai backtick di dalam komentar SQL** pada template literal `db.exec(\`...\`)` di
+  `reminderStorage.js` — backtick menutup literal dan bikin SyntaxError.
 - **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.
   Aturan format: reminder `EMBED` **tidak pernah** bisa dibagikan — `r shareable ... on` ditolak sejak
   awal, dan `r send` serta eksekusi transfer memakai `shareBlockReason()` supaya kolom `shareable`

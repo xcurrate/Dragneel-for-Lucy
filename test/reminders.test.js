@@ -806,9 +806,10 @@ describe('custom reminder — server default settings via s namespace', () => {
     await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
     assert.match(textOf(message), /disimpan/);
     assert.equal(storage().getGuildReminderSetting('guild1', 'hunt').message, 'serang!');
+    assert.equal(storage().getGuildReminderSetting('guild1', 'battle').message, 'serang!', 'hunt dan battle satu baris');
   });
 
-  it('isolates settings per guild and per action', async () => {
+  it('isolates settings per guild', async () => {
     const setA = makeMessage('d s pray set text guild A', { guildId: 'guildA', userId: 'a1', admin: true });
     await require('../src/commands/prefix').handlePrefixCommand(setA, null, { send: (m, payload) => m.reply(payload) });
     const setB = makeMessage('d s pray set text guild B', { guildId: 'guildB', userId: 'b1', admin: true });
@@ -816,17 +817,22 @@ describe('custom reminder — server default settings via s namespace', () => {
 
     assert.equal(storage().getGuildReminderSetting('guildA', 'pray').message, 'guild A');
     assert.equal(storage().getGuildReminderSetting('guildB', 'pray').message, 'guild B');
-    // Aksi lain di guild yang sama tetap kosong.
-    assert.equal(storage().getGuildReminderSetting('guildA', 'curse'), null);
+    // Kategori lain di guild yang sama tetap kosong.
+    assert.equal(storage().getGuildReminderSetting('guildA', 'battle'), null);
+    assert.equal(storage().getGuildReminderSetting('guildA', 'lucy'), null);
   });
 
-  it('keeps pray and curse as independent settings', async () => {
-    for (const action of ['pray', 'curse']) {
-      const message = makeMessage('d s ' + action + ' set text teks ' + action, { userId: 'admin1', admin: true });
-      await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
-    }
-    assert.equal(storage().getGuildReminderSetting('guild1', 'pray').message, 'teks pray');
-    assert.equal(storage().getGuildReminderSetting('guild1', 'curse').message, 'teks curse');
+  it('s pray dan s curse menulis pengaturan kategori yang sama', async () => {
+    // `pray` adalah aksi kasar (mewakili kategori PRAY_CURSE), jadi keduanya
+    // harus mengarah ke satu baris dan tidak lagi terpisah.
+    const setPray = makeMessage('d s pray set text teks pray', { userId: 'admin1', admin: true });
+    await require('../src/commands/prefix').handlePrefixCommand(setPray, null, { send: (m, payload) => m.reply(payload) });
+    assert.equal(storage().getGuildReminderSetting('guild1', 'curse').message, 'teks pray', 's pray ikut berlaku untuk curse');
+
+    const setCurse = makeMessage('d s curse set text teks curse', { userId: 'admin1', admin: true });
+    await require('../src/commands/prefix').handlePrefixCommand(setCurse, null, { send: (m, payload) => m.reply(payload) });
+    assert.equal(storage().getGuildReminderSetting('guild1', 'pray').message, 'teks curse', 's curse menimpa baris yang sama');
+    assert.equal(storage().listGuildReminderSettings('guild1').length, 1, 'hanya satu baris untuk satu kategori');
   });
 
   it('reports that server-default embeds are not supported but owned embeds are', async () => {
@@ -1101,7 +1107,7 @@ describe('custom reminder — engine integration (no second scheduler)', () => {
 
   it('uses the server default when the user has no active reminder', async () => {
     const engine = require('../src/services/lucyReminder');
-    // Pengaturan server tetap per AKSI: aksi 'hunt' memakai `s hunt`, bukan `s battle`.
+    // Pengaturan server per KATEGORI: `s hunt` dan `s battle` menulis baris yang sama.
     storage().setGuildReminderSetting({ guildId: 'guild1', action: 'hunt', message: 'server battle {count}', updatedBy: 'a1' });
     require('../src/utils/lucyActionStorage').setPref('userX', 'battle', { enabled: true, pingMode: 'none' });
 
@@ -1735,5 +1741,113 @@ describe('custom reminder — kode redeem sekali pakai & hanya penerima', () => 
     assert.match(result.errors.join(' '), /sekali/);
     assert.equal(store.listRemindersByOwner(OWNER).length, 0, 'reminder dari transaksi batal tidak tertinggal');
     assert.equal(store.getAward(award.claimId).status, 'pending', 'award tidak berubah status');
+  });
+});
+
+describe('custom reminder — pengaturan server per kategori (hunt/battle)', () => {
+  function adminMessage(content, opts = {}) {
+    return makeMessage(content, { userId: 'admin1', admin: true, ...opts });
+  }
+
+  it('s battle set text langsung berlaku untuk hunt maupun battle', async () => {
+    const set = adminMessage('d s battle set text ayo {mention} battle!');
+    await require('../src/commands/prefix').handlePrefixCommand(set, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(set), /disimpan/);
+
+    const rows = storage().listGuildReminderSettings('guild1');
+    assert.equal(rows.length, 1, 'hanya satu baris untuk kategori HUNT_BATTLE');
+    assert.equal(rows[0].action, 'battle', 'kunci baris memakai aksi kasar');
+
+    const resolve = require('../src/utils/reminderResolve');
+    for (const action of ['battle', 'hunt']) {
+      const resolved = resolve.resolveRendered({ guildId: 'guild1', userId: 'u1', action });
+      assert.equal(resolved.source, 'guild', action + ' memakai pengaturan server');
+      assert.match(resolved.content, /ayo/, action + ' memakai teks yang sama');
+    }
+  });
+
+  it('s hunt set text menimpa baris yang sama, bukan menambah baris baru', async () => {
+    await require('../src/commands/prefix').handlePrefixCommand(
+      adminMessage('d s battle set text teks battle'), null, { send: (m, payload) => m.reply(payload) });
+    await require('../src/commands/prefix').handlePrefixCommand(
+      adminMessage('d s hunt set text teks hunt'), null, { send: (m, payload) => m.reply(payload) });
+
+    assert.equal(storage().listGuildReminderSettings('guild1').length, 1);
+    assert.equal(storage().getGuildReminderSetting('guild1', 'battle').message, 'teks hunt');
+    assert.equal(storage().getGuildReminderSetting('guild1', 'hunt').message, 'teks hunt');
+  });
+
+  it('s battle reset mengembalikan battle dan hunt sekaligus', async () => {
+    await require('../src/commands/prefix').handlePrefixCommand(
+      adminMessage('d s battle set text sementara'), null, { send: (m, payload) => m.reply(payload) });
+    const reset = adminMessage('d s battle reset');
+    await require('../src/commands/prefix').handlePrefixCommand(reset, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(reset), /dikembalikan ke bawaan/);
+
+    const resolve = require('../src/utils/reminderResolve');
+    for (const action of ['battle', 'hunt']) {
+      assert.equal(resolve.resolveRendered({ guildId: 'guild1', userId: 'u1', action }).source, 'builtin', action + ' kembali ke bawaan');
+    }
+  });
+
+  it('mengingatkan dengan teks server yang sama untuk battle dan hunt lewat engine', async () => {
+    const engine = require('../src/services/lucyReminder');
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'battle', message: 'server {count} kali', updatedBy: 'a1' });
+    require('../src/utils/lucyActionStorage').setPref('userX', 'battle', { enabled: true, pingMode: 'none' });
+
+    const sent = [];
+    const client = {
+      channels: { fetch: async () => ({ isTextBased: () => true, send: async payload => { sent.push(payload); } }) },
+      users: { fetch: async id => ({ id, username: 'u', displayAvatarURL: () => null }) },
+      guilds: { cache: new Map([['guild1', { name: 'G', iconURL: () => null, members: { fetch: async () => null } }]]) }
+    };
+    for (const action of ['battle', 'hunt']) {
+      await engine.deliverReminder(client, {
+        guildId: 'guild1', channelId: 'chan1', userId: 'userX', kind: 'battle', action, name: 'X', messageId: 'm-' + action
+      });
+    }
+    assert.equal(sent.length, 2);
+    for (const payload of sent) assert.match(payload.content, /server \d+ kali/, 'teks server yang sama');
+  });
+});
+
+describe('custom reminder — migrasi pengaturan server skema lama', () => {
+  it('menggabungkan baris per aksi menjadi per kategori tanpa kehilangan data terbaru', () => {
+    const { DatabaseSync } = require('node:sqlite');
+    // Bangun database gaya skema v2 (baris per aksi) sebelum modul dimuat.
+    fs.mkdirSync(path.join(tempDir, 'data'), { recursive: true });
+    const raw = new DatabaseSync(path.join(tempDir, 'data', 'reminders.db'));
+    raw.exec(`
+      CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT);
+      CREATE TABLE guild_reminder_settings (
+        guild_id TEXT NOT NULL, action TEXT NOT NULL, format TEXT NOT NULL DEFAULT 'NORMAL',
+        message TEXT, embed_json TEXT, updated_by TEXT, updated_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, action));`);
+    raw.prepare('INSERT INTO schema_meta VALUES (?, ?)').run('schema_version', '2');
+    const insert = raw.prepare('INSERT INTO guild_reminder_settings (guild_id, action, format, message, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+    insert.run('guild1', 'hunt', 'NORMAL', 'hunt lama', 'a1', 1000);
+    insert.run('guild1', 'battle', 'NORMAL', 'battle baru', 'a1', 2000);
+    insert.run('guild1', 'pray', 'NORMAL', 'pray saja', 'a1', 1500);
+    raw.close();
+
+    resetModules();
+    const store = require('../src/utils/reminderStorage');
+    assert.equal(store.SCHEMA_VERSION, '3');
+
+    const rows = store.listGuildReminderSettings('guild1');
+    assert.equal(rows.length, 2, 'hunt+battle digabung, pray dibiarkan');
+    assert.equal(store.getGuildReminderSetting('guild1', 'battle').message, 'battle baru', 'baris terbaru menang');
+    assert.equal(store.getGuildReminderSetting('guild1', 'hunt').message, 'battle baru', 'hunt ikut memakai baris gabungan');
+    assert.equal(store.getGuildReminderSetting('guild1', 'pray').message, 'pray saja', 'kategori satu baris tidak berubah');
+    assert.equal(store.getGuildReminderSetting('guild1', 'curse').message, 'pray saja');
+  });
+
+  it('tidak menjalankan migrasi dua kali', () => {
+    const store = require('../src/utils/reminderStorage');
+    store.setGuildReminderSetting({ guildId: 'guild1', action: 'hunt', message: 'teks', updatedBy: 'a1' });
+    resetModules();
+    const reloaded = require('../src/utils/reminderStorage');
+    assert.equal(reloaded.listGuildReminderSettings('guild1').length, 1, 'tetap satu baris setelah muat ulang');
+    assert.equal(reloaded.getGuildReminderSetting('guild1', 'battle').message, 'teks');
   });
 });

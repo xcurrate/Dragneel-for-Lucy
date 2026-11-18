@@ -206,9 +206,12 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   }
 
   if (sub === 'settings') {
+    const coarse = reminderCategories.ACTIONS.filter(a => reminderCategories.isCoarseAction(a));
+    const single = reminderCategories.ACTIONS.filter(a => !reminderCategories.isCoarseAction(a));
     return _sendText(message, 'Pengaturan server: `' + prefix + ' s count on|off` — sakelar seluruh counter Lucy (admin/developer).\n' +
       'Pengingat default server: `' + prefix + ' s <aksi> set text <teks>` dan `' + prefix + ' s <aksi> reset` (admin/pemilik server).\n' +
-      'Aksi: ' + reminderCategories.ACTIONS.join(', ') + '.');
+      'Per kategori (berlaku untuk dua aksi sekaligus): ' + coarse.join(', ') + '.\n' +
+      'Per aksi saja: ' + single.join(', ') + '.');
   }
 
   // Pengaturan default pengingat server. HANYA pemilik server atau admin dengan
@@ -220,12 +223,21 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
     if (!canManage) return _sendText(message, 'Only server admins & owners can change this setting.');
 
     const verb = (args[0] || '').toLowerCase();
-    const label = reminderCategories.ACTION_LABELS[action] || action;
+
+    // `s pray`/`s battle` mengatur SATU KATEGORI (pray+curse, hunt+battle) supaya
+    // pengingat tidak terbelah dua. `s curse`/`s hunt` hanya mengatur aksi itu.
+    const coversAll = reminderCategories.isCoarseAction(action);
+    const label = coversAll
+      ? reminderCategories.categoryLabel(reminderCategories.categoryForAction(action))
+      : (reminderCategories.ACTION_LABELS[action] || action);
+    const scopeNote = coversAll
+      ? '\nMencakup aksi ' + reminderCategories.actionsForCategory(reminderCategories.categoryForAction(action)).join(' + ') + '.'
+      : '';
 
     if (verb === 'reset') {
       const had = reminderStore.deleteGuildReminderSetting(message.guildId, action);
       return _sendText(message, had
-        ? '✅ Pengingat server untuk **' + label + '** dikembalikan ke bawaan Dragneel.'
+        ? '✅ Pengingat server untuk **' + label + '** dikembalikan ke bawaan Dragneel.' + scopeNote
         : 'Pengingat server untuk **' + label + '** memang masih memakai bawaan Dragneel.');
     }
 
@@ -241,7 +253,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
       reminderStore.setGuildReminderSetting({
         guildId: message.guildId, action, format: 'NORMAL', message: text, updatedBy: message.author.id
       });
-      return _sendText(message, '✅ Pengingat server untuk **' + label + '** disimpan.\n' +
+      return _sendText(message, '✅ Pengingat server untuk **' + label + '** disimpan.' + scopeNote + '\n' +
         'Berlaku untuk anggota yang tidak punya Custom Reminder aktif pada kategori ini.');
     }
 
@@ -249,7 +261,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
     const line = current?.message
       ? '**' + label + '**: `' + current.message + '`'
       : '**' + label + '**: (bawaan Dragneel)';
-    return _sendText(message, line + '\nUbah dengan `' + prefix + ' s ' + action + ' set text <teks>` atau `' + prefix + ' s ' + action + ' reset`.');
+    return _sendText(message, line + scopeNote + '\nUbah dengan `' + prefix + ' s ' + action + ' set text <teks>` atau `' + prefix + ' s ' + action + ' reset`.');
   }
 
   if (sub === 'count') {

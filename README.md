@@ -234,7 +234,7 @@ Tidak ada kategori `DAILY`.
 Saat engine mengirim pengingat untuk sebuah aksi:
 
 1. **Custom Reminder milik user** yang aktif dan cocok kategorinya dipakai.
-2. Kalau tidak ada (atau reminder-nya nonaktif), dipakai **default server** untuk aksi itu.
+2. Kalau tidak ada (atau reminder-nya nonaktif), dipakai **default server** untuk kategori aksi itu.
 3. Kalau server belum mengatur, dipakai **bawaan Dragneel** (perilaku lama).
 
 Karena nonaktif jatuh ke langkah 2 lalu 3, **mematikan Custom Reminder otomatis mengembalikan user ke
@@ -245,9 +245,37 @@ Aturan isolasi:
 - Override bersifat pribadi; user lain tetap memakai default server.
 - Admin mengubah default server **tidak** mengubah Custom Reminder anggota.
 - User menyunting Custom Reminder **tidak** mengubah default server.
-- Fallback per aksi: mematikan Hunt/Battle tidak memengaruhi Pray/Curse atau Lucy.
+- Fallback per kategori: mematikan Hunt/Battle tidak memengaruhi Pray/Curse atau Lucy.
 - Kalau user punya beberapa reminder aktif di kategori sama, yang dipakai adalah **yang paling awal
   dibuat** (deterministik). Semua reminder tetap ada di inventory — tidak ada yang dibuang/digabung.
+
+### Pengaturan server: cakupan perintah `s`
+
+`s <aksi>` menulis pengaturan **per kategori**, bukan per aksi. Jadi satu perintah mengatur
+pengingat untuk dua aksi yang berbagi kategori:
+
+| Perintah | Kategori | Mencakup aksi |
+|----------|----------|---------------|
+| `<prefix> s pray` | Pray/Curse | `pray` + `curse` |
+| `<prefix> s battle` | Hunt/Battle | `hunt` + `battle` |
+| `<prefix> s lucy` | Lucy | `lucy` |
+| `<prefix> s curse` | Pray/Curse | `curse` saja (menimpa baris yang sama) |
+| `<prefix> s hunt` | Hunt/Battle | `hunt` saja (menimpa baris yang sama) |
+
+Karena `s battle` dan `s hunt` menulis baris yang sama, **tidak ada lagi pengingat yang terbelah dua**
+antara Hunt dan Battle. Contoh:
+
+```
+d s battle set text {mention} ayo battle!
+→ ✅ Pengingat server untuk **Hunt/Battle Reminder** disimpan.
+  Mencakup aksi hunt + battle.
+```
+
+Setelah itu, baik aksi `battle` maupun `hunt` memakai teks yang sama. `d s battle reset` juga
+mengembalikan keduanya ke bawaan Dragneel sekaligus.
+
+Database lama (skema versi 2) yang menyimpan pengaturan per aksi otomatis digabung saat bot mulai:
+bila satu kategori punya beberapa baris, yang paling baru dipakai dan sisanya dibuang.
 
 ### Tiga jenis ID (jangan tertukar)
 

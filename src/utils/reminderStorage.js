@@ -8,10 +8,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const categories = require('./reminderCategories');
 
 // Versi skema disimpan di schema_meta agar penambahan kolom di masa depan bisa
 // dikenali tanpa merusak data lama (CREATE TABLE IF NOT EXISTS bersifat aditif).
-const SCHEMA_VERSION = '2';
+const SCHEMA_VERSION = '3';
 
 // Huruf/angka tanpa karakter rancu (0/O, 1/I/L) supaya ID mudah dibaca ulang.
 // Panjang 5 karakter sesuai spesifikasi inventory; prefiks T-/C-/R- menjaga
@@ -117,8 +118,10 @@ function getDb() {
       activated_at INTEGER,
       last_delivered_at INTEGER
     );
-    -- Pengaturan default pengingat per server, per AKSI (bukan per kategori
-    -- gabungan) supaya pray dan curse tetap bisa dipisah seperti perilaku lama.
+    -- Pengaturan default pengingat per server. Kolom action menyimpan aksi KASAR
+    -- kategori: 'pray' untuk PRAY_CURSE, 'battle' untuk HUNT_BATTLE, 'lucy' untuk
+    -- LUCY. Satu baris mewakili satu kategori, jadi perintah s battle dan s hunt
+    -- menulis baris yang sama dan tidak ada lagi pengingat terbelah dua.
     CREATE TABLE IF NOT EXISTS guild_reminder_settings (
       guild_id TEXT NOT NULL,
       action TEXT NOT NULL,
@@ -148,6 +151,7 @@ function getDb() {
     CREATE INDEX IF NOT EXISTS idx_audit_reminder ON reminder_audit(reminder_id);
   `);
   ensureColumns(db);
+  migrateGuildSettingsToCategoryKeys(db);
   db.prepare('INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)').run('schema_version', SCHEMA_VERSION);
   return db;
 }
@@ -170,6 +174,56 @@ function ensureColumns(database) {
   add('reminders', 'format', "TEXT NOT NULL DEFAULT 'NORMAL'");
   add('reminders', 'name', 'TEXT');
   add('reminders', 'shareable', 'INTEGER NOT NULL DEFAULT 0');
+}
+
+// Gabungkan baris pengaturan server dari skema lama (per AKSI, sehingga pray +
+// curse dan battle + hunt terpisah) menjadi satu baris per KATEGORI. Bila satu
+// kategori punya beberapa baris lama, yang paling baru menang dan sisanya
+// dibuang — kalau tidak, teks lama tetap terpisah dan bug-nya kembali. Kategori
+// yang hanya punya satu baris dipertahankan apa adanya, jadi balasan kustom per
+// aksi (mis. `s curse`) tidak berubah artinya.
+// Aman diulang: hanya berjalan saat penanda versi masih di bawah 3.
+function migrateGuildSettingsToCategoryKeys(database) {
+  const version = Number(database.prepare(
+    "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+  ).get()?.value || 1);
+  if (version >= 3) return;
+  const rows = database.prepare('SELECT * FROM guild_reminder_settings ORDER BY guild_id, updated_at').all();
+  if (!rows.length) return;
+
+  const byGuild = new Map();
+  for (const row of rows) {
+    if (!byGuild.has(row.guild_id)) byGuild.set(row.guild_id, []);
+    byGuild.get(row.guild_id).push(row);
+  }
+  const upsert = database.prepare(`
+    INSERT INTO guild_reminder_settings (guild_id, action, format, message, embed_json, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(guild_id, action) DO UPDATE SET
+      format = excluded.format, message = excluded.message, embed_json = excluded.embed_json,
+      updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+
+  for (const [guildId, guildRows] of byGuild) {
+    const groups = new Map();
+    const unknown = [];
+    for (const row of guildRows) {
+      const category = categories.categoryForAction(row.action);
+      const canonical = category ? categories.canonicalAction(category) : null;
+      if (!canonical) { unknown.push(row); continue; }
+      if (!groups.has(canonical)) groups.set(canonical, []);
+      groups.get(canonical).push(row);
+    }
+    const keep = [...unknown];
+    for (const [canonical, groupRows] of groups) {
+      if (groupRows.length === 1) { keep.push(groupRows[0]); continue; }
+      const newest = groupRows.reduce((a, b) => (Number(b.updated_at) >= Number(a.updated_at) ? b : a));
+      keep.push({ ...newest, action: canonical });
+    }
+    database.prepare('DELETE FROM guild_reminder_settings WHERE guild_id = ?').run(guildId);
+    for (const row of keep) {
+      upsert.run(guildId, row.action, row.format, row.message, row.embed_json, row.updated_by, row.updated_at);
+    }
+  }
 }
 
 // Jalankan operasi dalam transaksi IMMEDIATE; rollback bila gagal.
@@ -522,7 +576,14 @@ function rowToGuildSetting(row) {
   };
 }
 
+// Kunci baris = aksi KASAR kategori, jadi `s hunt` dan `s battle` tidak lagi
+// menulis dua baris terpisah yang membuat pengingat terbelah.
+function settingKeyFor(action) {
+  const category = categories.categoryForAction(action);
+  return (category && categories.canonicalAction(category)) || action;
+}
 function setGuildReminderSetting({ guildId, action, format = 'NORMAL', message = null, embed = null, updatedBy = null, now = Date.now() }) {
+  const key = settingKeyFor(action);
   getDb().prepare(`
     INSERT INTO guild_reminder_settings (guild_id, action, format, message, embed_json, updated_by, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -532,16 +593,17 @@ function setGuildReminderSetting({ guildId, action, format = 'NORMAL', message =
       embed_json = excluded.embed_json,
       updated_by = excluded.updated_by,
       updated_at = excluded.updated_at`).run(
-    guildId, action, format, message, embed ? JSON.stringify(embed) : null, updatedBy, now
+    guildId, key, format, message, embed ? JSON.stringify(embed) : null, updatedBy, now
   );
-  addAudit({ action: 'guild_setting_set', actorId: updatedBy, detail: { guildId, action, format }, at: now });
+  addAudit({ action: 'guild_setting_set', actorId: updatedBy, detail: { guildId, action: key, requested: action, format }, at: now });
   return getGuildReminderSetting(guildId, action);
 }
 
 function getGuildReminderSetting(guildId, action) {
+  const key = settingKeyFor(action);
   return rowToGuildSetting(getDb().prepare(
     'SELECT * FROM guild_reminder_settings WHERE guild_id = ? AND action = ?'
-  ).get(guildId, action));
+  ).get(guildId, key));
 }
 
 function listGuildReminderSettings(guildId) {
@@ -551,14 +613,15 @@ function listGuildReminderSettings(guildId) {
 // Reset menghapus HANYA baris pengaturan server untuk aksi itu, sehingga
 // perilaku kembali ke bawaan Dragneel. Reminder milik user tidak disentuh.
 function deleteGuildReminderSetting(guildId, action) {
-  const result = getDb().prepare('DELETE FROM guild_reminder_settings WHERE guild_id = ? AND action = ?').run(guildId, action);
+  const key = settingKeyFor(action);
+  const result = getDb().prepare('DELETE FROM guild_reminder_settings WHERE guild_id = ? AND action = ?').run(guildId, key);
   if (result.changes === 0) return false;
-  addAudit({ action: 'guild_setting_reset', detail: { guildId, action } });
+  addAudit({ action: 'guild_setting_reset', detail: { guildId, action: key, requested: action } });
   return true;
 }
 
 module.exports = {
-  SCHEMA_VERSION, ID_PATTERNS,
+  SCHEMA_VERSION, ID_PATTERNS, settingKeyFor,
   getDb, newTemplateId, newClaimId, newReminderId,
   isValidTemplateId, isValidClaimId, isValidReminderId, isValidUserId, normalizeId,
   createTemplate, getTemplate, listTemplates, setTemplateAvailable,

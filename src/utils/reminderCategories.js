@@ -77,6 +77,35 @@ function normalizeAction(value) {
 function categoryForAction(action) {
   return ACTION_TO_CATEGORY[String(action || '').toLowerCase()] || null;
 }
+// Aksi "kasar" per kategori — satu perwakilan untuk kategori yang berisi dua
+// aksi. Pengaturan server disimpan per KATEGORI, jadi battle dan hunt memakai
+// baris yang sama (dan begitu pula pray dan curse).
+const CANONICAL_ACTION = {
+  PRAY_CURSE: 'pray',
+  HUNT_BATTLE: 'battle',
+  LUCY: 'lucy'
+};
+function canonicalAction(category) {
+  const key = normalizeCategory(category) || categoryForAction(category);
+  return key ? CANONICAL_ACTION[key] || null : null;
+}
+// Aksi mana saja yang tertulis di satu baris pengaturan kategori ini.
+function actionsForCategory(category) {
+  const key = normalizeCategory(category) || categoryForAction(category);
+  return key ? CATEGORIES[key].actions.slice() : [];
+}
+// `pray`/`battle`/`lucy` mewakili satu kategori penuh; `curse`/`hunt` hanya aksi
+// tunggal. Dipakai `s <aksi>` untuk memutuskan seberapa luas dampaknya.
+function isCoarseAction(value) {
+  const text = normalizeAction(value);
+  return Boolean(text) && CANONICAL_ACTION[ACTION_TO_CATEGORY[text]] === text;
+}
+// Aksi yang ikut terpengaruh oleh `s <aksi>`.
+function expandAction(value) {
+  const text = normalizeAction(value);
+  if (!text) return [];
+  return isCoarseAction(text) ? actionsForCategory(categoryForAction(text)) : [text];
+}
 // Terima masukan kategori dari pengguna: nama kategori resmi, atau nama aksi
 // yang lazim ditulis developer (`battle` -> HUNT_BATTLE, `pray` -> PRAY_CURSE).
 function resolveCategoryInput(value) {
@@ -108,6 +137,7 @@ function displayNameFor(category, format) {
 
 module.exports = {
   CATEGORIES, CATEGORY_KEYS, FORMATS, FORMAT_KEYS,
+  canonicalAction, actionsForCategory, isCoarseAction, expandAction,
   ACTIONS, ACTION_LABELS, ACTION_TO_CATEGORY,
   normalizeCategory, normalizeFormat, normalizeAction,
   categoryForAction, resolveCategoryInput, combinations, categoryLabel, formatLabel, displayNameFor
