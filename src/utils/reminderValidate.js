@@ -182,6 +182,12 @@ function validateCollectible(value, settings) {
 // -------------------------------------------------------------------- URL ---
 const TENOR_HOSTS = ['tenor.com', 'www.tenor.com', 'media.tenor.com'];
 const TENOR_MEDIA_RE = /^https:\/\/media\.tenor\.com\/[A-Za-z0-9._\-/]+\.(gif|mp4|webm)$/i;
+// Klipy: penyedia GIF kedua. Bentuk URL-nya menyerupai Tenor (halaman /gif/ dan
+// host media terpisah), jadi alurnya sama: media langsung dipakai, halaman
+// diambil HTML-nya untuk mencari URL media.
+const KLIPY_HOSTS = ['klipy.com', 'www.klipy.com', 'cdn.klipy.com', 'media.klipy.com'];
+const KLIPY_MEDIA_RE = /^https:\/\/(?:cdn|media)\.klipy\.com\/[A-Za-z0-9._\-/]+\.(gif|mp4|webm)$/i;
+const KLIPY_MEDIA_PATTERN = /https:\/\/(?:cdn|media)\.klipy\.com\/[A-Za-z0-9._\-/]+\.(?:gif|mp4|webm)/i;
 
 // Validasi URL umum (untuk embed/sumber): harus https.
 function validateUrl(value) {
@@ -189,40 +195,61 @@ function validateUrl(value) {
   return pass(value);
 }
 
-// Resolusi Tenor: menerima URL media langsung, atau halaman /view/ yang diambil
-// HTML-nya untuk mencari og:image. `fetchFn` bisa disuntik agar bisa diuji tanpa
-// jaringan. Tidak ada skema selain https yang diterima.
-async function resolveTenor(rawUrl, { fetchFn = globalThis.fetch, timeoutMs = 5000 } = {}) {
-  if (typeof rawUrl !== 'string' || !rawUrl.trim()) return fail(['URL Tenor kosong.']);
+// Resolusi media generik untuk Tenor dan Klipy. Menerima URL media langsung,
+// atau halaman penyedia yang diambil HTML-nya untuk mencari URL media. `fetchFn`
+// bisa disuntik agar bisa diuji tanpa jaringan. Hanya skema https yang diterima.
+async function resolveMedia(rawUrl, { fetchFn = globalThis.fetch, timeoutMs = 5000, provider = 'tenor' } = {}) {
+  const spec = provider === 'klipy'
+    ? { hosts: KLIPY_HOSTS, mediaHosts: ['cdn.klipy.com', 'media.klipy.com'], mediaRe: KLIPY_MEDIA_RE, mediaPattern: KLIPY_MEDIA_PATTERN, name: 'Klipy', example: '`https://klipy.com/gif/...` atau `https://cdn.klipy.com/....gif`' }
+    : { hosts: TENOR_HOSTS, mediaHosts: ['media.tenor.com'], mediaRe: TENOR_MEDIA_RE, mediaPattern: /https:\/\/media\.tenor\.com\/[A-Za-z0-9._\-/]+\.(?:gif|mp4|webm)/i, name: 'Tenor', example: '`https://tenor.com/view/...` atau `https://media.tenor.com/....gif`' };
+
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) return fail(['URL ' + spec.name + ' kosong.']);
   let url;
   try { url = new URL(rawUrl.trim()); }
   catch { return fail(['URL tidak valid.']); }
   if (url.protocol !== 'https:') return fail(['Hanya URL https yang diterima.']);
-  if (!TENOR_HOSTS.includes(url.hostname.toLowerCase())) {
-    return fail(['Bukan URL Tenor. Contoh: `https://tenor.com/view/...` atau `https://media.tenor.com/....gif`']);
+  if (!spec.hosts.includes(url.hostname.toLowerCase())) {
+    return fail(['Bukan URL ' + spec.name + '. Contoh: ' + spec.example]);
   }
-  // Sudah berupa media yang bisa langsung dipakai.
-  if (url.hostname.toLowerCase() === 'media.tenor.com') {
-    if (TENOR_MEDIA_RE.test(url.href)) return pass(url.href);
-    return fail(['URL media Tenor harus berakhiran .gif, .mp4, atau .webm.']);
+  if (spec.mediaHosts.includes(url.hostname.toLowerCase())) {
+    if (spec.mediaRe.test(url.href)) return pass(url.href);
+    return fail(['URL media ' + spec.name + ' harus berakhiran .gif, .mp4, atau .webm.']);
   }
-  // Halaman /view/: ambil HTML dan cari URL media.
-  if (typeof fetchFn !== 'function') return fail(['Pengambilan Tenor tidak tersedia di lingkungan ini. Pakai URL media.tenor.com langsung.']);
+  if (typeof fetchFn !== 'function') return fail(['Pengambilan ' + spec.name + ' tidak tersedia di lingkungan ini. Pakai URL media langsung.']);
   let html = '';
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetchFn(url.href, { signal: controller.signal, headers: { 'user-agent': 'Dragneel-Reminder/1.0' } });
     clearTimeout(timer);
-    if (!response?.ok) return fail(['Gagal mengambil halaman Tenor (status ' + (response?.status ?? 'tidak diketahui') + ').']);
+    if (!response?.ok) return fail(['Gagal mengambil halaman ' + spec.name + ' (status ' + (response?.status ?? 'tidak diketahui') + ').']);
     html = String(await response.text());
   } catch (error) {
-    return fail(['Gagal mengambil halaman Tenor: ' + (error?.message || 'kesalahan jaringan') + '.']);
+    return fail(['Gagal mengambil halaman ' + spec.name + ': ' + (error?.message || 'kesalahan jaringan') + '.']);
   }
-  const match = html.match(/https:\/\/media\.tenor\.com\/[A-Za-z0-9._\-/]+\.(?:gif|mp4|webm)/i);
-  if (!match) return fail(['Tidak menemukan GIF di halaman Tenor itu. Salin URL media.tenor.com langsung.']);
+  const match = html.match(spec.mediaPattern);
+  if (!match) return fail(['Tidak menemukan GIF di halaman ' + spec.name + ' itu. Salin URL media langsung.']);
   return pass(match[0]);
 }
+
+async function resolveTenor(rawUrl, options = {}) {
+  return resolveMedia(rawUrl, { ...options, provider: 'tenor' });
+}
+
+async function resolveKlipy(rawUrl, options = {}) {
+  return resolveMedia(rawUrl, { ...options, provider: 'klipy' });
+}
+
+// Deteksi penyedia dari URL, lalu resolusi dengan resolver yang tepat. Dipakai
+// perintah `<prefix> r media <URL>` supaya Tenor dan Klipy punya satu pintu.
+async function resolveAnyMedia(rawUrl, options = {}) {
+  let host = '';
+  try { host = new URL(String(rawUrl || '').trim()).hostname.toLowerCase(); } catch { return fail(['URL tidak valid.']); }
+  if (KLIPY_HOSTS.includes(host)) return resolveKlipy(rawUrl, options);
+  return resolveTenor(rawUrl, options);
+}
+
+
 
 // Bersihkan konten dari mention massal. Mention pengguna tunggal dibiarkan,
 // tapi @everyone/@here dinetralkan supaya reminder tidak bisa dipakai spam.
@@ -232,7 +259,8 @@ function sanitizeContent(text) {
 
 module.exports = {
   LIMITS, MAX_EMBED_FIELDS, EMBED_KEYS, DEFAULT_COLLECTIBLES,
+  TENOR_HOSTS, KLIPY_HOSTS,
   isSafeUrl, validateUrl, validateEmbed, parseAndValidateEmbed,
   collectibleRegistry, validateCollectible,
-  resolveTenor, sanitizeContent
+  resolveMedia, resolveTenor, resolveKlipy, resolveAnyMedia, sanitizeContent
 };

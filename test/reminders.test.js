@@ -81,8 +81,9 @@ function idOf(message, prefix) {
 const svc = () => require('../src/services/reminders');
 const storage = () => require('../src/utils/reminderStorage');
 
-async function makeTemplate(name = 'Template Satu', body = 'Halo {USER}') {
-  const message = makeMessage('d r create ' + name + ' | ' + body, { userId: 'dev1', dev: true });
+// Kategori dan format wajib disebut (sesuai spesifikasi enam kombinasi).
+async function makeTemplate(name = 'Template Satu', body = 'Halo {USER}', { category = 'PRAY_CURSE', format = 'NORMAL', dev = true } = {}) {
+  const message = makeMessage('d r create ' + category + ' ' + format + ' ' + name + ' | ' + body, { userId: 'dev1', dev });
   await svc().handleMessage(message);
   return { templateId: idOf(message, 'T'), message };
 }
@@ -144,12 +145,12 @@ describe('custom reminder — prefix resolution', () => {
 
 describe('custom reminder — developer authorization', () => {
   it('lets only the existing developer ID create templates and award reminders', async () => {
-    const denied = makeMessage('d r create Nakal | x', { userId: 'user9' });
+    const denied = makeMessage('d r create PRAY_CURSE NORMAL Nakal | x', { userId: 'user9' });
     await svc().handleMessage(denied);
     assert.match(textOf(denied), /Hanya developer bot/);
     assert.equal(storage().listTemplates().length, 0);
 
-    const dev = makeMessage('d r create Sah | y', { userId: 'dev1', dev: true });
+    const dev = makeMessage('d r create PRAY_CURSE NORMAL Sah | y', { userId: 'dev1', dev: true });
     await svc().handleMessage(dev);
     assert.equal(storage().listTemplates().length, 1);
 
@@ -162,11 +163,11 @@ describe('custom reminder — developer authorization', () => {
 
   it('honours DEVELOPER_IDS and the guild owner, not server roles or names', async () => {
     process.env.DEVELOPER_IDS = 'envdev';
-    assert.equal(await svc().handleMessage(makeMessage('d r create A | x', { userId: 'envdev' })), true);
-    const admin = makeMessage('d r create B | y', { userId: 'user1', admin: true });
+    assert.equal(await svc().handleMessage(makeMessage('d r create PRAY_CURSE NORMAL A | x', { userId: 'envdev' })), true);
+    const admin = makeMessage('d r create PRAY_CURSE NORMAL B | y', { userId: 'user1', admin: true });
     await svc().handleMessage(admin);
     assert.match(textOf(admin), /Hanya developer bot/);
-    assert.equal(await svc().handleMessage(makeMessage('d r create C | z', { userId: 'user1', guildOwner: true })), true);
+    assert.equal(await svc().handleMessage(makeMessage('d r create PRAY_CURSE NORMAL C | z', { userId: 'user1', guildOwner: true })), true);
   });
 
   it('rejects unknown subcommands with a helpful message', async () => {
@@ -318,6 +319,12 @@ describe('custom reminder — ownership and permissions', () => {
     const owner = '111222333444555666';
     const target = '999888777666555444';
 
+    // Transfer hanya boleh untuk reminder yang ditandai shareable.
+    const notShareable = makeMessage('d r send <@' + target + '> ' + reminderId, { userId: owner });
+    await svc().handleMessage(notShareable);
+    assert.match(textOf(notShareable), /tidak shareable/);
+    await svc().handleMessage(makeMessage('d r shareable ' + reminderId + ' on', { userId: owner }));
+
     const send = makeMessage('d r send <@' + target + '> ' + reminderId, { userId: owner });
     await svc().handleMessage(send);
     assert.match(textOf(send), /memindahkan kepemilikan/);
@@ -352,6 +359,7 @@ describe('custom reminder — ownership and permissions', () => {
 
   it('records an audit trail for awards and transfers', async () => {
     const { reminderId, claimId } = await awardAndRedeem();
+    await svc().handleMessage(makeMessage('d r shareable ' + reminderId + ' on', { userId: '111222333444555666' }));
     await svc().handleMessage(makeMessage('d r send <@999888777666555444> ' + reminderId, { userId: '111222333444555666' }));
     await svc().handleMessage(makeMessage('d r confirm', { userId: '111222333444555666' }));
     const actions = storage().listAudit({ reminderId }).map(a => a.action);
@@ -422,7 +430,9 @@ describe('custom reminder — customization commands', () => {
     const owner = '111222333444555666';
     const inventory = makeMessage('d r inventory', { userId: owner });
     await svc().handleMessage(inventory);
-    assert.match(textOf(inventory), new RegExp(reminderId));
+    const invEmbed = inventory.sent.at(-1).embeds[0].data;
+    assert.match(invEmbed.description, new RegExp(reminderId));
+    assert.match(invEmbed.description, /Pray\/Curse Reminder \(Normal\)/, 'kategori + format tampil');
 
     const view = makeMessage('d r view ' + reminderId, { userId: owner });
     await svc().handleMessage(view);
@@ -725,9 +735,443 @@ describe('custom reminder — storage schema and IDs', () => {
   });
 
   it('never lets a user gain developer power through names or arguments', async () => {
-    const spoof = makeMessage('d r create X | y', { userId: '999888777666555444', name: 'dev1' });
+    const spoof = makeMessage('d r create PRAY_CURSE NORMAL X | y', { userId: '999888777666555444', name: 'dev1' });
     await svc().handleMessage(spoof);
     assert.match(textOf(spoof), /Hanya developer bot/);
     assert.equal(storage().listTemplates().length, 0);
+  });
+});
+
+describe('custom reminder — categories, formats and six combinations', () => {
+  it('creates all six category-format combinations', async () => {
+    const { CATEGORY_KEYS, FORMAT_KEYS } = require('../src/utils/reminderCategories');
+    let n = 0;
+    for (const category of CATEGORY_KEYS) {
+      for (const format of FORMAT_KEYS) {
+        const { templateId } = await makeTemplate('T' + n, 'Isi ' + category + ' ' + format, { category, format });
+        assert.ok(templateId, category + '/' + format);
+        const template = storage().getTemplate(templateId);
+        assert.equal(template.category, category);
+        assert.equal(template.format, format);
+        n++;
+      }
+    }
+    assert.equal(n, 6, 'enam kombinasi');
+    assert.equal(storage().listTemplates().length, 6);
+  });
+
+  it('keeps category and format as separate properties', () => {
+    const cats = require('../src/utils/reminderCategories');
+    assert.equal(cats.normalizeCategory('pray_curse'), 'PRAY_CURSE');
+    assert.equal(cats.normalizeCategory('EMBED'), null, 'format bukan kategori');
+    assert.equal(cats.normalizeFormat('embed'), 'EMBED');
+    assert.equal(cats.normalizeFormat('PRAY_CURSE'), null, 'kategori bukan format');
+    assert.equal(cats.displayNameFor('HUNT_BATTLE', 'EMBED'), 'Hunt/Battle Reminder (Embed)');
+    assert.equal(cats.combinations().length, 6);
+    // Kategori gabungan memetakan aksi engine yang sesuai.
+    assert.deepEqual(cats.CATEGORIES.PRAY_CURSE.actions, ['pray', 'curse']);
+    assert.deepEqual(cats.CATEGORIES.HUNT_BATTLE.actions, ['hunt', 'battle']);
+    assert.deepEqual(cats.CATEGORIES.LUCY.actions, ['lucy']);
+  });
+
+  it('rejects a create command without an explicit category and format', async () => {
+    const message = makeMessage('d r create Tanpa Kategori | isi', { userId: 'dev1', dev: true });
+    await svc().handleMessage(message);
+    assert.match(textOf(message), /Format:/);
+    assert.match(textOf(message), /Kategori: PRAY_CURSE/);
+    assert.equal(storage().listTemplates().length, 0);
+  });
+
+  it('does not expose a DAILY category', () => {
+    const cats = require('../src/utils/reminderCategories');
+    assert.equal(cats.normalizeCategory('DAILY'), null);
+    assert.ok(!cats.CATEGORY_KEYS.includes('DAILY'));
+  });
+
+  it('preserves category and format through award, redeem and edit', async () => {
+    const { templateId } = await makeTemplate('Hunt Embed', 'Serang!', { category: 'HUNT_BATTLE', format: 'EMBED' });
+    const give = makeMessage('d r give <@111222333444555666> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+    assert.equal(storage().getReminder(reminderId).category, 'HUNT_BATTLE');
+    assert.equal(storage().getReminder(reminderId).format, 'EMBED');
+
+    // Edit pesan dan embed tidak mengubah kategori/format.
+    await svc().handleMessage(makeMessage('d r update ' + reminderId + ' teks baru', { userId: '111222333444555666' }));
+    await svc().handleMessage(makeMessage('d r embed ' + reminderId + ' {"title":"x"}', { userId: '111222333444555666' }));
+    const after = storage().getReminder(reminderId);
+    assert.equal(after.category, 'HUNT_BATTLE');
+    assert.equal(after.format, 'EMBED');
+    assert.equal(after.message, 'teks baru');
+  });
+});
+
+describe('custom reminder — server default settings via s namespace', () => {
+  function adminMessage(content, { userId = 'admin1', admin = true, guildOwner = false, dev = false } = {}) {
+    return makeMessage(content, { userId, admin, guildOwner, dev });
+  }
+
+  it('lets a server admin set and reset a server default', async () => {
+    const set = adminMessage('d s pray set text {mention} jangan lupa doa!');
+    await require('../src/commands/prefix').handlePrefixCommand(set, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(set), /disimpan/);
+    const stored = storage().getGuildReminderSetting('guild1', 'pray');
+    assert.equal(stored.message, '{mention} jangan lupa doa!');
+    assert.equal(stored.format, 'NORMAL');
+
+    const reset = adminMessage('d s pray reset');
+    await require('../src/commands/prefix').handlePrefixCommand(reset, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(reset), /dikembalikan ke bawaan/);
+    assert.equal(storage().getGuildReminderSetting('guild1', 'pray'), null);
+  });
+
+  it('refuses members without server admin permission', async () => {
+    const message = adminMessage('d s pray set text nakal', { userId: 'user9', admin: false });
+    await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(message), /Only server admins & owners can change this setting/);
+    assert.equal(storage().getGuildReminderSetting('guild1', 'pray'), null);
+  });
+
+  it('does not let a developer ID alone change server defaults', async () => {
+    // dev=true (application owner) tapi bukan admin server dan bukan pemilik guild.
+    const message = adminMessage('d s pray set text dev coba', { userId: 'dev1', admin: false, dev: true });
+    await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(message), /Only server admins & owners/);
+    assert.equal(storage().getGuildReminderSetting('guild1', 'pray'), null);
+  });
+
+  it('lets the guild owner change settings', async () => {
+    const message = adminMessage('d s hunt set text serang!', { userId: 'owner1', admin: false, guildOwner: true });
+    await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(message), /disimpan/);
+    assert.equal(storage().getGuildReminderSetting('guild1', 'hunt').message, 'serang!');
+  });
+
+  it('isolates settings per guild and per action', async () => {
+    const setA = makeMessage('d s pray set text guild A', { guildId: 'guildA', userId: 'a1', admin: true });
+    await require('../src/commands/prefix').handlePrefixCommand(setA, null, { send: (m, payload) => m.reply(payload) });
+    const setB = makeMessage('d s pray set text guild B', { guildId: 'guildB', userId: 'b1', admin: true });
+    await require('../src/commands/prefix').handlePrefixCommand(setB, null, { send: (m, payload) => m.reply(payload) });
+
+    assert.equal(storage().getGuildReminderSetting('guildA', 'pray').message, 'guild A');
+    assert.equal(storage().getGuildReminderSetting('guildB', 'pray').message, 'guild B');
+    // Aksi lain di guild yang sama tetap kosong.
+    assert.equal(storage().getGuildReminderSetting('guildA', 'curse'), null);
+  });
+
+  it('keeps pray and curse as independent settings', async () => {
+    for (const action of ['pray', 'curse']) {
+      const message = makeMessage('d s ' + action + ' set text teks ' + action, { userId: 'admin1', admin: true });
+      await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
+    }
+    assert.equal(storage().getGuildReminderSetting('guild1', 'pray').message, 'teks pray');
+    assert.equal(storage().getGuildReminderSetting('guild1', 'curse').message, 'teks curse');
+  });
+
+  it('reports that server-default embeds are not supported but owned embeds are', async () => {
+    const message = makeMessage('d s pray set embed {"title":"x"}', { userId: 'admin1', admin: true });
+    await require('../src/commands/prefix').handlePrefixCommand(message, null, { send: (m, payload) => m.reply(payload) });
+    assert.match(textOf(message), /hanya mendukung teks/);
+  });
+});
+
+describe('custom reminder — resolution precedence and fallback', () => {
+  const resolve = () => require('../src/utils/reminderResolve');
+
+  it('uses builtin when there is no guild setting and no owned reminder', () => {
+    const result = resolve().resolveForAction({ guildId: 'guild1', userId: 'user1', action: 'pray' });
+    assert.equal(result.source, 'builtin');
+    assert.equal(result.message, null);
+  });
+
+  it('falls back to the guild setting when there is no active owned reminder', async () => {
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'pray', message: 'server pray', updatedBy: 'a1' });
+    const result = resolve().resolveForAction({ guildId: 'guild1', userId: 'user1', action: 'pray' });
+    assert.equal(result.source, 'guild');
+    assert.equal(result.message, 'server pray');
+  });
+
+  it('prefers an active owned reminder over the guild setting', async () => {
+    const { reminderId } = await awardAndRedeem();
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'pray', message: 'server pray', updatedBy: 'a1' });
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: '111222333444555666' }));
+
+    const owned = resolve().resolveForAction({ guildId: 'guild1', userId: '111222333444555666', action: 'pray' });
+    assert.equal(owned.source, 'owned');
+    assert.equal(owned.reminder.reminderId, reminderId);
+    // User lain tetap memakai default server.
+    const other = resolve().resolveForAction({ guildId: 'guild1', userId: 'other1', action: 'pray' });
+    assert.equal(other.source, 'guild');
+  });
+
+  it('falls back to the server default when the owned reminder is disabled', async () => {
+    const { reminderId } = await awardAndRedeem();
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'pray', message: 'server pray', updatedBy: 'a1' });
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: '111222333444555666' }));
+    await svc().handleMessage(makeMessage('d r disable ' + reminderId, { userId: '111222333444555666' }));
+
+    const result = resolve().resolveForAction({ guildId: 'guild1', userId: '111222333444555666', action: 'pray' });
+    assert.equal(result.source, 'guild', 'disable otomatis kembali ke default server');
+    assert.equal(result.message, 'server pray');
+  });
+
+  it('falls all the way back to builtin when the server default is reset', async () => {
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'pray', message: 'server pray' });
+    storage().deleteGuildReminderSetting('guild1', 'pray');
+    assert.equal(resolve().resolveForAction({ guildId: 'guild1', userId: 'user1', action: 'pray' }).source, 'builtin');
+  });
+
+  it('resolves per action so one category cannot override another', async () => {
+    const { templateId } = await makeTemplate('Doa', 'doa {mention}', { category: 'PRAY_CURSE' });
+    const give = makeMessage('d r give <@111222333444555666> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
+    await svc().handleMessage(redeem);
+    await svc().handleMessage(makeMessage('d r enable ' + idOf(redeem, 'R'), { userId: '111222333444555666' }));
+
+    assert.equal(resolve().resolveForAction({ guildId: 'guild1', userId: '111222333444555666', action: 'pray' }).source, 'owned');
+    // Kategori lain tidak terpengaruh.
+    assert.equal(resolve().resolveForAction({ guildId: 'guild1', userId: '111222333444555666', action: 'hunt' }).source, 'builtin');
+    assert.equal(resolve().resolveForAction({ guildId: 'guild1', userId: '111222333444555666', action: 'lucy' }).source, 'builtin');
+  });
+
+  it('picks deterministically when several reminders of one category are active', async () => {
+    const first = await awardAndRedeem();
+    const second = await makeTemplate('Kedua', 'pesan kedua', { category: 'PRAY_CURSE' });
+    const give = makeMessage('d r give <@111222333444555666> ' + second.templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
+    await svc().handleMessage(redeem);
+    const secondId = idOf(redeem, 'R');
+
+    await svc().handleMessage(makeMessage('d r enable ' + first.reminderId, { userId: '111222333444555666' }));
+    await svc().handleMessage(makeMessage('d r enable ' + secondId, { userId: '111222333444555666' }));
+
+    // Keduanya tetap ada di inventory (tidak dibuang/digabung).
+    assert.equal(storage().listRemindersByOwner('111222333444555666').length, 2);
+    const picked = resolve().pickActiveOwned('guild1', '111222333444555666', 'PRAY_CURSE');
+    // Yang paling awal dibuat yang dipakai, dan hasilnya stabil.
+    assert.equal(picked.reminderId, first.reminderId);
+    assert.equal(resolve().pickActiveOwned('guild1', '111222333444555666', 'PRAY_CURSE').reminderId, first.reminderId);
+  });
+
+  it('renders owned and guild messages with legacy and new variables', () => {
+    const rendered = resolve().resolveRendered({
+      guildId: 'guild1', userId: 'u1', action: 'pray',
+      legacyVars: { mention: '<@u1>', count: '3' },
+      context: require('../src/utils/reminderVariables').createRenderContext({ user: { id: 'u1', mention: '<@u1>' } })
+    });
+    assert.equal(rendered.source, 'builtin');
+  });
+
+  it('does not mutate server defaults when a user edits an owned reminder', async () => {
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'pray', message: 'server pray' });
+    const { reminderId } = await awardAndRedeem();
+    await svc().handleMessage(makeMessage('d r update ' + reminderId + ' pesan user', { userId: '111222333444555666' }));
+    assert.equal(storage().getGuildReminderSetting('guild1', 'pray').message, 'server pray');
+  });
+
+  it('does not mutate the template when a user edits an owned reminder', async () => {
+    const { templateId, reminderId } = await awardAndRedeem();
+    await svc().handleMessage(makeMessage('d r update ' + reminderId + ' diubah user', { userId: '111222333444555666' }));
+    assert.equal(storage().getTemplate(templateId).message, 'Halo {USER}');
+  });
+
+  it('does not overwrite owned reminders when an admin resets server defaults', async () => {
+    const { reminderId } = await awardAndRedeem();
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: '111222333444555666' }));
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'pray', message: 'server pray' });
+    storage().deleteGuildReminderSetting('guild1', 'pray');
+    const reminder = storage().getReminder(reminderId);
+    assert.equal(reminder.message, 'Halo {USER}', 'reminder milik user tetap utuh');
+    assert.equal(reminder.active, true);
+  });
+});
+
+describe('custom reminder — shareable and transfer rules', () => {
+  it('keeps active and shareable independent', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
+    let reminder = storage().getReminder(reminderId);
+    assert.equal(reminder.active, true);
+    assert.equal(reminder.shareable, false, 'aktif belum tentu shareable');
+
+    await svc().handleMessage(makeMessage('d r shareable ' + reminderId + ' on', { userId: owner }));
+    reminder = storage().getReminder(reminderId);
+    assert.equal(reminder.active, true);
+    assert.equal(reminder.shareable, true);
+
+    await svc().handleMessage(makeMessage('d r disable ' + reminderId, { userId: owner }));
+    reminder = storage().getReminder(reminderId);
+    assert.equal(reminder.active, false);
+    assert.equal(reminder.shareable, true, 'shareable tetap walau nonaktif');
+  });
+
+  it('refuses to transfer a reminder that is not shareable', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const send = makeMessage('d r send <@999888777666555444> ' + reminderId, { userId: '111222333444555666' });
+    await svc().handleMessage(send);
+    assert.match(textOf(send), /tidak shareable/);
+    assert.equal(storage().getReminder(reminderId).ownerId, '111222333444555666');
+  });
+
+  it('keeps inactive reminders editable', async () => {
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    await svc().handleMessage(makeMessage('d r disable ' + reminderId, { userId: owner }));
+    await svc().handleMessage(makeMessage('d r update ' + reminderId + ' tetap bisa diubah', { userId: owner }));
+    assert.equal(storage().getReminder(reminderId).message, 'tetap bisa diubah');
+  });
+
+  it('shows an empty inventory response', async () => {
+    const message = makeMessage('d r inventory', { userId: 'user9' });
+    await svc().handleMessage(message);
+    const embed = message.sent.at(-1).embeds[0].data;
+    assert.match(embed.description, /belum punya reminder/);
+    assert.match(embed.title, /Custom Reminders/);
+  });
+
+  it('lists owned reminder IDs, not template or claim IDs', async () => {
+    const { templateId, claimId, reminderId } = await awardAndRedeem();
+    const inventory = makeMessage('d r inventory', { userId: '111222333444555666' });
+    await svc().handleMessage(inventory);
+    const text = JSON.stringify(inventory.sent.at(-1).embeds[0].data);
+    assert.match(text, new RegExp(reminderId));
+    assert.ok(!text.includes(templateId), 'template ID tidak muncul di inventory');
+    assert.ok(!text.includes(claimId), 'claim ID tidak muncul di inventory');
+  });
+});
+
+describe('custom reminder — media providers', () => {
+  it('supports Tenor and Klipy through the media command', async () => {
+    const tenor = makeMessage('d r media https://media.tenor.com/a/b.gif');
+    await svc().handleMessage(tenor);
+    assert.match(textOf(tenor), /media\.tenor\.com/);
+
+    const klipy = makeMessage('d r media https://cdn.klipy.com/a/b.gif');
+    await svc().handleMessage(klipy);
+    assert.match(textOf(klipy), /klipy\.com/);
+
+    // Perintah khusus penyedia tetap ada.
+    const tenorOnly = makeMessage('d r tenor https://media.tenor.com/a/b.gif');
+    await svc().handleMessage(tenorOnly);
+    assert.match(textOf(tenorOnly), /URL media/);
+
+    const klipyOnly = makeMessage('d r klipy https://cdn.klipy.com/a/b.gif');
+    await svc().handleMessage(klipyOnly);
+    assert.match(textOf(klipyOnly), /klipy\.com/);
+  });
+
+  it('rejects invalid or unsupported media URLs', async () => {
+    for (const url of ['javascript:alert(1)', 'http://cdn.klipy.com/a.gif', 'https://evil.example/a.gif']) {
+      const message = makeMessage('d r media ' + url);
+      await svc().handleMessage(message);
+      assert.match(textOf(message), /❌/, url);
+    }
+  });
+
+  it('resolves a Klipy page through an injected fetch', async () => {
+    const { resolveKlipy } = require('../src/utils/reminderValidate');
+    const result = await resolveKlipy('https://klipy.com/gif/abc', {
+      fetchFn: async () => ({ ok: true, text: async () => '<meta property="og:image" content="https://cdn.klipy.com/XYZ/abc.gif">' })
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.value, 'https://cdn.klipy.com/XYZ/abc.gif');
+    const missing = await resolveKlipy('https://klipy.com/gif/abc', { fetchFn: async () => ({ ok: true, text: async () => '<html></html>' }) });
+    assert.equal(missing.ok, false);
+  });
+
+  it('accepts Klipy media URLs inside embed image and thumbnail', () => {
+    const { validateEmbed } = require('../src/utils/reminderValidate');
+    const result = validateEmbed({ image: { url: 'https://cdn.klipy.com/a/b.gif' }, thumbnail: { url: 'https://media.tenor.com/c/d.gif' } });
+    assert.equal(result.ok, true, JSON.stringify(result.errors));
+    assert.equal(validateEmbed({ image: { url: 'http://cdn.klipy.com/a.gif' } }).ok, false);
+  });
+});
+
+describe('custom reminder — engine integration (no second scheduler)', () => {
+  it('delivers an owned reminder through the existing engine delivery path', async () => {
+    const engine = require('../src/services/lucyReminder');
+    const { reminderId } = await awardAndRedeem();
+    const owner = '111222333444555666';
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
+
+    // Preferensi engine harus aktif agar pengingat benar-benar dikirim.
+    require('../src/utils/lucyActionStorage').setPref(owner, 'pray', { enabled: true, pingMode: 'tag' });
+
+    const sent = [];
+    const client = {
+      channels: { fetch: async () => ({ isTextBased: () => true, send: async payload => { sent.push(payload); } }) },
+      users: { fetch: async id => ({ id, username: 'user' + id, displayAvatarURL: () => null }) },
+      guilds: { cache: new Map([['guild1', { name: 'Guild Satu', iconURL: () => null, members: { fetch: async () => null } }]]) }
+    };
+    await engine.deliverReminder(client, {
+      guildId: 'guild1', channelId: 'chan1', userId: owner, kind: 'pray', action: 'pray', name: 'Ani', messageId: 'm1'
+    });
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].content, /<@111222333444555666>/, 'override pribadi dipakai');
+  });
+
+  it('delivers an EMBED-format reminder as an embed', async () => {
+    const engine = require('../src/services/lucyReminder');
+    const { templateId } = await makeTemplate('Embed Lucy', 'Pesan lucy', { category: 'LUCY', format: 'EMBED' });
+    const give = makeMessage('d r give <@111222333444555666> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: '111222333444555666' }));
+    require('../src/utils/lucyActionStorage').setPref('111222333444555666', 'lucy', { enabled: true, pingMode: 'none' });
+
+    const sent = [];
+    const client = {
+      channels: { fetch: async () => ({ isTextBased: () => true, send: async payload => { sent.push(payload); } }) },
+      users: { fetch: async id => ({ id, username: 'u' + id, displayAvatarURL: () => null }) },
+      guilds: { cache: new Map([['guild1', { name: 'G', iconURL: () => null, members: { fetch: async () => null } }]]) }
+    };
+    await engine.deliverReminder(client, {
+      guildId: 'guild1', channelId: 'chan1', userId: '111222333444555666', kind: 'lucy', action: 'lucy', name: 'Ani', messageId: 'm2'
+    });
+    assert.equal(sent.length, 1);
+    assert.ok(Array.isArray(sent[0].embeds) && sent[0].embeds.length === 1, 'dikirim sebagai embed');
+    assert.match(sent[0].embeds[0].data.description, /Pesan lucy/);
+  });
+
+  it('uses the server default when the user has no active reminder', async () => {
+    const engine = require('../src/services/lucyReminder');
+    // Pengaturan server tetap per AKSI: aksi 'hunt' memakai `s hunt`, bukan `s battle`.
+    storage().setGuildReminderSetting({ guildId: 'guild1', action: 'hunt', message: 'server battle {count}', updatedBy: 'a1' });
+    require('../src/utils/lucyActionStorage').setPref('userX', 'battle', { enabled: true, pingMode: 'none' });
+
+    const sent = [];
+    const client = {
+      channels: { fetch: async () => ({ isTextBased: () => true, send: async payload => { sent.push(payload); } }) },
+      users: { fetch: async id => ({ id, username: 'u', displayAvatarURL: () => null }) },
+      guilds: { cache: new Map([['guild1', { name: 'G', iconURL: () => null, members: { fetch: async () => null } }]]) }
+    };
+    await engine.deliverReminder(client, {
+      guildId: 'guild1', channelId: 'chan1', userId: 'userX', kind: 'battle', action: 'hunt', name: 'X', messageId: 'm3'
+    });
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].content, /server battle/, 'default server dipakai');
+    assert.match(sent[0].content, /server battle \d+/, 'token {count} lama tetap dirender');
+  });
+
+  it('keeps the built-in reply when nothing overrides it', async () => {
+    const engine = require('../src/services/lucyReminder');
+    require('../src/utils/lucyActionStorage').setPref('userY', 'pray', { enabled: true, pingMode: 'none' });
+    const sent = [];
+    const client = {
+      channels: { fetch: async () => ({ isTextBased: () => true, send: async payload => { sent.push(payload); } }) },
+      users: { fetch: async id => ({ id, username: 'u', displayAvatarURL: () => null }) },
+      guilds: { cache: new Map([['guild1', { name: 'G', iconURL: () => null, members: { fetch: async () => null } }]]) }
+    };
+    await engine.deliverReminder(client, {
+      guildId: 'guild1', channelId: 'chan1', userId: 'userY', kind: 'pray', action: 'pray', name: 'Y', messageId: 'm4'
+    });
+    assert.match(sent[0].content, /memanjatkan doa/, 'teks bawaan Dragneel dipertahankan');
   });
 });

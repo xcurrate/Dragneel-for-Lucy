@@ -15,6 +15,8 @@ const { getGuildSettings, updateGuildSettings, matchPrefix, DEFAULT_PREFIX } = r
 const store = require('../utils/reminderStorage');
 const validate = require('../utils/reminderValidate');
 const variables = require('../utils/reminderVariables');
+const cats = require('../utils/reminderCategories');
+const resolver = require('../utils/reminderResolve');
 const { isDeveloper } = require('../commands/prefix');
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
@@ -92,22 +94,25 @@ function contextFor(message, user, guild) {
 
 function reminderEmbed(reminder, context) {
   const rendered = variables.render(reminder.message || '', context);
-  const embed = new EmbedBuilder().setColor(0x5865F2).setDescription(rendered || '\u200b');
-  if (reminder.embed) {
-    const config = variables.renderEmbed(reminder.embed, context);
-    if (config.title) embed.setTitle(config.title);
-    if (config.color != null) embed.setColor(config.color);
-    if (config.url) embed.setURL(config.url);
-    if (config.footer) embed.setFooter(config.footer);
-    if (config.author) embed.setAuthor(config.author);
-    if (config.image) embed.setImage(config.image.url);
-    if (config.thumbnail) embed.setThumbnail(config.thumbnail.url);
-    if (config.timestamp) embed.setTimestamp(new Date(config.timestamp));
-    if (config.fields) embed.addFields(config.fields);
-    if (config.description) embed.setDescription(variables.render(config.description, context));
-  }
-  return embed;
+  const config = reminder.embed ? variables.renderEmbed(reminder.embed, context) : {};
+  // Builder bersama dipakai engine pengingat dan perintah view, supaya render
+  // embed hanya ada di satu tempat.
+  return resolver.buildEmbed({ color: 0x5865F2, ...config }, rendered);
 }
+
+// Baris ringkas untuk inventory: ID, nama, kategori, format, status.
+function inventoryLine(reminder) {
+  const active = reminder.active ? '✅' : '❌';
+  const share = reminder.shareable ? '🎉' : '🔒';
+  return `${active} \`${reminder.reminderId}\` — ${cats.displayNameFor(reminder.category, reminder.format)} ${share}`;
+}
+
+const INVENTORY_LEGEND = [
+  '✅ Aktif: pengingat dinyalakan.',
+  '🎉 Shareable: boleh dipindahbukukan ke user lain.',
+  '🔒 Tidak shareable: hanya bisa dipakai sendiri.',
+  '❌ Tidak aktif, tapi tetap bisa diubah.'
+].join('\n');
 
 function collectibleSuffix(reminder) {
   return reminder.collectible ? ' • 🏅 ' + reminder.collectible : '';
@@ -200,7 +205,8 @@ function redeemAward({ claimId, userId, now = Date.now() }) {
   return store.inTransaction(() => {
     const reminder = store.createReminder({
       ownerId: userId, templateId: template.templateId, message: template.message,
-      embed: template.embed, collectible: template.collectible, active: false, now
+      embed: template.embed, collectible: template.collectible, active: false, now,
+      category: template.category, format: template.format, name: template.name
     });
     const won = store.markAwardRedeemed({ claimId: id, recipientId: userId, reminderId: reminder.reminderId, now });
     if (!won) throw new Error('CLAIM_RACE');
@@ -232,19 +238,28 @@ function helpText(prefix) {
     '`' + prefix + ' r setcollectible <ID> <tipe>` — atur tipe collectible',
     '`' + prefix + ' r reset <ID>` — kembalikan ke bawaan template (perlu konfirmasi)',
     '`' + prefix + ' r enable <ID>` / `' + prefix + ' r disable <ID>` — aktifkan/matikan',
-    '`' + prefix + ' r send <@user> <ID>` — hadiahkan reminder ke orang lain (perlu konfirmasi)',
+    '`' + prefix + ' r shareable <ID> on|off` — tandai boleh dipindahbukukan',
+    '`' + prefix + ' r send <@user> <ID>` — hadiahkan reminder shareable ke orang lain (perlu konfirmasi)',
     '',
     '**Utilitas**',
-    '`' + prefix + ' r tenor <URL>` — ubah URL Tenor jadi URL GIF langsung',
+    '`' + prefix + ' r media <URL>` — ubah URL Tenor/Klipy jadi URL media langsung',
+    '`' + prefix + ' r tenor <URL>` / `' + prefix + ' r klipy <URL>` — khusus satu penyedia',
     '`' + prefix + ' r variables` — daftar variabel',
     '`' + prefix + ' r help` — bantuan ini',
     '',
     '**Developer saja**',
-    '`' + prefix + ' r create <nama> | <pesan> [| <embed JSON>]` — buat template',
+    '`' + prefix + ' r create <KATEGORI> <FORMAT> <nama> | <pesan> [| <embed JSON>]` — buat template',
+    '  kategori: ' + cats.CATEGORY_KEYS.join(', '),
+    '  format: ' + cats.FORMAT_KEYS.join(', ') + ' (kombinasi: 3 kategori × 2 format)',
     '`' + prefix + ' r templates` — daftar template',
     '`' + prefix + ' r give <@user> <TEMPLATE_ID>` — beri reminder ke user',
     '`' + prefix + ' r awards` — daftar award & status klaim',
-    '`' + prefix + ' r revoke <CLAIM_ID>` — cabut award yang belum diklaim (perlu konfirmasi)'
+    '`' + prefix + ' r revoke <CLAIM_ID>` — cabut award yang belum diklaim (perlu konfirmasi)',
+    '',
+    '**Pengaturan server (admin/pemilik server)**',
+    '`' + prefix + ' s <aksi> set text <teks>` — default pengingat server (aksi: ' + cats.ACTIONS.join(', ') + ')',
+    '`' + prefix + ' s <aksi> reset` — kembalikan ke bawaan Dragneel',
+    'Pengingat memakai urutan: Custom Reminder aktif → default server → bawaan bot.'
   ].join('\n');
 }
 
@@ -287,9 +302,20 @@ async function handleMessage(message, deps = {}) {
   // --- inventory / active ---
   if (sub === 'inventory' || sub === 'inv' || sub === 'daftar') {
     const list = store.listRemindersByOwner(message.author.id);
-    if (!list.length) { await sendText(message, 'Kamu belum punya reminder. Klaim award dari developer dengan `' + prefix + ' r redeem <CLAIM_ID>`.'); return true; }
-    const lines = list.map(r => '`' + r.reminderId + '` ' + (r.active ? '🟢' : '⚪') + ' ' + r.message.slice(0, 60) + collectibleSuffix(r));
-    await sendText(message, '**Reminder milikmu (' + list.length + ')**\n' + lines.join('\n'));
+    if (!list.length) {
+      await send(message, {
+        embeds: [new EmbedBuilder().setColor(0x5865F2)
+          .setTitle('Dragneel\'s Custom Reminders')
+          .setDescription('Kamu belum punya reminder.\nKlaim award dari developer dengan `' + prefix + ' r redeem <CLAIM_ID>`.')]
+      });
+      return true;
+    }
+    await send(message, {
+      embeds: [new EmbedBuilder().setColor(0x5865F2)
+        .setTitle('Dragneel\'s Custom Reminders')
+        .setDescription(list.map(inventoryLine).join('\n'))
+        .setFooter({ text: list.length + ' reminder • Legend: ✅ aktif • 🎉 shareable • ❌ nonaktif (masih bisa diubah)' })]
+    });
     return true;
   }
 
@@ -319,8 +345,10 @@ async function handleMessage(message, deps = {}) {
       const template = store.getTemplate(reminder.templateId);
       await sendText(message, [
         '**Info ' + reminder.reminderId + '**',
+        'Nama: ' + cats.displayNameFor(reminder.category, reminder.format),
+        'Kategori: ' + cats.categoryLabel(reminder.category) + ' • Format: ' + cats.formatLabel(reminder.format),
         'Pemilik: <@' + reminder.ownerId + '>',
-        'Status: ' + (reminder.active ? '🟢 aktif' : '⚪ nonaktif'),
+        'Status: ' + (reminder.active ? '🟢 aktif' : '⚪ nonaktif') + ' • Shareable: ' + (reminder.shareable ? '🎉 ya' : '🔒 tidak'),
         'Collectible: ' + (reminder.collectible || '(belum diatur)'),
         'Sumber: template `' + reminder.templateId + '`' + (template ? ' (' + template.name + ')' : ''),
         'Dibuat: <t:' + Math.floor(reminder.createdAt / 1000) + ':R>',
@@ -414,15 +442,37 @@ async function handleMessage(message, deps = {}) {
     const reminder = store.getReminder(id);
     if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
     if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa menghadiahkan reminder milikmu sendiri.'); return true; }
+    if (!reminder.shareable) { await sendText(message, 'Reminder ini tidak shareable, jadi tidak bisa dipindahbukukan. Nyalakan dulu dengan `' + prefix + ' r shareable ' + store.normalizeId(id) + ' on`.'); return true; }
     return askConfirm(message, prefix, { kind: 'transfer', reminderId: store.normalizeId(id), toUserId: targetId },
       '⚠️ Kirim `' + store.normalizeId(id) + '` ke <@' + targetId + '>? Ini **memindahkan kepemilikan** — kamu tidak bisa lagi mengubahnya.');
   }
 
-  // --- tenor ---
-  if (sub === 'tenor') {
-    const result = await validate.resolveTenor(args[0]);
+  // --- shareable ---
+  if (sub === 'shareable' || sub === 'bagikan') {
+    const id = args[0];
+    const action = (args[1] || '').toLowerCase();
+    if (!store.isValidReminderId(id) || !['on', 'off'].includes(action)) {
+      await sendText(message, 'Format: `' + prefix + ' r shareable <ID> on|off`.');
+      return true;
+    }
+    const reminder = store.getReminder(id);
+    if (!reminder) { await sendText(message, 'Reminder tidak ditemukan.'); return true; }
+    if (!isOwner(message, reminder)) { await sendText(message, 'Kamu hanya bisa mengubah reminder milikmu sendiri.'); return true; }
+    store.updateReminder(id, { shareable: action === 'on' });
+    await sendText(message, action === 'on'
+      ? '🎉 Reminder `' + store.normalizeId(id) + '` sekarang shareable (boleh dipindahbukukan).'
+      : '🔒 Reminder `' + store.normalizeId(id) + '` sekarang tidak shareable.');
+    return true;
+  }
+
+  // --- media (Tenor + Klipy) ---
+  if (sub === 'media' || sub === 'tenor' || sub === 'klipy') {
+    const provider = sub === 'klipy' ? 'klipy' : sub === 'tenor' ? 'tenor' : 'any';
+    const result = provider === 'any' ? await validate.resolveAnyMedia(args[0])
+      : provider === 'klipy' ? await validate.resolveKlipy(args[0])
+      : await validate.resolveTenor(args[0]);
     if (!result.ok) { await sendText(message, '❌ ' + result.errors.join(' ')); return true; }
-    await sendText(message, '✅ URL GIF: ' + result.value);
+    await sendText(message, '✅ URL media: ' + result.value);
     return true;
   }
 
@@ -431,9 +481,19 @@ async function handleMessage(message, deps = {}) {
     if (!dev) { await sendText(message, 'Hanya developer bot yang bisa membuat template.'); return true; }
     const raw = matched.trim().slice(parts[0].length + parts[1].length + 2).trim();
     const segments = raw.split('|').map(s => s.trim());
-    const [name, templateMessage, embedJson] = segments;
-    if (!name || !templateMessage) {
-      await sendText(message, 'Format: `' + prefix + ' r create <nama> | <pesan default> [| <embed JSON>]`.');
+    // Kategori dan format WAJIB disebut agar keenam kombinasi eksplisit dan
+    // tidak ada tebakan. Kategori = apa yang diingatkan, format = cara tampil.
+    const head = segments[0] || '';
+    const tokens = head.split(/\s+/).filter(Boolean);
+    const category = cats.normalizeCategory(tokens[0]);
+    const format = cats.normalizeFormat(tokens[1]);
+    const name = tokens.slice(2).join(' ');
+    const templateMessage = segments[1];
+    const embedJson = segments[2];
+    if (!category || !format || !name || !templateMessage) {
+      await sendText(message, 'Format: `' + prefix + ' r create <KATEGORI> <FORMAT> <nama> | <pesan default> [| <embed JSON>]`.\n' +
+        'Kategori: ' + cats.CATEGORY_KEYS.join(', ') + '\nFormat: ' + cats.FORMAT_KEYS.join(', ') + '\n' +
+        'Contoh: `' + prefix + ' r create PRAY_CURSE NORMAL Doa Harian | {mention} jangan lupa doa!`');
       return true;
     }
     let embed = null;
@@ -442,8 +502,9 @@ async function handleMessage(message, deps = {}) {
       if (!result.ok) { await sendText(message, '❌ Embed ditolak:\n• ' + result.errors.join('\n• ')); return true; }
       embed = result.value;
     }
-    const template = store.createTemplate({ name, message: templateMessage, embed, creatorId: message.author.id });
-    await sendText(message, '✅ Template dibuat: `' + template.templateId + '` (**' + template.name + '**). Beri ke user dengan `' + prefix + ' r give @user ' + template.templateId + '`.');
+    const template = store.createTemplate({ name, message: templateMessage, embed, creatorId: message.author.id, category, format });
+    await sendText(message, '✅ Template dibuat: `' + template.templateId + '` — **' + template.name + '** (' + cats.displayNameFor(category, format) + ').\n' +
+      'Beri ke user dengan `' + prefix + ' r give @user ' + template.templateId + '`.');
     return true;
   }
 
@@ -452,7 +513,7 @@ async function handleMessage(message, deps = {}) {
     const list = store.listTemplates({ includeUnavailable: true });
     if (!list.length) { await sendText(message, 'Belum ada template. Buat dengan `' + prefix + ' r create <nama> | <pesan>`.') ; return true; }
     await sendText(message, '**Template (' + list.length + ')**\n' + list.map(t =>
-      '`' + t.templateId + '` ' + (t.available ? '🟢' : '🔴') + ' **' + t.name + '**' + (t.collectible ? ' • ' + t.collectible : '') + '\n   ' + t.message.slice(0, 80)
+      '`' + t.templateId + '` ' + (t.available ? '🟢' : '🔴') + ' **' + t.name + '** — ' + cats.displayNameFor(t.category, t.format) + (t.collectible ? ' • ' + t.collectible : '') + '\n   ' + t.message.slice(0, 80)
     ).join('\n'));
     return true;
   }

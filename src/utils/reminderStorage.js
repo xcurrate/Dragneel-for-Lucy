@@ -11,10 +11,13 @@ const { DatabaseSync } = require('node:sqlite');
 
 // Versi skema disimpan di schema_meta agar penambahan kolom di masa depan bisa
 // dikenali tanpa merusak data lama (CREATE TABLE IF NOT EXISTS bersifat aditif).
-const SCHEMA_VERSION = '1';
+const SCHEMA_VERSION = '2';
 
 // Huruf/angka tanpa karakter rancu (0/O, 1/I/L) supaya ID mudah dibaca ulang.
+// Panjang 5 karakter sesuai spesifikasi inventory; prefiks T-/C-/R- menjaga
+// tiga jenis ID tetap tidak tertukar.
 const ID_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const ID_LENGTH = 5;
 
 let db = null;
 let dbPath = null;
@@ -26,7 +29,7 @@ function paths() {
 
 // ID pendek berprefiks supaya tiga jenis ID tidak tertukar saat dibaca manusia:
 // T- = template, C- = claim (award), R- = reminder milik user.
-function shortId(length = 6) {
+function shortId(length = ID_LENGTH) {
   const bytes = crypto.randomBytes(length);
   let out = '';
   for (let i = 0; i < length; i++) out += ID_ALPHABET[bytes[i] % ID_ALPHABET.length];
@@ -66,6 +69,8 @@ function getDb() {
     CREATE TABLE IF NOT EXISTS reminder_templates (
       template_id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'PRAY_CURSE',
+      format TEXT NOT NULL DEFAULT 'NORMAL',
       message TEXT NOT NULL,
       embed_json TEXT,
       collectible TEXT,
@@ -99,14 +104,30 @@ function getDb() {
       reminder_id TEXT PRIMARY KEY,
       owner_id TEXT NOT NULL,
       template_id TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'PRAY_CURSE',
+      format TEXT NOT NULL DEFAULT 'NORMAL',
+      name TEXT,
       message TEXT NOT NULL,
       embed_json TEXT,
       collectible TEXT,
       active INTEGER NOT NULL DEFAULT 0,
+      shareable INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       activated_at INTEGER,
       last_delivered_at INTEGER
+    );
+    -- Pengaturan default pengingat per server, per AKSI (bukan per kategori
+    -- gabungan) supaya pray dan curse tetap bisa dipisah seperti perilaku lama.
+    CREATE TABLE IF NOT EXISTS guild_reminder_settings (
+      guild_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      format TEXT NOT NULL DEFAULT 'NORMAL',
+      message TEXT,
+      embed_json TEXT,
+      updated_by TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (guild_id, action)
     );
     CREATE TABLE IF NOT EXISTS reminder_audit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,8 +147,29 @@ function getDb() {
     CREATE INDEX IF NOT EXISTS idx_awards_recipient ON reminder_awards(recipient_id);
     CREATE INDEX IF NOT EXISTS idx_audit_reminder ON reminder_audit(reminder_id);
   `);
-  db.prepare('INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)').run('schema_version', SCHEMA_VERSION);
+  ensureColumns(db);
+  db.prepare('INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)').run('schema_version', SCHEMA_VERSION);
   return db;
+}
+
+// Tambah kolom yang belum ada pada database lama. Aditif dan aman diulang,
+// jadi upgrade dari skema versi 1 tidak menghapus data yang sudah ada.
+function ensureColumns(database) {
+  const columnsOf = table => {
+    try { return new Set(database.prepare('PRAGMA table_info(' + table + ')').all().map(c => c.name)); }
+    catch { return new Set(); }
+  };
+  const add = (table, column, definition) => {
+    if (!columnsOf(table).has(column)) {
+      try { database.exec('ALTER TABLE ' + table + ' ADD COLUMN ' + column + ' ' + definition); } catch {}
+    }
+  };
+  add('reminder_templates', 'category', "TEXT NOT NULL DEFAULT 'PRAY_CURSE'");
+  add('reminder_templates', 'format', "TEXT NOT NULL DEFAULT 'NORMAL'");
+  add('reminders', 'category', "TEXT NOT NULL DEFAULT 'PRAY_CURSE'");
+  add('reminders', 'format', "TEXT NOT NULL DEFAULT 'NORMAL'");
+  add('reminders', 'name', 'TEXT');
+  add('reminders', 'shareable', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 // Jalankan operasi dalam transaksi IMMEDIATE; rollback bila gagal.
@@ -183,6 +225,8 @@ function rowToTemplate(row) {
   return {
     templateId: row.template_id,
     name: row.name,
+    category: row.category || 'PRAY_CURSE',
+    format: row.format || 'NORMAL',
     message: row.message,
     embed: row.embed_json ? JSON.parse(row.embed_json) : null,
     collectible: row.collectible || null,
@@ -193,19 +237,19 @@ function rowToTemplate(row) {
   };
 }
 
-function createTemplate({ name, message, embed = null, collectible = null, metadata = {}, creatorId = null, now = Date.now() }) {
+function createTemplate({ name, message, embed = null, collectible = null, metadata = {}, creatorId = null, category = 'PRAY_CURSE', format = 'NORMAL', now = Date.now() }) {
   const database = getDb();
   const templateId = insertWithUniqueId(
     newTemplateId,
     id => Boolean(database.prepare('SELECT 1 FROM reminder_templates WHERE template_id = ?').get(id)),
     id => database.prepare(`
-      INSERT INTO reminder_templates (template_id, name, message, embed_json, collectible, metadata_json, creator_id, created_at, available)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`).run(
-      id, name, message, embed ? JSON.stringify(embed) : null, collectible,
+      INSERT INTO reminder_templates (template_id, name, category, format, message, embed_json, collectible, metadata_json, creator_id, created_at, available)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`).run(
+      id, name, category, format, message, embed ? JSON.stringify(embed) : null, collectible,
       JSON.stringify(metadata || {}), creatorId, now
     )
   );
-  addAudit({ action: 'template_create', templateId, actorId: creatorId, detail: { name }, at: now });
+  addAudit({ action: 'template_create', templateId, actorId: creatorId, detail: { name, category, format }, at: now });
   return getTemplate(templateId);
 }
 
@@ -328,10 +372,14 @@ function rowToReminder(row) {
     reminderId: row.reminder_id,
     ownerId: row.owner_id,
     templateId: row.template_id,
+    category: row.category || 'PRAY_CURSE',
+    format: row.format || 'NORMAL',
+    name: row.name || null,
     message: row.message,
     embed: row.embed_json ? JSON.parse(row.embed_json) : null,
     collectible: row.collectible || null,
     active: Boolean(row.active),
+    shareable: Boolean(row.shareable),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     activatedAt: row.activated_at == null ? null : Number(row.activated_at),
@@ -339,19 +387,19 @@ function rowToReminder(row) {
   };
 }
 
-function createReminder({ ownerId, templateId, message, embed = null, collectible = null, active = false, now = Date.now() }) {
+function createReminder({ ownerId, templateId, message, embed = null, collectible = null, active = false, now = Date.now(), category = 'PRAY_CURSE', format = 'NORMAL', name = null, shareable = false }) {
   const database = getDb();
   const reminderId = insertWithUniqueId(
     newReminderId,
     id => Boolean(database.prepare('SELECT 1 FROM reminders WHERE reminder_id = ?').get(id)),
     id => database.prepare(`
-      INSERT INTO reminders (reminder_id, owner_id, template_id, message, embed_json, collectible, active, created_at, updated_at, activated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, ownerId, templateId, message, embed ? JSON.stringify(embed) : null, collectible,
-      active ? 1 : 0, now, now, active ? now : null
+      INSERT INTO reminders (reminder_id, owner_id, template_id, category, format, name, message, embed_json, collectible, active, shareable, created_at, updated_at, activated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, ownerId, templateId, category, format, name, message, embed ? JSON.stringify(embed) : null, collectible,
+      active ? 1 : 0, shareable ? 1 : 0, now, now, active ? now : null
     )
   );
-  addAudit({ action: 'reminder_create', reminderId, templateId, actorId: ownerId, toUserId: ownerId, at: now });
+  addAudit({ action: 'reminder_create', reminderId, templateId, actorId: ownerId, toUserId: ownerId, detail: { category, format }, at: now });
   return getReminder(reminderId);
 }
 
@@ -383,14 +431,18 @@ function updateReminder(reminderId, fields, { now = Date.now() } = {}) {
     ownerId: v => v,
     active: v => (v ? 1 : 0),
     activatedAt: v => v,
-    lastDeliveredAt: v => v
+    lastDeliveredAt: v => v,
+    shareable: v => (v ? 1 : 0),
+    name: v => v
+  };
+  const columns = {
+    message: 'message', embed: 'embed_json', collectible: 'collectible',
+    ownerId: 'owner_id', active: 'active', activatedAt: 'activated_at',
+    lastDeliveredAt: 'last_delivered_at', shareable: 'shareable', name: 'name'
   };
   for (const [key, toColumn] of Object.entries(map)) {
     if (!(key in fields)) continue;
-    sets.push({
-      message: 'message', embed: 'embed_json', collectible: 'collectible',
-      ownerId: 'owner_id', active: 'active', activatedAt: 'activated_at', lastDeliveredAt: 'last_delivered_at'
-    }[key] + ' = ?');
+    sets.push(columns[key] + ' = ?');
     params.push(toColumn(fields[key]));
   }
   if (!sets.length) return getReminder(id);
@@ -436,6 +488,58 @@ function listAudit({ reminderId = null, claimId = null, limit = 50 } = {}) {
   }));
 }
 
+// ------------------------------------------------------- server defaults --
+// Pengaturan default pengingat per server per AKSI. Baris di sini HANYA
+// menyimpan konfigurasi server; tidak pernah menyentuh reminder milik user dan
+// tidak pernah ditimpa oleh suntingan user (dan sebaliknya).
+function rowToGuildSetting(row) {
+  if (!row) return null;
+  return {
+    guildId: row.guild_id,
+    action: row.action,
+    format: row.format || 'NORMAL',
+    message: row.message || null,
+    embed: row.embed_json ? JSON.parse(row.embed_json) : null,
+    updatedBy: row.updated_by || null,
+    updatedAt: Number(row.updated_at)
+  };
+}
+
+function setGuildReminderSetting({ guildId, action, format = 'NORMAL', message = null, embed = null, updatedBy = null, now = Date.now() }) {
+  getDb().prepare(`
+    INSERT INTO guild_reminder_settings (guild_id, action, format, message, embed_json, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(guild_id, action) DO UPDATE SET
+      format = excluded.format,
+      message = excluded.message,
+      embed_json = excluded.embed_json,
+      updated_by = excluded.updated_by,
+      updated_at = excluded.updated_at`).run(
+    guildId, action, format, message, embed ? JSON.stringify(embed) : null, updatedBy, now
+  );
+  addAudit({ action: 'guild_setting_set', actorId: updatedBy, detail: { guildId, action, format }, at: now });
+  return getGuildReminderSetting(guildId, action);
+}
+
+function getGuildReminderSetting(guildId, action) {
+  return rowToGuildSetting(getDb().prepare(
+    'SELECT * FROM guild_reminder_settings WHERE guild_id = ? AND action = ?'
+  ).get(guildId, action));
+}
+
+function listGuildReminderSettings(guildId) {
+  return getDb().prepare('SELECT * FROM guild_reminder_settings WHERE guild_id = ? ORDER BY action').all(guildId).map(rowToGuildSetting);
+}
+
+// Reset menghapus HANYA baris pengaturan server untuk aksi itu, sehingga
+// perilaku kembali ke bawaan Dragneel. Reminder milik user tidak disentuh.
+function deleteGuildReminderSetting(guildId, action) {
+  const result = getDb().prepare('DELETE FROM guild_reminder_settings WHERE guild_id = ? AND action = ?').run(guildId, action);
+  if (result.changes === 0) return false;
+  addAudit({ action: 'guild_setting_reset', detail: { guildId, action } });
+  return true;
+}
+
 module.exports = {
   SCHEMA_VERSION, ID_PATTERNS,
   getDb, newTemplateId, newClaimId, newReminderId,
@@ -443,5 +547,6 @@ module.exports = {
   createTemplate, getTemplate, listTemplates, setTemplateAvailable,
   createAward, getAward, listAwards, revokeAward, markAwardRedeemed,
   createReminder, getReminder, listRemindersByOwner, listAllActive, updateReminder, transferReminder,
+  setGuildReminderSetting, getGuildReminderSetting, listGuildReminderSettings, deleteGuildReminderSetting,
   addAudit, listAudit, inTransaction
 };

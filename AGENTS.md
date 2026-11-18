@@ -264,28 +264,33 @@
 
 ## Custom Reminder (`src/services/reminders.js`)
 
-Distribusi rilis ini **manual oleh developer** (tanpa giveaway otomatis/voting/pembayaran), tapi model
-datanya sudah siap untuk integrasi giveaway.
+Distribusi **manual oleh developer** (tanpa giveaway otomatis/voting/pembayaran). Model data sudah
+siap untuk integrasi giveaway nanti.
 
-- **Modul**: `src/utils/reminderStorage.js` (SQLite `data/reminders.db`), `src/utils/reminderVariables.js`
-  (registry variabel), `src/utils/reminderValidate.js` (embed/collectible/URL/Tenor),
-  `src/services/reminders.js` (perintah + runtime). Wiring: `src/index.js` (`reminders.handleMessage`
-  dan hook `onCounted`), blok `reminders` di `defaults()`/`mergeSettings()` `src/utils/storage.js`.
-- **Tiga ID**: `T-` template, `C-` claim/award, `R-` reminder milik user. `createAward` idempoten lewat
-  `UNIQUE(source, source_ref, recipient_id)` untuk sumber berulang (giveaway) dan lewat cek
-  `template_id + recipient_id + status='pending'` untuk pemberian manual. `markAwardRedeemed` memakai
-  guard SQL (`status='pending' AND recipient_id=? AND belum kedaluwarsa`) sehingga klaim ganda mustahil.
-- **Otorisasi**: memakai ulang `isDeveloper` dari `src/commands/prefix.js` (env `DEVELOPER_IDS`, pemilik
-  aplikasi, pemilik server). Tidak ada daftar developer kedua. Perintah template/give/awards/revoke
-  khusus developer; edit reminder khusus pemilik.
-- **Transfer** = pindah kepemilikan (`reminders.owner_id` satu sumber kebenaran), perlu konfirmasi
-  (`pendingConfirms` di memori, TTL 60 detik). Bukan berbagi akses.
-- **Runtime**: `deliverForActivity()` dipanggil dari hook `onCounted` (aktivitas Lucy) dengan jeda 60
-  detik per pengguna. Tidak ada event grinding baru yang dikarang — kalau hook ini berubah, adapter
-  ikut berubah.
-- **Integrasi giveaway masa depan**: `onGiveawayWinner({ client, guildId, giveawayId, winnerId, templateId })`.
-- **Test**: `test/reminders.test.js` (52 test) menutup prefix, otorisasi developer, award/redeem,
-  idempotensi, kepemilikan, validasi embed, variabel, runtime, dan persistensi.
+- **Modul**: `src/utils/reminderStorage.js` (SQLite `data/reminders.db`, skema v2),
+  `src/utils/reminderCategories.js` (registry kategori/format + pemetaan aksi),
+  `src/utils/reminderVariables.js` (registry variabel), `src/utils/reminderValidate.js`
+  (embed/collectible/URL/Tenor/Klipy), `src/utils/reminderResolve.js` (layer resolusi pesan),
+  `src/services/reminders.js` (perintah + siklus award/redeem).
+- **Titik integrasi engine**: `deliverReminder()` di `src/services/lucyReminder.js` memanggil
+  `reminderResolve.resolveRendered()` sebelum mengirim. Tidak ada scheduler/pendeteksi aksi kedua —
+  trigger, durasi, dan cooldown lama tidak berubah. Pengaturan server lewat namespace `s` di
+  `src/commands/prefix.js` (sub `reminder-setting`).
+- **Kategori × format**: 3 kategori (`PRAY_CURSE`, `HUNT_BATTLE`, `LUCY`) × 2 format (`NORMAL`,
+  `EMBED`) = 6 kombinasi. Kategori memetakan banyak-ke-satu ke jenis engine (pray+curse satu jenis,
+  battle+hunt satu jenis), sementara **pengaturan server tetap per AKSI** (`s pray`, `s curse`,
+  `s hunt`, `s battle`, `s lucy`).
+- **Urutan resolusi**: owned aktif → default server → bawaan Dragneel. Nonaktif otomatis jatuh ke
+  default server. `pickActiveOwned` memilih yang paling awal dibuat bila ada beberapa (deterministik);
+  semua tetap ada di inventory.
+- **Tiga ID**: `T-` template, `C-` claim, `R-` reminder (5 karakter alfanumerik + prefiks).
+  `createAward` idempoten lewat `UNIQUE(source, source_ref, recipient_id)` untuk sumber berulang dan
+  cek `pending` untuk pemberian manual. `markAwardRedeemed` memakai guard SQL sehingga klaim ganda
+  mustahil.
+- **Izin**: developer (`isDeveloper` lama) untuk template/give/awards/revoke. Admin/pemilik server
+  untuk `s <aksi>`; developer **tidak** otomatis boleh. Pemilik saja untuk edit/enable/shareable.
+- **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.
+- **Test**: `test/reminders.test.js` (88 test).
 
 ## Prefix command (`<prefix> <perintah>`)
 - **Prefix bawaan = `d`** (inisial bot Dragneel), konstanta `DEFAULT_PREFIX` di

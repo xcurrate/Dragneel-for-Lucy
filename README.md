@@ -197,142 +197,173 @@ Setiap leaderboard memiliki tombol navigasi ⏮️ ◀️ ▶️ ⏭️ (awal, s
 ## Custom Reminder
 
 Reminder pribadi dengan variabel dinamis, dibuat dan dibagikan **secara manual oleh developer bot**.
-Distribusi rilis ini sengaja **tanpa giveaway otomatis, voting, tier supporter, atau pembayaran** —
-developer memberi reminder setelah menentukan pemenang di luar sistem ini. Integrasi giveaway otomatis
-bisa ditambahkan nanti lewat `onGiveawayWinner()` tanpa mengubah kepemilikan.
+Distribusi rilis ini **tanpa giveaway otomatis, voting, tier supporter, atau pembayaran** — developer
+memberi reminder setelah menentukan pemenang di luar sistem ini.
 
-Semua perintah mengikuti prefix server. Contoh memakai prefix bawaan `d`; kalau prefix server diubah,
-perintah otomatis ikut (`<prefix> r ...`). Alias pendek `r` sama dengan `reminder`.
+Custom Reminder **memakai engine pengingat yang sudah ada** (`src/services/lucyReminder.js`). Tidak ada
+penjadwal atau pendeteksi aksi kedua: sistem ini hanya menambah **layer pemilihan pesan** pada engine
+itu, sehingga trigger, durasi, cooldown, dan perilaku Lucy yang lama tetap sama.
+
+### Tiga kategori dan dua format
+
+Kategori = **apa** yang diingatkan. Format = **bagaimana** ditampilkan. Keduanya properti terpisah;
+Normal dan Embed bukan kategori berbeda.
+
+| Kategori | Arti | Aksi engine yang dicakup |
+|----------|------|--------------------------|
+| `PRAY_CURSE` | Pengingat Pray/Curse | `pray`, `curse` |
+| `HUNT_BATTLE` | Pengingat Hunt/Battle | `hunt`, `battle` |
+| `LUCY` | Pengingat **Say Lucy** | `lucy` |
+
+`LUCY` berarti **Say Lucy**: reminder mengirim konten Lucy yang dikonfigurasi. Bukan event aktivitas
+Lucy. Trigger-nya adalah perilaku "Say Lucy" yang sudah ada (`onLucyCounted` di engine).
+
+Format: `NORMAL` (konten pesan biasa) dan `EMBED` (embed kaya). Enam kombinasi yang didukung:
+
+- Pray/Curse Normal, Pray/Curse Embed
+- Hunt/Battle Normal, Hunt/Battle Embed
+- Lucy Normal, Lucy Embed
+
+Tidak ada kategori `DAILY`.
+
+### Urutan pemakaian pesan (fallback otomatis)
+
+Saat engine mengirim pengingat untuk sebuah aksi:
+
+1. **Custom Reminder milik user** yang aktif dan cocok kategorinya dipakai.
+2. Kalau tidak ada (atau reminder-nya nonaktif), dipakai **default server** untuk aksi itu.
+3. Kalau server belum mengatur, dipakai **bawaan Dragneel** (perilaku lama).
+
+Karena nonaktif jatuh ke langkah 2 lalu 3, **mematikan Custom Reminder otomatis mengembalikan user ke
+default server** — tanpa perintah tambahan dan tanpa redeem ulang.
+
+Aturan isolasi:
+
+- Override bersifat pribadi; user lain tetap memakai default server.
+- Admin mengubah default server **tidak** mengubah Custom Reminder anggota.
+- User menyunting Custom Reminder **tidak** mengubah default server.
+- Fallback per aksi: mematikan Hunt/Battle tidak memengaruhi Pray/Curse atau Lucy.
+- Kalau user punya beberapa reminder aktif di kategori sama, yang dipakai adalah **yang paling awal
+  dibuat** (deterministik). Semua reminder tetap ada di inventory — tidak ada yang dibuang/digabung.
 
 ### Tiga jenis ID (jangan tertukar)
 
 | ID | Bentuk | Arti |
 |----|--------|------|
-| Template ID | `T-XXXXXX` | Cetakan reminder yang dibuat developer. Satu template bisa diberikan ke banyak orang. |
-| Claim ID | `C-XXXXXX` | Tiket pemberian untuk satu penerima. Dipakai penerima saat `redeem`. |
-| Reminder ID | `R-XXXXXX` | Reminder milik user (hasil redeem). Ini yang diatur, diaktifkan, dan dihadiahkan. |
+| Template ID | `T-XXXXX` | Cetakan reminder yang dibuat developer. |
+| Claim ID | `C-XXXXX` | Tiket pemberian untuk satu penerima; dipakai saat `redeem`. |
+| Reminder ID | `R-XXXXX` | Reminder milik user (hasil redeem). Ini yang ada di inventory. |
 
-Hubungannya: satu **template** diberikan lewat satu **claim** kepada satu penerima; setelah diklaim,
-claim menghasilkan satu **reminder** milik penerima itu. Mengirim ulang `give` untuk template dan
-penerima yang sama yang claimnya belum diklaim tidak membuat claim baru.
+Inventory **hanya** menampilkan Reminder ID, bukan template atau claim ID.
 
 ### Untuk penerima reminder
 
-- `<prefix> r redeem <CLAIM_ID>` — klaim reminder dari claim ID yang dikirim developer lewat DM.
-- `<prefix> r inventory` — daftar reminder milikmu.
-- `<prefix> r view <ID>` — pratinjau reminder (variabel sudah ter-render).
-- `<prefix> r info <ID>` — detail: pemilik, status, collectible, sumber template.
+- `<prefix> r redeem <CLAIM_ID>` — klaim reminder dari claim ID yang dikirim developer.
+- `<prefix> r inventory` — daftar reminder milikmu (embed): ID, nama, kategori, format, status.
+- `<prefix> r view <ID>` — pratinjau pesan/embed (variabel sudah ter-render).
+- `<prefix> r info <ID>` — detail: nama, kategori, format, pemilik, status, shareable, sumber.
 - `<prefix> r active` — daftar reminder aktif.
-- `<prefix> r update <ID> <pesan>` — ubah pesan. Variabel seperti `{USER}` didukung.
+- `<prefix> r update <ID> <pesan>` — ubah pesan Normal.
 - `<prefix> r embed <ID> <JSON>` — atur embed (lihat contoh di bawah).
 - `<prefix> r setcollectible <ID> <tipe>` — atur tipe collectible.
 - `<prefix> r reset <ID>` — kembalikan ke bawaan template (perlu konfirmasi).
-- `<prefix> r enable <ID>` / `<prefix> r disable <ID>` — aktifkan atau matikan.
-- `<prefix> r send <@user> <ID>` — hadiahkan ke orang lain. Ini **memindahkan kepemilikan**
-  (bukan sekadar berbagi akses) dan perlu konfirmasi; setelah itu kamu tidak bisa mengubahnya lagi.
-- `<prefix> r tenor <URL>` — ubah halaman Tenor jadi URL GIF langsung.
-- `<prefix> r variables` / `<prefix> r help` — daftar variabel dan bantuan.
+- `<prefix> r enable <ID>` / `<prefix> r disable <ID>` — aktifkan/matikan satu reminder.
+- `<prefix> r shareable <ID> on|off` — tandai reminder boleh dipindahbukukan.
+- `<prefix> r send <@user> <ID>` — pindahbukukan reminder **shareable** (perlu konfirmasi).
+- `<prefix> r media <URL>` — ubah URL Tenor/Klipy jadi URL media langsung.
+- `<prefix> r variables` / `<prefix> r help`.
 
-Tindakan destruktif memakai konfirmasi: setelah `send` atau `reset`, balas
-`<prefix> r confirm` (atau `<prefix> r cancel`) dalam 60 detik.
+Legenda inventory: ✅ aktif • 🎉 shareable • 🔒 tidak shareable • ❌ nonaktif (tetap bisa diubah).
+Aktif dan shareable **independen** — reminder bisa aktif tanpa shareable. Reminder nonaktif tetap bisa
+disunting. Mengubah pesan/embed/collectible **tidak** mengubah Reminder ID, kategori, format, atau pemilik.
 
 ### Untuk developer bot
 
-Otorisasi memakai sistem Developer ID yang sudah ada (`isDeveloper`): ID di `DEVELOPER_IDS`, pemilik
-aplikasi bot, atau pemilik server. Tidak ada daftar developer terpisah.
+Memakai sistem Developer ID yang sudah ada (`isDeveloper`): `DEVELOPER_IDS`, pemilik aplikasi bot, atau
+pemilik server. Tidak ada daftar developer kedua.
 
-- `<prefix> r create <nama> | <pesan default> [| <embed JSON>]` — buat template, dapat `T-...`.
-- `<prefix> r templates` — daftar template.
-- `<prefix> r give <@user> <TEMPLATE_ID>` — beri reminder; bot mengirim DM berisi claim ID.
-- `<prefix> r awards` — daftar claim beserta status (`pending`, `redeemed`, `revoked`).
+- `<prefix> r create <KATEGORI> <FORMAT> <nama> | <pesan> [| <embed JSON>]` — buat template.
+- `<prefix> r templates` — daftar template (kategori + format tampil).
+- `<prefix> r give <@user> <TEMPLATE_ID>` — beri reminder; bot DM penerima berisi claim ID.
+- `<prefix> r awards` — daftar claim + status (`pending`, `redeemed`, `revoked`).
 - `<prefix> r revoke <CLAIM_ID>` — cabut claim yang belum diklaim (perlu konfirmasi).
 
-Contoh alur pemberian:
+Alur pemberian:
 
 ```
-d r create Reminder Harian | Halo {USER}, jangan lupa reset <t:{DAILY_TOMORROW}:R> ya! | {"title":"Pengingat","color":"#5865F2"}
-d r give @pemenang T-NHHKTY
+d r create PRAY_CURSE NORMAL Doa Harian | {mention} jangan lupa doa <t:{DAILY_TOMORROW}:R>!
+d r give @pemenang T-NHHKT
 # penerima:
-d r redeem C-B8DW6P
+d r redeem C-B8DW6
 ```
 
-Kalau DM ke penerima gagal (DM ditutup), bot memberi tahu developer dan menampilkan claim ID supaya
-bisa disampaikan manual.
+Kalau DM gagal, bot memberi tahu developer dan menampilkan claim ID untuk disampaikan manual.
+Developer **tidak** otomatis mendapat izin admin server.
+
+### Pengaturan default server (`s`)
+
+Memakai namespace Settings yang sudah ada, **bukan** `r server`:
+
+- `<prefix> s <aksi> set text <teks>` — aksi: `pray`, `curse`, `hunt`, `battle`, `lucy`.
+- `<prefix> s <aksi> reset` — kembali ke bawaan Dragneel (tidak menghapus Custom Reminder siapa pun).
+- `<prefix> s <aksi>` — lihat pengaturan saat ini.
+
+Pengaturan tetap **per aksi** (pray dan curse terpisah), walau kategori Custom Reminder-nya sama.
+Hanya **pemilik server atau admin dengan izin Manage Server** yang boleh mengubah — balasan:
+`Only server admins & owners can change this setting.` Developer ID saja tidak cukup.
+
+Default server saat ini hanya mendukung **teks**; embed hanya tersedia untuk Custom Reminder milik
+user. Pengaturan tersimpan per guild dan tidak bocor antar server.
 
 ### Variabel
 
 | Kelompok | Variabel |
 |----------|----------|
-| User | `{USER}`, `{EMOJI}`, `{USER_ID}`, `{USER_MENTION}`, `{USER_NAME}`, `{USER_DISPLAYNAME}`, `{USER_NICKNAME}`, `{USER_AVATAR}`, `{USER_SERVERAVATAR}` |
+| User | `{USER}`, `{USER_ID}`, `{USER_MENTION}`, `{USER_NAME}`, `{USER_DISPLAYNAME}`, `{USER_NICKNAME}`, `{USER_AVATAR}`, `{USER_SERVERAVATAR}` |
 | Goal | `{GOAL}`, `{GOAL_PROGRESS}`, `{GOAL_PROGRESS_INVERTED}`, `{GOAL_END}` |
-| Acak | `{FLAG}`, `{CAT}`, `{DOG}` |
+| Acak | `{EMOJI}`, `{FLAG}`, `{CAT}`, `{DOG}` |
 | Waktu | `{DAILY}`, `{DAILY_TOMORROW}`, `{DAILY_YESTERDAY}`, `{TIME}` |
 | Server | `{SERVER_NAME}`, `{SERVER_ICON}` |
 
-Catatan perilaku:
+Token gaya lama engine tetap didukung di pesan pengingat: `{user}`, `{mention}`, `{kind}`, `{durasi}`,
+`{count}`.
 
-- Variabel goal dibaca dari **sistem Target Lucy** yang sudah ada. Kalau target server belum
-  diaktifkan atau goal belum diatur, nilai diganti `(tidak tersedia)` — bukan angka karangan.
-- `{CAT}` dan `{DOG}` membaca daftar gambar di `reminders.randomImages` (lihat di bawah). Kalau daftar
-  kosong, muncul pesan bahwa gambar belum dikonfigurasi.
-- Nilai acak (`{EMOJI}`, `{FLAG}`, `{CAT}`, `{DOG}`) dipilih **sekali per pesan**, jadi `{EMOJI}` dua
-  kali menampilkan emoji yang sama dalam satu pesan.
-- Timestamp harian mengikuti reset harian WIB (`Asia/Jakarta`), sama dengan sistem target Lucy.
-- Variabel tak dikenal dibiarkan apa adanya, dan nilai hasil tidak dipindai ulang (tanpa ekspansi rekursif).
+- Variabel goal dibaca dari **sistem Target Lucy**; kalau belum aktif → `(tidak tersedia)`.
+- `{CAT}`/`{DOG}` dari `reminders.randomImages`; fallback jelas bila kosong.
+- Nilai acak dipilih **sekali per pesan** (konsisten dalam satu render).
+- Waktu harian mengikuti reset WIB (`Asia/Jakarta`).
+- Variabel tak dikenal dibiarkan apa adanya; nilai hasil tidak dipindai ulang (tanpa ekspansi rekursif).
 
-Contoh timestamp relatif:
-
-```
-d r update R-F5Y9CR Halo {USER}, reset <t:{DAILY_TOMORROW}:R>!
-```
+Contoh: `d r update R-F5Y9C Halo {USER}, reset <t:{DAILY_TOMORROW}:R>!`
 
 ### Contoh embed JSON
 
 ```
-d r embed R-F5Y9CR {"title":"Pengingat {USER}","description":"Reset <t:{DAILY_TOMORROW}:R>","color":"#5865F2","footer":{"text":"{SERVER_NAME}"},"fields":[{"name":"Target","value":"{GOAL}","inline":true}]}
+d r embed R-F5Y9C {"title":"Pengingat {USER}","description":"Reset <t:{DAILY_TOMORROW}:R>","color":"#5865F2","footer":{"text":"{SERVER_NAME}"},"image":{"url":"https://cdn.klipy.com/a/b.gif"}}
 ```
 
-Field yang didukung: `title`, `description`, `url`, `color`, `timestamp`, `footer`, `image`,
-`thumbnail`, `author`, `fields`. Batas Discord ditegakkan sebelum disimpan: `title` 256,
-`description` 4096, `footer.text` 2048, `author.name` 256, `fields` maksimal 25 (nama 256, nilai 1024),
-total 6000 karakter. Hanya URL `https` yang diterima — skema `javascript:`, `data:`, dan `file:`
-ditolak, begitu juga field yang tidak dikenal.
+Field: `title`, `description`, `url`, `color`, `timestamp`, `footer`, `image`, `thumbnail`, `author`,
+`fields`. Batas Discord ditegakkan sebelum disimpan: `title` 256, `description` 4096, `footer.text`
+2048, `author.name` 256, `fields` maks 25 (nama 256, nilai 1024), total 6000. Hanya `https` — skema
+`javascript:`, `data:`, `file:` ditolak, field tak dikenal ditolak.
 
-### Konfigurasi
+### Media: Tenor dan Klipy
 
-`data/guild-settings.json` per server menyimpan blok `reminders`:
+`r media <URL>` mendeteksi penyedia otomatis; `r tenor`/`r klipy` untuk satu penyedia. URL media
+langsung (`.gif`/`.mp4`/`.webm`) dipakai apa adanya; halaman `tenor.com/view/...` atau `klipy.com/gif/...`
+diambil HTML-nya untuk mencari URL media. Hanya `https`; URL tidak tersedia/ tidak valid ditolak dengan
+pesan jelas.
 
-```json
-{ "reminders": { "collectibles": ["event_khusus"], "randomImages": { "cats": ["https://..."], "dogs": ["https://..."] } } }
-```
+### Data, konfigurasi, dan rollback
 
-`collectibles` menambah tipe collectible di luar bawaan (`common`, `uncommon`, `rare`, `epic`,
-`legendary`, `mythic`). Semua tipe divalidasi saat dipakai.
-
-### Data dan penyimpanan
-
-Semua data ada di SQLite `data/reminders.db` (`node:sqlite`, tabel `reminder_templates`,
-`reminder_awards`, `reminders`, `reminder_audit`) sehingga tetap utuh setelah bot restart. Riwayat
-pemberian dan transfer dicatat di `reminder_audit`. Tidak ada kepemilikan penting yang hanya ada di memori.
-
-### Kapan reminder aktif dikirim
-
-Reminder yang aktif dikirim saat pemiliknya melakukan **aktivitas Lucy** (aksi yang dihitung counter
-Lucy). Pengiriman diberi jeda minimal 60 detik per pengguna agar tidak spam, dan mention massal selalu
-dinetralkan.
-
-### Migrasi dan rollback
-
-- **Tanpa migrasi data**: fitur ini adalah penambahan baru. Saat pertama dijalankan, `data/reminders.db`
-  dibuat otomatis dengan `CREATE TABLE IF NOT EXISTS`, jadi server yang sudah berjalan tidak perlu
-  langkah apa pun.
-- **Kolom baru di masa depan** bersifat aditif dan penanda versi disimpan di tabel `schema_meta`
-  (`schema_version`).
-- **Rollback**: cukup kembalikan kode ke versi sebelumnya. File `data/reminders.db` boleh dibiarkan
-  (tidak dibaca kode lama) atau dihapus. Blok `reminders` di `data/guild-settings.json` juga aman
-  dibiarkan — pengaturan lama tidak dihapus oleh penambahan ini.
-- **Cadangkan sebelum upgrade besar**: salin `data/reminders.db` (beserta `-wal`/`-shm` bila ada) dan
-  `data/guild-settings.json`.
+- `data/reminders.db` (SQLite `node:sqlite`): `reminder_templates`, `reminder_awards`, `reminders`,
+  `reminder_audit`, dan `guild_reminder_settings` (default server per aksi).
+- Skema versi 2. Upgrade dari versi 1 **aditif**: kolom `category`, `format`, `name`, `shareable`
+  ditambahkan otomatis lewat `PRAGMA table_info` + `ALTER TABLE`, data lama tetap utuh.
+- Tidak ada migrasi manual. `guild_reminder_settings` dibuat otomatis.
+- Rollback: kembalikan kode ke versi sebelumnya; `data/reminders.db` boleh dibiarkan atau dihapus.
+  Blok `reminders` di `data/guild-settings.json` aman dibiarkan.
+- Cadangkan `data/reminders.db` (beserta `-wal`/`-shm`) dan `data/guild-settings.json` sebelum upgrade besar.
 
 ## Untuk moderator/admin
 Membutuhkan izin Discord Manage Server (Administrator juga diizinkan):

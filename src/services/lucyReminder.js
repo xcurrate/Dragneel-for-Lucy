@@ -19,6 +19,8 @@ const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
 const { parseIndonesianDate, counterOffNotice, navRow } = require('./lucyCounter');
 const trigger = require('../utils/lucyTrigger');
+const reminderResolve = require('../utils/reminderResolve');
+const reminderVariables = require('../utils/reminderVariables');
 
 const WIB = 'Asia/Jakarta';
 const REMINDER_NAV = 'lrem';
@@ -277,10 +279,30 @@ async function deliverReminder(client, reminder) {
 
   const mention = pref.pingMode === 'tag' || pref.pingMode === 'both';
   const useReply = pref.pingMode === 'reply' || pref.pingMode === 'both';
+
+  // Layer resolusi Custom Reminder: override pribadi -> default server -> bawaan.
+  // Tidak ada scheduler/pengiriman kedua; ini hanya pemilihan KONFIGURASI pesan.
+  const legacyVars = {
+    user: reminder.name || 'Pemain',
+    mention: `<@${userId}>`,
+    kind: label,
+    durasi: humanDuration(info.waitMs),
+    count
+  };
+  const resolved = reminderResolve.resolveRendered({
+    guildId, userId, action, legacyVars, context: await deliveryContext(client, guildId, userId, reminder.name)
+  });
+
   const payload = {
-    content: (mention ? `<@${userId}> ` : '') + content,
+    content: (mention ? `<@${userId}> ` : '') + (resolved.content ?? content),
     allowedMentions: mention ? { parse: [], users: [userId] } : { parse: [] }
   };
+  // Format EMBED: pesan dirender sebagai embed; teks tetap dipakai sebagai
+  // deskripsi cadangan bila embed tidak punya description sendiri.
+  if (resolved.format === 'EMBED') {
+    const config = resolved.renderedEmbed || {};
+    payload.embeds = [reminderResolve.buildEmbed(config, resolved.content ?? content)];
+  }
   if (useReply && messageId) payload.reply = { messageReference: messageId, failIfNotExists: false };
 
   try {
@@ -288,6 +310,31 @@ async function deliverReminder(client, reminder) {
   } catch (e) {
     console.error('[LucyReminder] gagal mengirim pengingat:', e.message);
   }
+}
+
+// Konteks variabel untuk pengiriman. Data user/guild diambil best-effort; kalau
+// gagal, variabel yang tidak tersedia memakai fallback yang jelas.
+async function deliveryContext(client, guildId, userId, name) {
+  let user = null;
+  let guild = null;
+  try { user = await client.users.fetch(userId); } catch { user = null; }
+  try { guild = client.guilds?.cache?.get?.(guildId) || null; } catch { guild = null; }
+  let member = null;
+  try { member = await guild?.members?.fetch?.(userId); } catch { member = null; }
+  return reminderVariables.createRenderContext({
+    guildId,
+    settings: getGuildSettings(guildId),
+    user: {
+      id: userId,
+      name: user?.username || name || null,
+      displayName: member?.displayName || user?.globalName || user?.username || name || null,
+      nickname: member?.nickname || null,
+      mention: `<@${userId}>`,
+      avatarUrl: user?.displayAvatarURL?.({ size: 256 }) || null,
+      serverAvatarUrl: member?.displayAvatarURL?.({ size: 256 }) || null
+    },
+    guild: guild ? { name: guild.name, iconUrl: guild.iconURL?.({ size: 256 }) || null } : null
+  });
 }
 
 // Pasang reminder. Pengingat pertama untuk satu jenis menang; pemanggilan
@@ -815,7 +862,7 @@ module.exports = {
   handleMessage, handleCommand, handleComponent, isReminderNav, helpText,
   handleLeaderboardNav, isLeaderboardNav,
   panelEmbed, panelComponents, leaderboardView, parseRange, rangeLabel,
-  scheduleReminder, deliverReminder, scheduledCount, renderTemplate, replyTemplate,
+  scheduleReminder, deliverReminder, scheduledCount, renderTemplate, replyTemplate, deliveryContext,
   dayKey, shiftDay, humanDuration, KINDS, PING_MODES, CATEGORIES, DEFAULT_REPLIES,
   DEFAULT_PREF, TRIGGER_KIND_TO_REMINDER, ACTION_LABELS,
   handleLucyPrefixCommand, lucyRankingGlobal, rankingFor,

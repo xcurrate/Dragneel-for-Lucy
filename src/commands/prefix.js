@@ -3,6 +3,9 @@ const { modeLabel, warnLabel, personalPanel, statusEmbed, helpEmbed } = require(
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { handlePersonalCommand } = require('./bossRewardNotify');
 const { buildDexResponse } = require('../services/animalDex');
+const reminderStore = require('../utils/reminderStorage');
+const reminderCategories = require('../utils/reminderCategories');
+const reminderValidate = require('../utils/reminderValidate');
 
 const ALIASES = {
   help: ['bantuan', 'help', '?'],
@@ -55,6 +58,12 @@ function parsePrefixInput(content, prefix) {
     if (headSub === 'settings') {
       const setting = (args[0] || '').toLowerCase();
       if (ALIAS_MAP[setting] === 'count') return { sub: 'count', rawSub: setting, args: args.slice(1) };
+      // Pengaturan pengingat per aksi: `s pray set text <teks>`, `s pray reset`.
+      // Pengaturan tetap per AKSI (pray dan curse terpisah), bukan per kategori
+      // gabungan, supaya perilaku lama yang sudah terpisah tidak berubah.
+      if (reminderCategories.normalizeAction(setting)) {
+        return { sub: 'reminder-setting', action: reminderCategories.normalizeAction(setting), rawSub: setting, args: args.slice(1) };
+      }
       return { sub: 'settings', rawSub: head, args };
     }
     return { sub: headSub, rawSub: head, args };
@@ -197,7 +206,50 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   }
 
   if (sub === 'settings') {
-    return _sendText(message, 'Pengaturan server: `' + prefix + ' s count on|off` — sakelar seluruh counter Lucy (admin/developer).');
+    return _sendText(message, 'Pengaturan server: `' + prefix + ' s count on|off` — sakelar seluruh counter Lucy (admin/developer).\n' +
+      'Pengingat default server: `' + prefix + ' s <aksi> set text <teks>` dan `' + prefix + ' s <aksi> reset` (admin/pemilik server).\n' +
+      'Aksi: ' + reminderCategories.ACTIONS.join(', ') + '.');
+  }
+
+  // Pengaturan default pengingat server. HANYA pemilik server atau admin dengan
+  // izin Manage Server — developer bot TIDAK otomatis boleh (sesuai kebijakan
+  // izin server yang ada). Reminder milik user tidak pernah disentuh di sini.
+  if (sub === 'reminder-setting') {
+    const action = parsed.action;
+    const canManage = _isAdmin(message) || Boolean(message.guild?.ownerId && message.guild.ownerId === message.author?.id);
+    if (!canManage) return _sendText(message, 'Only server admins & owners can change this setting.');
+
+    const verb = (args[0] || '').toLowerCase();
+    const label = reminderCategories.ACTION_LABELS[action] || action;
+
+    if (verb === 'reset') {
+      const had = reminderStore.deleteGuildReminderSetting(message.guildId, action);
+      return _sendText(message, had
+        ? '✅ Pengingat server untuk **' + label + '** dikembalikan ke bawaan Dragneel.'
+        : 'Pengingat server untuk **' + label + '** memang masih memakai bawaan Dragneel.');
+    }
+
+    if (verb === 'set') {
+      const field = (args[1] || '').toLowerCase();
+      if (field !== 'text') {
+        return _sendText(message, 'Format: `' + prefix + ' s ' + action + ' set text <teks>`.\n' +
+          'Balasan default server saat ini hanya mendukung teks; embed hanya tersedia untuk Custom Reminder milik user.');
+      }
+      const text = args.slice(2).join(' ');
+      if (!text) return _sendText(message, 'Teks tidak boleh kosong. Contoh: `' + prefix + ' s ' + action + ' set text {mention} ayo ' + action + '!`');
+      if (text.length > 1000) return _sendText(message, 'Teks terlalu panjang (maks 1000 karakter).');
+      reminderStore.setGuildReminderSetting({
+        guildId: message.guildId, action, format: 'NORMAL', message: text, updatedBy: message.author.id
+      });
+      return _sendText(message, '✅ Pengingat server untuk **' + label + '** disimpan.\n' +
+        'Berlaku untuk anggota yang tidak punya Custom Reminder aktif pada kategori ini.');
+    }
+
+    const current = reminderStore.getGuildReminderSetting(message.guildId, action);
+    const line = current?.message
+      ? '**' + label + '**: `' + current.message + '`'
+      : '**' + label + '**: (bawaan Dragneel)';
+    return _sendText(message, line + '\nUbah dengan `' + prefix + ' s ' + action + ' set text <teks>` atau `' + prefix + ' s ' + action + ' reset`.');
   }
 
   if (sub === 'count') {
