@@ -457,7 +457,7 @@ describe('custom reminder — customization commands', () => {
     const view = makeMessage('d r view ' + reminderId, { userId: owner });
     await svc().handleMessage(view);
     const embed = view.sent.at(-1).embeds[0].data;
-    assert.match(embed.description, /<@111222333444555666>/, 'variabel USER ter-render');
+    assert.match(embed.description, /user111222333444555666/, 'variabel USER ter-render sebagai username');
 
     // `r info` adalah alias `r view`.
     const info = makeMessage('d r info ' + reminderId, { userId: owner });
@@ -560,7 +560,8 @@ describe('custom reminder — variables', () => {
       },
       guild: { name: 'Guild Satu', iconUrl: 'https://cdn.discordapp.com/icons/1/a.png' }
     });
-    assert.equal(variables().render('{USER}', context), '<@123>');
+    assert.equal(variables().render('{USER}', context), 'ani', '{USER} tanpa mention');
+    assert.equal(variables().render('{USER_MENTION}', context), '<@123>');
     assert.equal(variables().render('{USER_ID}', context), '123');
     assert.equal(variables().render('{USER_NAME}', context), 'ani');
     assert.equal(variables().render('{USER_DISPLAYNAME}', context), 'Ani');
@@ -636,18 +637,18 @@ describe('custom reminder — variables', () => {
   });
 
   it('interpolates embed text fields but not structural values', () => {
-    const context = variables().createRenderContext({ user: { id: '1', mention: '<@1>' }, guild: { name: 'G' } });
+    const context = variables().createRenderContext({ user: { id: '1', name: 'ani', mention: '<@1>' }, guild: { name: 'G' } });
     const embed = variables().renderEmbed({
-      title: 'Halo {USER}', description: '{SERVER_NAME}',
+      title: 'Halo {USER_MENTION}', description: '{SERVER_NAME}',
       footer: { text: '{USER}' }, author: { name: '{USER}' },
       fields: [{ name: '{USER}', value: '{SERVER_NAME}' }],
       color: 0x123456, url: 'https://example.com/{USER}'
     }, context);
-    assert.equal(embed.title, 'Halo <@1>');
+    assert.equal(embed.title, 'Halo <@1>', 'USER_MENTION menghasilkan mention');
     assert.equal(embed.description, 'G');
-    assert.equal(embed.footer.text, '<@1>');
-    assert.equal(embed.author.name, '<@1>');
-    assert.equal(embed.fields[0].name, '<@1>');
+    assert.equal(embed.footer.text, 'ani', '{USER} tanpa mention');
+    assert.equal(embed.author.name, 'ani');
+    assert.equal(embed.fields[0].name, 'ani');
     assert.equal(embed.color, 0x123456, 'nilai non-teks tidak diubah');
     assert.equal(embed.url, 'https://example.com/{USER}', 'url tidak diinterpolasi');
   });
@@ -660,69 +661,6 @@ describe('custom reminder — variables', () => {
   });
 });
 
-describe('custom reminder — runtime delivery', () => {
-  function runtimeClient(sent) {
-    return {
-      channels: { fetch: async () => ({ send: async payload => { sent.push(payload); } }) },
-      guilds: { cache: new Map([['guild1', { name: 'Guild Satu', iconURL: () => null }]]) },
-      users: { fetch: async id => ({ id, username: 'ani', displayAvatarURL: () => null }) }
-    };
-  }
-
-  it('delivers active reminders to the activity channel', async () => {
-    const { reminderId } = await awardAndRedeem();
-    const owner = '111222333444555666';
-    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
-
-    const sent = [];
-    const result = await svc().deliverForActivity({ client: runtimeClient(sent), guildId: 'guild1', userId: owner, channelId: 'chan1' });
-    assert.equal(result.delivered, 1);
-    assert.equal(sent.length, 1);
-    assert.match(sent[0].content, /<@111222333444555666>/);
-    assert.deepEqual(sent[0].allowedMentions, { parse: [] }, 'tidak bisa mention massal');
-  });
-
-  it('respects the delivery cooldown and skips when nothing is active', async () => {
-    const { reminderId } = await awardAndRedeem();
-    const owner = '111222333444555666';
-    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
-    const sent = [];
-    const client = runtimeClient(sent);
-    await svc().deliverForActivity({ client, guildId: 'guild1', userId: owner, channelId: 'chan1' });
-    const second = await svc().deliverForActivity({ client, guildId: 'guild1', userId: owner, channelId: 'chan1' });
-    assert.equal(second.delivered, 0);
-    assert.equal(second.skipped, 'cooldown');
-    assert.equal(sent.length, 1, 'tidak spam');
-
-    const other = await svc().deliverForActivity({ client, guildId: 'guild1', userId: 'user9', channelId: 'chan1' });
-    assert.equal(other.skipped, 'none', 'pengguna tanpa reminder dilewati');
-  });
-
-  it('fails gracefully when the channel, user or client is unavailable', async () => {
-    const noClient = await svc().deliverForActivity({ client: null, guildId: 'guild1', userId: 'user1' });
-    assert.equal(noClient.skipped, 'invalid');
-
-    const { reminderId } = await awardAndRedeem();
-    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: '111222333444555666' }));
-
-    const noChannel = await svc().deliverForActivity({
-      client: { channels: { fetch: async () => null }, guilds: { cache: new Map() }, users: { fetch: async () => null } },
-      guildId: 'guild1', userId: '111222333444555666', channelId: 'chan1'
-    });
-    assert.equal(noChannel.delivered, 0);
-
-    const noUser = await svc().deliverForActivity({
-      client: {
-        channels: { fetch: async () => ({ send: async () => {} }) },
-        guilds: { cache: new Map() },
-        users: { fetch: async () => { throw new Error('Unknown User'); } }
-      },
-      guildId: 'guild1', userId: '111222333444555666', channelId: 'chan1'
-    });
-    assert.equal(noUser.delivered, 0);
-    assert.equal(noUser.skipped, 'no-user');
-  });
-});
 
 describe('custom reminder — storage schema and IDs', () => {
   it('creates the schema with a version marker and validates IDs', () => {
@@ -1364,5 +1302,178 @@ describe('custom reminder — revisi: counter off, discohook, panel, create ring
       const last = message.sent.at(-1);
       assert.ok(last && Array.isArray(last.embeds) && last.embeds.length === 1, content + ' harus berupa embed');
     }
+  });
+});
+
+describe('custom reminder — tag, duplikat, dan jam harian WIB', () => {
+  const variables = () => require('../src/utils/reminderVariables');
+
+  it('hanya engine lucyReminder yang mengirim (tidak ada pengirim kedua)', () => {
+    const svcMod = svc();
+    assert.equal(typeof svcMod.deliverForActivity, 'undefined', 'pengirim kedua sudah dihapus');
+    assert.equal(typeof svcMod.handleMessage, 'function');
+  });
+
+  it('{USER} tidak memicu tag, {USER_MENTION} memicunya', () => {
+    const id = '111222333444555666';
+    const context = variables().createRenderContext({ user: { id, name: 'ani', mention: '<@' + id + '>' } });
+    assert.equal(variables().render('{USER}', context), 'ani');
+    assert.equal(variables().render('{USER_MENTION}', context), '<@' + id + '>');
+    assert.deepEqual(variables().mentions('{USER}'), []);
+    assert.deepEqual(variables().mentions(variables().render('{USER_MENTION}', context)), [id]);
+  });
+
+  it('tidak menandai saat pingMode bukan tag (kasus `{mention} jangan lupa battle!`)', async () => {
+    const owner = '111222333444555666';
+    const { templateId } = await makeTemplate('Battle', 'x', { category: 'HUNT_BATTLE', format: 'EMBED' });
+    const give = makeMessage('d r give <@' + owner + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: owner });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+
+    await svc().handleMessage(makeMessage('d r update ' + reminderId + ' {mention} jangan lupa battle!', { userId: owner }));
+    await svc().handleMessage(makeMessage('d r embed ' + reminderId + ' {"title":"Battle Reminder","description":"{mention} jangan lupa battle!"}', { userId: owner }));
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
+
+    const engine = require('../src/services/lucyReminder');
+    const prefStore = require('../src/utils/lucyActionStorage');
+    const sent = [];
+    const client = { channels: { fetch: async () => ({ isTextBased: () => true, send: async p => { sent.push(p); } }) } };
+    const base = { guildId: 'guild1', channelId: 'chan1', userId: owner, name: 'Ani', kind: 'battle', action: 'battle', messageId: 'm1' };
+
+    // Mode `none`: teks DAN embed harus bersih dari mention.
+    prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'none' });
+    await engine.deliverReminder(client, { ...base });
+    const none = sent.at(-1);
+    assert.doesNotMatch(none.content, /<@/, 'teks tanpa tag saat mode none');
+    assert.doesNotMatch(JSON.stringify(none.embeds[0].data), /<@/, 'embed tanpa tag saat mode none');
+    assert.deepEqual(none.allowedMentions, { parse: [], users: [] }, 'tidak ada user yang diizinkan');
+    assert.equal(none.reply, undefined, 'tidak me-reply');
+
+    // Mode `reply`: me-reply, tetap tanpa tag.
+    prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'reply' });
+    await engine.deliverReminder(client, { ...base });
+    const reply = sent.at(-1);
+    assert.equal(reply.reply.messageReference, 'm1');
+    assert.doesNotMatch(reply.content, /<@/, 'mode reply tidak menandai');
+
+    // Mode `tag`: boleh menandai, dan diizinkan.
+    prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'tag' });
+    await engine.deliverReminder(client, { ...base });
+    const tag = sent.at(-1);
+    assert.match(tag.content, new RegExp('<@' + owner + '>'));
+    assert.deepEqual(tag.allowedMentions, { parse: [], users: [owner] });
+    assert.equal(tag.reply, undefined, 'mode tag tidak me-reply');
+  });
+
+  it('satu aksi hanya memicu satu pengingat', async () => {
+    const owner = '111222333444555666';
+    const { templateId } = await makeTemplate('Battle', 'x', { category: 'HUNT_BATTLE', format: 'NORMAL' });
+    const give = makeMessage('d r give <@' + owner + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: owner });
+    await svc().handleMessage(redeem);
+    await svc().handleMessage(makeMessage('d r enable ' + idOf(redeem, 'R'), { userId: owner }));
+
+    const engine = require('../src/services/lucyReminder');
+    const prefStore = require('../src/utils/lucyActionStorage');
+    prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'none' });
+    engine.timers.clear();
+
+    const message = makeMessage('lucy battle', { userId: owner });
+    await engine.handleMessage(message);
+    assert.equal(engine.timers.size, 1, 'aksi menjadwalkan tepat satu pengingat');
+    engine.timers.clear();
+  });
+
+  it('{DAILY} tepat 00:00 WIB, dan berganti hari saat lewat tengah malam WIB', () => {
+    // 15 Jan 2026 05:30 WIB = 14 Jan 22:30 UTC.
+    const morning = Date.UTC(2026, 0, 14, 22, 30, 0);
+    const daily = variables().wibDayStartUnix(0, morning);
+    assert.equal(new Date(daily * 1000).toLocaleString('en-GB', { timeZone: 'Asia/Jakarta' }), '15/01/2026, 00:00:00');
+    assert.equal(variables().wibDayStartUnix(1, morning), daily + 86400, 'besok tepat +24 jam');
+
+    // 15 Jan 2026 23:59 WIB masih hari yang sama...
+    const beforeMidnight = Date.UTC(2026, 0, 15, 16, 59, 0);
+    assert.equal(variables().wibDayStartUnix(0, beforeMidnight), daily);
+    // ...dan 16 Jan 2026 00:01 WIB sudah masuk hari berikutnya.
+    const afterMidnight = Date.UTC(2026, 0, 15, 17, 1, 0);
+    assert.equal(variables().wibDayStartUnix(0, afterMidnight), daily + 86400);
+    assert.equal(variables().dayKey(new Date(afterMidnight)), '2026-01-16');
+    assert.equal(variables().dayKey(new Date(beforeMidnight)), '2026-01-15');
+  });
+
+  it('menjelaskan variabel waktu sebagai 00:00 WIB', () => {
+    const reference = Object.fromEntries(variables().variableReference().map(v => [v.name, v.description]));
+    assert.match(reference['{DAILY}'], /00:00 WIB/);
+    assert.match(reference['{DAILY_TOMORROW}'], /00:00 WIB/);
+  });
+});
+
+describe('custom reminder — tag tunggal dan token {mention} di embed', () => {
+  async function setupBattleReminder(owner = '111222333444555666') {
+    const { templateId } = await makeTemplate('Battle', 'x', { category: 'HUNT_BATTLE', format: 'EMBED' });
+    const give = makeMessage('d r give <@' + owner + '> ' + templateId, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: owner });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+    await svc().handleMessage(makeMessage('d r update ' + reminderId + ' {mention} jangan lupa battle!', { userId: owner }));
+    await svc().handleMessage(makeMessage('d r embed ' + reminderId + ' {"title":"Battle Reminder","description":"{mention} jangan lupa battle!"}', { userId: owner }));
+    await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
+    return reminderId;
+  }
+
+  function deliver(client, sent, owner, pingMode) {
+    const engine = require('../src/services/lucyReminder');
+    const prefs = require('../src/utils/lucyActionStorage');
+    prefs.setPref(owner, 'battle', { enabled: true, pingMode });
+    return engine.deliverReminder(client, {
+      guildId: 'guild1', channelId: 'chan1', userId: owner, name: 'Ani', kind: 'battle', action: 'battle', messageId: 'm1'
+    }).then(() => sent.at(-1));
+  }
+
+  function clientOf(sent) {
+    return { channels: { fetch: async () => ({ isTextBased: () => true, send: async p => { sent.push(p); } }) } };
+  }
+
+  it('merender {mention} di dalam embed (bukan literal)', async () => {
+    const owner = '111222333444555666';
+    await setupBattleReminder(owner);
+    const sent = [];
+    const payload = await deliver(clientOf(sent), sent, owner, 'tag');
+    assert.doesNotMatch(payload.embeds[0].data.description, /\{mention\}/, 'token lama dirender di embed');
+    assert.match(payload.embeds[0].data.description, new RegExp('<@' + owner + '>'));
+  });
+
+  it('hanya menandai sekali walau teks diawali {mention}', async () => {
+    const owner = '111222333444555666';
+    await setupBattleReminder(owner);
+    const sent = [];
+    const payload = await deliver(clientOf(sent), sent, owner, 'tag');
+    const tags = payload.content.match(/<@!?\d+>/g) || [];
+    assert.equal(tags.length, 1, 'tepat satu tag, tidak dobel');
+    assert.equal(payload.reply, undefined, 'mode tag tidak me-reply');
+  });
+
+  it('mode none mengganti mention dengan nama, tanpa tag dan tanpa reply', async () => {
+    const owner = '111222333444555666';
+    await setupBattleReminder(owner);
+    const sent = [];
+    const payload = await deliver(clientOf(sent), sent, owner, 'none');
+    assert.doesNotMatch(payload.content, /<@/, 'tanpa tag');
+    assert.match(payload.content, /Ani jangan lupa battle!/, 'mention diganti nama');
+    assert.deepEqual(payload.allowedMentions, { parse: [], users: [] });
+    assert.equal(payload.reply, undefined);
+  });
+
+  it('mode both menandai sekali sekaligus me-reply', async () => {
+    const owner = '111222333444555666';
+    await setupBattleReminder(owner);
+    const sent = [];
+    const payload = await deliver(clientOf(sent), sent, owner, 'both');
+    assert.equal((payload.content.match(/<@!?\d+>/g) || []).length, 1);
+    assert.equal(payload.reply.messageReference, 'm1');
   });
 });

@@ -1,5 +1,7 @@
-// Custom Reminder: perintah, siklus pemberian (award) oleh developer, dan
-// runtime pengiriman.
+// Custom Reminder: perintah, panel, dan siklus pemberian (award) oleh developer.
+//
+// PENGIRIMAN pengingat ada di engine `lucyReminder` (durasi + pingMode tiap
+// kategori). Modul ini sengaja TIDAK mengirim sendiri.
 //
 // Distribusi rilis ini MANUAL dan dikendalikan developer — TIDAK ada giveaway
 // otomatis, voting, atau pembayaran. Pemberian memakai `awardReminder()` yang
@@ -25,10 +27,7 @@ const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const CONFIRM_TTL_MS = 60000;
 const CONFIRM_COMMANDS = new Set(['confirm', 'konfirmasi', 'ya', 'yes']);
 const CANCEL_COMMANDS = new Set(['cancel', 'batal', 'tidak', 'no']);
-// Jeda minimum antar pengiriman reminder aktif ke pengguna yang sama.
-const DELIVERY_COOLDOWN_MS = 60000;
 const pendingConfirms = new Map();
-const lastDelivery = new Map();
 
 // Panel interaktif `d r`: tombol untuk bantuan dan daftar variabel.
 const PANEL_PREFIX = 'rempanel';
@@ -183,63 +182,6 @@ function panelBackRow() {
 
 function collectibleSuffix(reminder) {
   return reminder.collectible ? ' • 🏅 ' + reminder.collectible : '';
-}
-
-// ------------------------------------------------------------------ runtime --
-// Adapter runtime. Titik integrasi activity/grinding Lucy ada di
-// lucyCounter.handleMessage -> callback `onCounted` (lihat index.js). Pengiriman
-// reminder aktif dipanggil dari sana, jadi tidak ada event grinding yang
-// dikarang. Bila guild tidak punya reminder aktif, fungsi ini tidak melakukan
-// apa-apa.
-async function deliverForActivity({ client, guildId, userId, channelId, now = Date.now() }) {
-  if (!client || !guildId || !userId) return { delivered: 0, skipped: 'invalid' };
-  const key = guildId + ':' + userId;
-  const previous = lastDelivery.get(key) || 0;
-  if (now - previous < DELIVERY_COOLDOWN_MS) return { delivered: 0, skipped: 'cooldown' };
-  let reminders;
-  try { reminders = store.listRemindersByOwner(userId, { activeOnly: true }); }
-  catch { return { delivered: 0, skipped: 'storage' }; }
-  if (!reminders.length) return { delivered: 0, skipped: 'none' };
-
-  let channel = null;
-  try {
-    channel = channelId ? await client.channels.fetch(channelId).catch(() => null) : null;
-    if (typeof channel?.send !== 'function') return { delivered: 0, skipped: 'no-channel' };
-  } catch { return { delivered: 0, skipped: 'no-channel' }; }
-
-  const guild = client.guilds?.cache?.get?.(guildId) || null;
-  let user = null;
-  try { user = await client.users.fetch(userId); } catch { user = null; }
-  if (!user) return { delivered: 0, skipped: 'no-user' };
-
-  const context = variables.createRenderContext({
-    guildId,
-    settings: getGuildSettings(guildId),
-    user: {
-      id: user.id, name: user.username, displayName: user.globalName || user.username,
-      nickname: null, mention: '<@' + user.id + '>',
-      avatarUrl: user.displayAvatarURL?.({ size: 256 }) || null, serverAvatarUrl: null
-    },
-    guild: guild ? { name: guild.name, iconUrl: guild.iconURL?.({ size: 256 }) || null } : null,
-    now
-  });
-
-  let delivered = 0;
-  for (const reminder of reminders) {
-    try {
-      await channel.send({
-        content: variables.render(reminder.message || '', context),
-        embeds: [reminderEmbed(reminder, context)],
-        allowedMentions: { parse: [] }
-      });
-      store.updateReminder(reminder.reminderId, { lastDeliveredAt: now }, { now });
-      delivered++;
-    } catch (error) {
-      console.error('[Reminders] gagal mengirim', reminder.reminderId, error.message);
-    }
-  }
-  if (delivered) lastDelivery.set(key, now);
-  return { delivered, skipped: null };
 }
 
 // --------------------------------------------------------------- award flow --
@@ -770,10 +712,10 @@ async function onGiveawayWinner({ client, guildId, giveawayId, winnerId, templat
 }
 
 module.exports = {
-  handleMessage, handleComponent, awardReminder, redeemAward, deliverForActivity, onGiveawayWinner,
+  handleMessage, handleComponent, awardReminder, redeemAward, onGiveawayWinner,
   helpText, variablesText, usageEmbed, variablesEmbed, reminderEmbed, contextFor, dmAward,
   inventoryEmbed, inventoryLine, panelRow, panelBackRow, isPanelNav, panelUser,
   isAdmin, isOwner, canManage,
   // untuk pengujian
-  pendingConfirms, lastDelivery, CONFIRM_TTL_MS, DELIVERY_COOLDOWN_MS
+  pendingConfirms, CONFIRM_TTL_MS
 };

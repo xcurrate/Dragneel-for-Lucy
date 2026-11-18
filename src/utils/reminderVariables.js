@@ -81,9 +81,11 @@ function goalContext(guildId, userId, now = Date.now()) {
 // Resolver tidak boleh melempar; kesalahan ditangani pemanggil sebagai fallback.
 const VARIABLES = {
   // --- USER ---
-  USER: { description: 'Mention pengguna (fallback: username)', resolve: c => c.user?.mention || c.user?.name || FALLBACK },
+  // {USER} sengaja TIDAK memakai mention: tag bisa mengaktifkan notifikasi dan
+  // masuk ke log audit. Pakai {USER_MENTION} bila memang ingin menandai.
+  USER: { description: 'Username pengguna (tanpa mention)', resolve: c => c.user?.name || c.user?.displayName || FALLBACK },
   USER_ID: { description: 'ID pengguna', resolve: c => c.user?.id || FALLBACK },
-  USER_MENTION: { description: 'Mention pengguna', resolve: c => c.user?.mention || FALLBACK },
+  USER_MENTION: { description: 'Mention pengguna (memicu notifikasi)', resolve: c => c.user?.mention || FALLBACK },
   USER_NAME: { description: 'Username pengguna', resolve: c => c.user?.name || FALLBACK },
   USER_DISPLAYNAME: { description: 'Nama tampilan pengguna', resolve: c => c.user?.displayName || c.user?.name || FALLBACK },
   USER_NICKNAME: { description: 'Nickname pengguna di server ini', resolve: c => c.user?.nickname || c.user?.displayName || c.user?.name || FALLBACK },
@@ -103,9 +105,9 @@ const VARIABLES = {
   DOG: { description: 'Gambar anjing acak dari daftar yang dikonfigurasi', resolve: c => c.random.dog },
 
   // --- TIME ---
-  DAILY: { description: 'Timestamp reset harian hari ini', resolve: c => String(c.time.daily) },
-  DAILY_TOMORROW: { description: 'Timestamp reset harian besok', resolve: c => String(c.time.tomorrow) },
-  DAILY_YESTERDAY: { description: 'Timestamp reset harian kemarin', resolve: c => String(c.time.yesterday) },
+  DAILY: { description: 'Timestamp 00:00 WIB hari ini', resolve: c => String(c.time.daily) },
+  DAILY_TOMORROW: { description: 'Timestamp 00:00 WIB besok', resolve: c => String(c.time.tomorrow) },
+  DAILY_YESTERDAY: { description: 'Timestamp 00:00 WIB kemarin', resolve: c => String(c.time.yesterday) },
   TIME: { description: 'Timestamp sekarang', resolve: c => String(c.time.now) },
 
   // --- SERVER ---
@@ -145,6 +147,26 @@ function createRenderContext({ user = {}, guild = null, guildId = null, now = Da
       yesterday: wibDayStartUnix(-1, now)
     }
   };
+}
+
+// Variabel yang menghasilkan mention pengguna. Dipakai pemanggil untuk memutuskan
+// apakah mention perlu diizinkan di payload Discord.
+const MENTION_VARIABLES = ['USER_MENTION'];
+
+// ID pengguna yang di-mention lewat variabel pada teks ini. Teks sudah dirender,
+// jadi cukup mencocokkan pola mention Discord.
+function mentions(text) {
+  const found = new Set();
+  for (const match of String(text ?? '').matchAll(/<@!?(\d{17,20})>/g)) found.add(match[1]);
+  return [...found];
+}
+
+// Nama variabel (tanpa kurung) yang dipakai di teks, terlepas dari dikenal atau
+// tidak. Dipakai untuk memberi peringatan variabel tak dikenal.
+function variablesUsed(text) {
+  const found = new Set();
+  for (const match of String(text ?? '').matchAll(VARIABLE_RE)) found.add(match[1]);
+  return [...found];
 }
 
 // Nama variabel yang dipakai di teks tapi tidak ada di registry.
@@ -204,7 +226,7 @@ function variableReference() {
 }
 
 module.exports = {
-  VARIABLES, VARIABLE_NAMES, VARIABLE_RE, FALLBACK, MAX_OUTPUT_LENGTH, MAX_VALUE_LENGTH,
-  createRenderContext, render, renderEmbed, unknownVariables, variableReference,
+  VARIABLES, VARIABLE_NAMES, VARIABLE_RE, MENTION_VARIABLES, FALLBACK, MAX_OUTPUT_LENGTH, MAX_VALUE_LENGTH,
+  createRenderContext, render, renderEmbed, mentions, variablesUsed, unknownVariables, variableReference,
   wibDayStartUnix, goalContext, dayKey
 };

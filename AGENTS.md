@@ -301,7 +301,13 @@ siap untuk integrasi giveaway nanti.
   menghitung), dan `lucyCounter.handleMessage` tetap memanggil hook `onCounted` lewat `notifyCounted`.
 - **Embed menerima payload discohook/webhook**: `unwrapWebhookPayload` mengambil `embeds[0]`;
   `resolveEmbedMedia` mengubah halaman Tenor/Klipy jadi URL media langsung.
-- **Test**: `test/reminders.test.js` (100 test).
+- **`{USER}` = username, `{USER_MENTION}` = mention.** Tag hanya muncul saat pingMode `tag`/`both`;
+  mode `reply`/`none` menetralkan mention di teks DAN embed (`neutraliseMentions`). Mode `tag` menandai
+  sekali saja walau teks memuat mention. `renderLegacyEmbed` merender token lama (`{mention}`) di embed.
+- **`{DAILY}`/`{DAILY_TOMORROW}`/`{DAILY_YESTERDAY}` = 00:00 WIB** (`wibDayStartUnix`).
+- **Satu pengirim saja**: pengiriman pengingat HANYA di `lucyReminder.deliverReminder`
+  (menghormati pingMode + durasi kategori). Jangan menambah pengirim kedua di `index.js`.
+- **Test**: `test/reminders.test.js` (106 test).
 
 ## Prefix command (`<prefix> <perintah>`)
 - **Prefix bawaan = `d`** (inisial bot Dragneel), konstanta `DEFAULT_PREFIX` di

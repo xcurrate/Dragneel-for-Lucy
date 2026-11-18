@@ -74,10 +74,10 @@ client.once(Events.ClientReady, async c => {
 client.on(Events.MessageCreate, async message => {
   lucyCounter.handleMessage(message, {
     onCounted: (m, name) => {
+      // Pengiriman pengingat ada di engine lucyReminder (menghormati pingMode dan
+      // durasi tiap kategori). Jangan tambah pengirim kedua di sini: itu membuat
+      // pesan terkirim dua kali.
       lucyReminder.onLucyCounted(m, name);
-      // Titik integrasi aktivitas/grinding Lucy -> pengiriman reminder aktif.
-      reminders.deliverForActivity({ client, guildId: m.guildId, userId: m.author?.id, channelId: m.channelId })
-        .catch(e => console.error('[Reminders]', e));
     }
   })
     .catch(e => console.error('[LucyCounter]', e));

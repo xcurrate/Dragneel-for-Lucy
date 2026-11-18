@@ -335,13 +335,18 @@ user. Pengaturan tersimpan per guild dan tidak bocor antar server.
 | Waktu | `{DAILY}`, `{DAILY_TOMORROW}`, `{DAILY_YESTERDAY}`, `{TIME}` |
 | Server | `{SERVER_NAME}`, `{SERVER_ICON}` |
 
-Token gaya lama engine tetap didukung di pesan pengingat: `{user}`, `{mention}`, `{kind}`, `{durasi}`,
-`{count}`.
+Token gaya lama engine tetap didukung di pesan **dan embed** pengingat: `{user}`, `{mention}`,
+`{kind}`, `{durasi}`, `{count}`.
 
+- **`{USER}` = username, bukan mention.** Ini sengaja: tag bisa memicu notifikasi dan masuk log audit.
+  Pakai `{USER_MENTION}` (atau token lama `{mention}`) bila memang ingin menandai.
+- Tag hanya muncul kalau **ping mode** pengingat memang `tag`/`both`. Pada mode `reply` atau `none`,
+  mention di dalam teks/embed diganti nama biasa. Mode `tag` menandai **sekali** walau teks sudah
+  memuat mention, dan mode `reply` **hanya** me-reply tanpa menandai.
 - Variabel goal dibaca dari **sistem Target Lucy**; kalau belum aktif → `(tidak tersedia)`.
 - `{CAT}`/`{DOG}` dari `reminders.randomImages`; fallback jelas bila kosong.
 - Nilai acak dipilih **sekali per pesan** (konsisten dalam satu render).
-- Waktu harian mengikuti reset WIB (`Asia/Jakarta`).
+- **`{DAILY}`/`{DAILY_TOMORROW}`/`{DAILY_YESTERDAY}` = tepat 00:00 WIB** (`Asia/Jakarta`, UTC+7 tanpa DST).
 - Variabel tak dikenal dibiarkan apa adanya; nilai hasil tidak dipindai ulang (tanpa ekspansi rekursif).
 
 Contoh: `d r update R-F5Y9C Halo {USER}, reset <t:{DAILY_TOMORROW}:R>!`

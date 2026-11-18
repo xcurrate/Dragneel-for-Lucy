@@ -50,6 +50,22 @@ function renderMessage(text, { legacyVars = {}, context = null } = {}) {
   return variables.render(renderLegacy(text, legacyVars), context || variables.createRenderContext({}));
 }
 
+// Terapkan token gaya lama ke field teks embed. Tanpa ini `{mention}` (huruf
+// kecil) tampil literal di embed, padahal ia bekerja di teks biasa.
+function renderLegacyEmbed(embed, vars) {
+  if (!embed || typeof embed !== 'object') return embed;
+  const out = { ...embed };
+  for (const key of ['title', 'description']) {
+    if (typeof out[key] === 'string') out[key] = renderLegacy(out[key], vars);
+  }
+  if (out.footer?.text) out.footer = { ...out.footer, text: renderLegacy(out.footer.text, vars) };
+  if (out.author?.name) out.author = { ...out.author, name: renderLegacy(out.author.name, vars) };
+  if (Array.isArray(out.fields)) {
+    out.fields = out.fields.map(f => ({ ...f, name: renderLegacy(f.name, vars), value: renderLegacy(f.value, vars) }));
+  }
+  return out;
+}
+
 // Reminder milik user yang aktif untuk kategori ini. Bila ada beberapa, dipilih
 // yang paling awal dibuat (created_at menaik, lalu reminder_id) supaya
 // deterministik dan tidak ada pengiriman ganda. Semua reminder tetap tersimpan
@@ -94,14 +110,20 @@ function resolveRendered({ guildId, userId, action, legacyVars = {}, context = n
   const resolved = resolveForAction({ guildId, userId, action });
   if (resolved.source === 'builtin') return { ...resolved, content: null, renderedEmbed: null };
   const ctx = context || variables.createRenderContext({ guildId, user: { id: userId } });
-  return {
-    ...resolved,
-    content: resolved.message ? renderMessage(resolved.message, { legacyVars, context: ctx }) : null,
-    renderedEmbed: resolved.embed ? variables.renderEmbed(resolved.embed, ctx) : null
-  };
+  const content = resolved.message ? renderMessage(resolved.message, { legacyVars, context: ctx }) : null;
+  const renderedEmbed = resolved.embed
+    ? variables.renderEmbed(renderLegacyEmbed(resolved.embed, legacyVars), ctx)
+    : null;
+  // Mention dikumpulkan dari SEMUA teks yang akan dikirim, supaya pemanggil bisa
+  // mengizinkan tag hanya bila memang diminta.
+  const mentioned = new Set(variables.mentions(content));
+  for (const embed of [renderedEmbed]) {
+    for (const id of variables.mentions(JSON.stringify(embed || {}))) mentioned.add(id);
+  }
+  return { ...resolved, content, renderedEmbed, mentions: [...mentioned] };
 }
 
 module.exports = {
-  LEGACY_RE, renderLegacy, renderMessage, buildEmbed,
+  LEGACY_RE, renderLegacy, renderLegacyEmbed, renderMessage, buildEmbed,
   pickActiveOwned, resolveForAction, resolveRendered
 };

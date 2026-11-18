@@ -289,19 +289,46 @@ async function deliverReminder(client, reminder) {
     durasi: humanDuration(info.waitMs),
     count
   };
-  const resolved = reminderResolve.resolveRendered({
-    guildId, userId, action, legacyVars, context: await deliveryContext(client, guildId, userId, reminder.name)
-  });
+  const context = await deliveryContext(client, guildId, userId, reminder.name);
+  const resolved = reminderResolve.resolveRendered({ guildId, userId, action, legacyVars, context });
 
-  const payload = {
-    content: (mention ? `<@${userId}> ` : '') + (resolved.content ?? content),
-    allowedMentions: mention ? { parse: [], users: [userId] } : { parse: [] }
-  };
-  // Format EMBED: pesan dirender sebagai embed; teks tetap dipakai sebagai
-  // deskripsi cadangan bila embed tidak punya description sendiri.
+  // Teks pengingat sudah dirender di layer resolusi (token lama + variabel).
+  // Untuk balasan bawaan/server, variabel baru tetap dirender di sini supaya
+  // perilakunya sama; `content` sudah melewati token lama, jadi tidak dobel.
+  const body = resolved.content ?? reminderVariables.render(content, context);
+
+  // Tag hanya bila mode meminta (`tag`/`both`). Saat mode `reply`, `none`, atau
+  // apa pun selain itu, mention DI DALAM teks/embed dinetralkan supaya tidak
+  // ada tag tak diminta.
+  const allowPing = mention;
+  const displayName = reminder.name || 'Pemain';
+  const allowedMentions = allowPing
+    ? { parse: [], users: [userId] }
+    : { parse: [], users: [] };
+
+  // Saat tidak menandai, mention di dalam teks diganti nama biasa (bukan `@id`)
+  // supaya tetap enak dibaca.
+  const text = allowPing ? body : neutraliseMentions(body, { [userId]: displayName });
+  // Satu tag saja: sisipkan mention di depan HANYA bila teks belum memuatnya
+  // (mis. teks diawali `{mention}`), supaya tidak muncul dua kali.
+  const alreadyTagged = new RegExp('<@!?' + userId + '>').test(text);
+  const content_ = allowPing && !alreadyTagged ? `<@${userId}> ` + text : text;
+  const payload = { content: content_, allowedMentions };
+
+  // Format EMBED: pesan dirender sebagai embed. Deskripsi embed juga dibersihkan
+  // dari mention bila tag tidak diminta.
   if (resolved.format === 'EMBED') {
     const config = resolved.renderedEmbed || {};
-    payload.embeds = [reminderResolve.buildEmbed(config, resolved.content ?? content)];
+    if (!allowPing) {
+      const names = { [userId]: displayName };
+      if (typeof config.description === 'string') config.description = neutraliseMentions(config.description, names);
+      if (typeof config.title === 'string') config.title = neutraliseMentions(config.title, names);
+      if (config.footer?.text) config.footer = { ...config.footer, text: neutraliseMentions(config.footer.text, names) };
+      if (Array.isArray(config.fields)) {
+        config.fields = config.fields.map(f => ({ ...f, name: neutraliseMentions(f.name, names), value: neutraliseMentions(f.value, names) }));
+      }
+    }
+    payload.embeds = [reminderResolve.buildEmbed(config, body)];
   }
   if (useReply && messageId) payload.reply = { messageReference: messageId, failIfNotExists: false };
 
@@ -310,6 +337,12 @@ async function deliverReminder(client, reminder) {
   } catch (e) {
     console.error('[LucyReminder] gagal mengirim pengingat:', e.message);
   }
+}
+
+// Ubah `<@id>` / `<@!id>` menjadi teks biasa supaya tidak memicu notifikasi.
+// Bila id ada di `names`, dipakai nama yang enak dibaca; selain itu `@id`.
+function neutraliseMentions(text, names = {}) {
+  return String(text ?? '').replace(/<@!?(\d{17,20})>/g, (match, id) => names[id] || '@' + id);
 }
 
 // Konteks variabel untuk pengiriman. Data user/guild diambil best-effort; kalau
@@ -870,5 +903,5 @@ module.exports = {
   dayKey, shiftDay, humanDuration, KINDS, PING_MODES, CATEGORIES, DEFAULT_REPLIES,
   DEFAULT_PREF, TRIGGER_KIND_TO_REMINDER, ACTION_LABELS,
   handleLucyPrefixCommand, lucyRankingGlobal, rankingFor,
-  onLucyCounted, timers, reminders
+  onLucyCounted, timers, reminders, neutraliseMentions
 };
