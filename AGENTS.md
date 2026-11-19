@@ -292,6 +292,12 @@ siap untuk integrasi giveaway nanti.
   mustahil.
 - **Izin**: developer (`isDeveloper` lama) untuk template/give/awards/revoke. Admin/pemilik server
   untuk `s <aksi>`; developer **tidak** otomatis boleh. Pemilik saja untuk edit/enable/shareable.
+- **Rentang leaderboard** diparse di `parseRange()` (`src/services/lucyReminder.js`) memakai
+  `parseIndonesianDateRange()` dari `lucyCounter.js`. Tipe rentang: `today`, `range` (N hari
+  terakhir, mis. `7d`), `date` (satu tanggal), `span` (tanggal awal–akhir, mis. `10-18 nov`),
+  `alltime`. Setiap tempat yang memeriksa `range.type` **harus** menangani `range` dan `span`
+  berdampingan (ranking, filter, label, judul, token tombol). `span` disimpan di custom_id
+  sebagai `span:<from>:<to>` karena jumlah harinya tidak bisa disingkat jadi `Nd`.
 - **Jangan pakai backtick di dalam komentar SQL** pada template literal `db.exec(...)` di
   `reminderStorage.js` — backtick menutup literal dan bikin SyntaxError.
 - **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.

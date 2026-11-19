@@ -1358,3 +1358,134 @@ describe('`d reminder` hanya ditangani Custom Reminder', () => {
     assert.ok(message.publicSent.length >= 1);
   });
 });
+
+describe('rentang tanggal eksplisit pada leaderboard', () => {
+  const foot = p => p.embeds[0].data.footer.text;
+  const title = p => p.embeds[0].data.title;
+  const desc = p => p.embeds[0].data.description;
+
+  // Data disemai pada tanggal tetap di masa lalu agar tidak bergantung jam tes.
+  const seedOn = entries => {
+    const store = require('../src/utils/lucyActionStorage');
+    for (const [userId, name, day, n] of entries) {
+      for (let i = 0; i < n; i++) store.recordAction({ guildId: 'guild1', userId, name, day, action: 'pray' });
+    }
+  };
+
+  it('membaca `10-18 nov` sebagai rentang tanggal, bukan tanggal tunggal', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const range = svc.parseRange('10-18 nov');
+    assert.equal(range.type, 'span');
+    assert.equal(range.from.slice(5), '11-10');
+    assert.equal(range.to.slice(5), '11-18');
+    assert.equal(range.days, 9);
+  });
+
+  it('menerima berbagai penulisan rentang', () => {
+    const svc = require('../src/services/lucyReminder');
+    const shapes = {
+      '10-18 nov': ['2026-11-10', '2026-11-18'],
+      '10 nov - 18 nov': ['2026-11-10', '2026-11-18'],
+      '10/11-18/11': ['2026-11-10', '2026-11-18'],
+      '10-18/11': ['2026-11-10', '2026-11-18'],
+      '10-18/11/2026': ['2026-11-10', '2026-11-18'],
+      '10 s/d 18 nov': ['2026-11-10', '2026-11-18'],
+      '10 sampai 18 nov': ['2026-11-10', '2026-11-18'],
+      '10 hingga 18 nov': ['2026-11-10', '2026-11-18'],
+      '10 sd 18 nov': ['2026-11-10', '2026-11-18'],
+      '10 to 18 nov': ['2026-11-10', '2026-11-18'],
+      '10–18 nov': ['2026-11-10', '2026-11-18'],
+      '10 — 18 nov': ['2026-11-10', '2026-11-18'],
+      '1-5 nov 2026': ['2026-11-01', '2026-11-05']
+    };
+    for (const [shape, [from, to]] of Object.entries(shapes)) {
+      const range = svc.parseRange(shape);
+      assert.equal(range.type, 'span', shape);
+      assert.equal(range.from, from, shape);
+      assert.equal(range.to, to, shape);
+    }
+  });
+
+  it('menolak rentang terbalik, tanggal mustahil, dan angka tanpa bulan', () => {
+    const svc = require('../src/services/lucyReminder');
+    for (const shape of ['18-10 nov', '32-40 nov', '10-18 xxx', '10-18']) {
+      assert.equal(svc.parseRange(shape).type, 'invalid', shape + ' harus ditolak');
+    }
+  });
+
+  it('membalik tahun hanya untuk rentang yang melewati pergantian tahun', () => {
+    const svc = require('../src/services/lucyReminder');
+    const lewatTahun = svc.parseRange('28 des - 3 jan');
+    assert.equal(lewatTahun.type, 'span');
+    assert.equal(lewatTahun.days, 7, '28 des sampai 3 jan = 7 hari, bukan 358');
+    assert.ok(lewatTahun.from < lewatTahun.to);
+  });
+
+  it('memakai tahun dari sisi kanan bila hanya sisi itu yang menyebutnya', () => {
+    const svc = require('../src/services/lucyReminder');
+    const range = svc.parseRange('25 des - 2 jan 2027');
+    assert.equal(range.from, '2026-12-25');
+    assert.equal(range.to, '2027-01-02');
+  });
+
+  it('tetap membedakan tanggal tunggal dari rentang', async () => {
+    const svc = require('../src/services/lucyReminder');
+    assert.equal(svc.parseRange('5 nov').type, 'date');
+    assert.equal(svc.parseRange('7d').type, 'range');
+    assert.equal(svc.parseRange('all').type, 'alltime');
+  });
+
+  it('menyaring data sesuai rentang dan menampilkan judulnya', async () => {
+    const svc = require('../src/services/lucyReminder');
+    seedOn([
+      ['u1', 'Ani', '2026-11-10', 3],
+      ['u2', 'Budi', '2026-11-12', 5],
+      ['u3', 'Cici', '2026-11-20', 9]
+    ]);
+
+    const inside = makeMessage('d top pray 10-18 nov');
+    await svc.handleMessage(inside);
+    assert.match(title(inside.replies[0]), /9 Hari/, 'judul menyebut jumlah hari');
+    assert.match(foot(inside.replies[0]), /10 nov 2026 – 18 nov 2026/);
+    assert.match(desc(inside.replies[0]), /Budi/, 'Budi di dalam rentang');
+    assert.match(desc(inside.replies[0]), /Ani/, 'Ani di dalam rentang');
+    assert.doesNotMatch(desc(inside.replies[0]), /Cici/, 'Cici di luar rentang');
+
+    const outside = makeMessage('d top pray 1-5 nov');
+    await svc.handleMessage(outside);
+    assert.match(outside.replies[0].embeds[0].data.description, /tidak ada|belum ada/i);
+  });
+
+  it('mempertahankan rentang tanggal saat berpindah halaman', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    for (let i = 1; i <= 23; i++) {
+      store.recordAction({ guildId: 'guild1', userId: 'u' + i, name: 'Pemain' + String(i).padStart(2, '0'), day: '2026-11-12', action: 'pray' });
+    }
+    const msg = makeMessage('d top pray 10-18 nov');
+    await svc.handleMessage(msg);
+    assert.match(foot(msg.replies[0]), /Halaman 1\/3/);
+
+    const id = msg.replies[0].components[0].components.find(b => b.data.label === '▶️').data.custom_id;
+    // custom_id = `<state>:<aksi tombol>`, state memuat rentang tanggalnya.
+    assert.match(id, /^lbtop\|pray\|span:2026-11-10:2026-11-18\|l\|1:/, 'rentang ikut di custom_id');
+    assert.ok(id.length <= 100, 'custom_id muat');
+
+    const updates = [];
+    await svc.handleLeaderboardNav({
+      customId: id, guildId: 'guild1', client: { guilds: { cache: new Map() } },
+      update: async payload => { updates.push(payload); }
+    });
+    assert.match(updates[0].embeds[0].data.footer.text, /10 nov 2026 – 18 nov 2026/, 'rentang bertahan');
+    assert.match(updates[0].embeds[0].data.footer.text, /Halaman 2\/3/);
+  });
+
+  it('memberi pesan contoh yang menyertakan bentuk rentang', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const msg = makeMessage('d top pray 10-18 xxx');
+    await svc.handleMessage(msg);
+    // Pesan kesalahan dikirim sebagai teks biasa, bukan embed.
+    assert.match(msg.replies[0], /Rentang tidak dikenali/);
+    assert.match(msg.replies[0], /10-18 nov/, 'contoh rentang ikut ditampilkan');
+  });
+});

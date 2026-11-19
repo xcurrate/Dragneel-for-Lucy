@@ -96,6 +96,72 @@ function parseIndonesianDate(input, today = new Date()) {
   return null;
 }
 
+// Rentang tanggal eksplisit, mis. `10-18 nov`, `10 nov - 18 nov`, `10/11-18/11`,
+// `1-5 nov 2026`, `10 s/d 18 nov`. Angka tunggal BUKAN rentang (sudah ditangani
+// `parseIndonesianDate`), jadi `5 nov` tetap berarti satu tanggal.
+//
+// Sisi kiri boleh hanya angka hari (`10`) dan mewarisi bulan/tahun dari sisi
+// kanan, karena bentuk itu yang paling sering diketik.
+const RANGE_SEPARATOR_RE = /\s+(?:s\/d|sampai|hingga|sd|to)\s+|\s*[–—]\s*|\s*-\s*/i;
+const DAY_ONLY_RE = /^(\d{1,2})$/;
+const NUMERIC_DATE_RE = /^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?$/;
+
+// Bulan (01-12) dari satu sisi rentang, baik bentuk teks (`18 nov`) maupun
+// angka (`18/11`). Dipakai untuk melengkapi sisi kiri yang hanya berisi tanggal.
+function monthNumberOf(side) {
+  const word = (side.match(/[a-z]+/g) || []).find(w => MONTHS_ID[w]);
+  if (word) return MONTHS_ID[word];
+  const numeric = NUMERIC_DATE_RE.exec(side);
+  return numeric ? numeric[2].padStart(2, '0') : null;
+}
+
+function parseIndonesianDateRange(input, today = new Date()) {
+  const text = String(input || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!text) return null;
+  const parts = text.split(RANGE_SEPARATOR_RE);
+  if (parts.length !== 2) return null;
+  const left = parts[0].trim();
+  const right = parts[1].trim();
+  if (!left || !right) return null;
+
+  const end = parseIndonesianDate(right, today);
+  if (!end) return null;
+
+  // Bulan dan tahun sisi kanan dipakai untuk melengkapi sisi kiri yang ringkas.
+  const rightMonth = monthNumberOf(right);
+  const rightYear = (right.match(/\b(\d{4})\b/) || [])[1] || end.slice(0, 4);
+  const leftYear = (left.match(/\b(\d{4})\b/) || [])[1] || null;
+
+  let start;
+  const numeric = NUMERIC_DATE_RE.exec(left);
+  const dayOnly = DAY_ONLY_RE.exec(left);
+  if (numeric) {
+    // `10/11` -> butuh tahun: pakai tahun sisi kanan bila ada, selain itu tahun acuan.
+    start = parseIndonesianDate(left + (numeric[3] ? '' : '/' + rightYear), today);
+  } else if (dayOnly) {
+    if (!rightMonth) return null;
+    start = parseIndonesianDate(dayOnly[1] + '/' + rightMonth + '/' + rightYear, today);
+  } else {
+    start = parseIndonesianDate(left, today);
+  }
+  if (!start) return null;
+
+  // Tahun: sisi kanan yang eksplisit menang.
+  if (!leftYear) start = rightYear + start.slice(4);
+  if (start > end) {
+    // Hanya rentang yang melewati pergantian tahun (`28 des - 3 jan`) yang boleh
+    // dibalik. Urutan terbalik dalam bulan yang sama (`18-10 nov`) adalah salah
+    // ketik, jadi ditolak — bukan diam-diam jadi rentang hampir setahun.
+    if (Number(rightMonth) >= Number(start.slice(5, 7))) return null;
+    start = (Number(start.slice(0, 4)) - 1) + start.slice(4);
+  }
+  if (start > end) return null;
+
+  const days = Math.round((new Date(end + 'T12:00:00Z') - new Date(start + 'T12:00:00Z')) / 86400000) + 1;
+  if (days < 1) return null;
+  return { from: start, to: end, days };
+}
+
 // Ambil tanggal dari daftar argumen. Mengembalikan { date, rest, invalid }:
 // - date    : key YYYY-MM-DD bila ada tanggal valid, selain itu null
 // - rest    : argumen tanpa token tanggal (mis. nomor halaman)
@@ -490,4 +556,4 @@ async function handleMessage(message, { onCounted } = {}) {
   }
 }
 module.exports = {
-  counterOffNotice, handleMessage, handleCommand, handleNavigation, isLucyNav, navRow, buildLeaderboard, countLucy, dayKey, parseIndonesianDate, formatIndonesianDate, extractDateArg, leaderboardEmbed, dailyLeaderboardView, targetLeaderboardEmbed, targetLeaderboardView, serverLeaderboardEmbed, serverLeaderboardView, ranking, targetRanking, serverRanking, pageRows, LEADERBOARD_PAGE_SIZE, targetSchedule, challengeCycleKey, isTargetWindow };
+  counterOffNotice, handleMessage, handleCommand, handleNavigation, isLucyNav, navRow, buildLeaderboard, countLucy, dayKey, parseIndonesianDate, parseIndonesianDateRange, formatIndonesianDate, extractDateArg, leaderboardEmbed, dailyLeaderboardView, targetLeaderboardEmbed, targetLeaderboardView, serverLeaderboardEmbed, serverLeaderboardView, ranking, targetRanking, serverRanking, pageRows, LEADERBOARD_PAGE_SIZE, targetSchedule, challengeCycleKey, isTargetWindow };

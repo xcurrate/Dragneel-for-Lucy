@@ -129,8 +129,37 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
 - Semua leaderboard punya tombol ⏮️ ◀️ ▶️ ⏭️ (awal, sebelumnya, berikutnya,
   akhir). Tombol membaca ulang data setiap kali ditekan, halaman di-clamp di
   ujung, dan kategori/rentang/lintas-server ikut terbawa saat berpindah halaman.
-- Rentang: kosong/harian (hari ini), 7d (7 hari terakhir), all (semua waktu), atau tanggal (5 nov)
+- Rentang: kosong/harian (hari ini), 7d (7 hari terakhir), all (semua waktu), satu tanggal
+  (`5 nov`), atau **rentang tanggal** (`10-18 nov`, `1 nov - 5 nov 2026`). Daftar bentuk yang
+  diterima ada di bagian "Rentang tanggal leaderboard" di bawah.
 - battle dan hunt digabung jadi satu kategori; lucy memakai penghitung Lucy yang sudah ada
+### Rentang tanggal leaderboard
+
+Selain `7d` dan `all`, leaderboard menerima rentang tanggal eksplisit. Bulan dan tahun
+boleh ditulis sebagai nama (`nov`) atau angka (`11`).
+
+| Bentuk | Arti |
+|--------|------|
+| `10-18 nov` | 10–18 November tahun berjalan |
+| `10 nov - 18 nov` | sama, dengan spasi |
+| `10/11-18/11` | sama, bentuk angka |
+| `10-18/11` | sama, sisi kiri tanpa bulan |
+| `1-5 nov 2026` | tahun eksplisit |
+| `25 des - 2 jan 2027` | melewati pergantian tahun |
+| `10 s/d 18 nov`, `10 sampai 18 nov`, `10 hingga 18 nov`, `10 sd 18 nov`, `10 to 18 nov` | pemisah kata |
+| `10–18 nov`, `10 — 18 nov` | pemisah en/em dash |
+
+Aturan yang perlu diketahui:
+
+- Tanpa tahun, dipakai tahun berjalan. Rentang yang terbalik karena melewati tahun baru
+  (`28 des - 3 jan`) otomatis dibaca sebagai rentang lintas tahun, bukan 358 hari.
+- Urutan terbalik di bulan yang sama (`18-10 nov`) **ditolak** dengan pesan kesalahan,
+  bukan diam-diam dianggap rentang hampir setahun.
+- `5 nov` tetap berarti **satu tanggal**, bukan rentang. Tanggal mustahil (`32-40 nov`)
+  dan angka tanpa bulan (`10-18`) juga ditolak.
+- Judul embed menyebut jumlah hari (`9 Hari`), dan rentangnya ikut terbawa saat berpindah
+  halaman lewat tombol.
+
 - d ping (alias d p) — cek latency bot (roundtrip & WebSocket)
 - d dex <nama...> — Animal Dex (alias d d)
 - d help (alias d) — panduan; d prefix — lihat/ubah prefix server

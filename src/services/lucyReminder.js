@@ -17,7 +17,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFl
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
-const { parseIndonesianDate, counterOffNotice, navRow } = require('./lucyCounter');
+const { parseIndonesianDate, parseIndonesianDateRange, counterOffNotice, navRow } = require('./lucyCounter');
 const trigger = require('../utils/lucyTrigger');
 const reminderResolve = require('../utils/reminderResolve');
 const reminderVariables = require('../utils/reminderVariables');
@@ -424,20 +424,24 @@ function parseRange(input, today = new Date()) {
     const to = dayKey(today);
     return { type: 'range', from: shiftDay(to, -(n - 1)), to, days: n };
   }
+  // Rentang eksplisit (`10-18 nov`) dicek sebelum tanggal tunggal karena bentuk
+  // pertamanya bisa saja terbaca sebagai satu tanggal bila tidak berhati-hati.
+  const span = parseIndonesianDateRange(text, today);
+  if (span) return { type: 'span', from: span.from, to: span.to, days: span.days };
   const key = parseIndonesianDate(text);
   return key ? { type: 'date', date: key } : { type: 'invalid', value: text };
 }
 
 function actionRanking(guildId, actions, range) {
   if (range.type === 'alltime') return store.topAllTime(guildId, actions);
-  if (range.type === 'range') return store.topByRange(guildId, range.from, range.to, actions);
+  if (range.type === 'range' || range.type === 'span') return store.topByRange(guildId, range.from, range.to, actions);
   const day = range.type === 'date' ? range.date : range.from;
   return store.topByDay(guildId, day, actions);
 }
 
 function actionRankingGlobal(actions, range) {
   if (range.type === 'alltime') return store.topAllTimeAll(actions);
-  if (range.type === 'range') return store.topByRangeAll(range.from, range.to, actions);
+  if (range.type === 'range' || range.type === 'span') return store.topByRangeAll(range.from, range.to, actions);
   const day = range.type === 'date' ? range.date : range.from;
   return store.topByRangeAll(day, day, actions);
 }
@@ -451,7 +455,7 @@ function rankingFor(guildId, category, range, { global = false } = {}) {
 function rangeFilter(range) {
   if (range.type === 'date') return day => day === range.date;
   if (range.type === 'today') return day => day === range.from;
-  if (range.type === 'range') return day => day >= range.from && day <= range.to;
+  if (range.type === 'range' || range.type === 'span') return day => day >= range.from && day <= range.to;
   return null;
 }
 
@@ -490,7 +494,7 @@ function lucyRankingGlobal(range) {
 
 function rangeLabel(range) {
   if (range.type === 'alltime') return 'semua tanggal';
-  if (range.type === 'range') return `${formatIndonesianDate(range.from)} – ${formatIndonesianDate(range.to)} (${range.days} hari)`;
+  if (range.type === 'range' || range.type === 'span') return `${formatIndonesianDate(range.from)} – ${formatIndonesianDate(range.to)} (${range.days} hari)`;
   const day = range.type === 'date' ? range.date : range.from;
   return formatIndonesianDate(day);
 }
@@ -498,7 +502,9 @@ function rangeLabel(range) {
 // Judul mengikuti isi board: harian, rentang N hari, satu tanggal, atau all-time.
 function rangeTitle(range) {
   if (range.type === 'alltime') return 'All-Time';
+  // `range` = N hari terakhir (relatif), `span` = tanggal awal–akhir yang dipilih.
   if (range.type === 'range') return `${range.days} Hari Terakhir`;
+  if (range.type === 'span') return `${range.days} Hari`;
   if (range.type === 'date') return formatIndonesianDate(range.date);
   return 'Harian';
 }
@@ -797,7 +803,9 @@ async function handleLeaderboardCommand(message, prefix, parts, { forceGlobal = 
 }
 
 async function badRange(message, prefix, value) {
-  await message.reply(`Rentang tidak dikenali: **${value}**. Contoh: \`${prefix} top pray 7d\`, \`${prefix} top lucy all\`, \`${prefix} top curse 5 nov\`.`);
+  await message.reply(`Rentang tidak dikenali: **${value}**.\n` +
+    `Contoh: \`${prefix} top pray 7d\`, \`${prefix} top lucy all\`, \`${prefix} top curse 5 nov\`, ` +
+    `\`${prefix} top pray 10-18 nov\`, \`${prefix} top battle 1 nov - 5 nov 2026\`.`);
   return true;
 }
 
@@ -817,6 +825,9 @@ const LB_BUTTONS = [
 function rangeToken(range) {
   if (range.type === 'alltime') return 'alltime';
   if (range.type === 'date') return 'date:' + range.date;
+  // Rentang tanggal eksplisit butuh penanda sendiri: `10-18 nov` tidak bisa
+  // disingkat jadi `Nd` karena jumlah harinya bergantung tahun, bukan hari ini.
+  if (range.type === 'span') return 'span:' + range.from + ':' + range.to;
   if (range.type === 'range') return range.days + 'd';
   return 'today';
 }
@@ -825,6 +836,11 @@ function tokenToRange(token) {
   if (token === 'today') return parseRange('');
   const date = /^date:(\d{4}-\d{2}-\d{2})$/.exec(token);
   if (date) return { type: 'date', date: date[1] };
+  const span = /^span:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$/.exec(token);
+  if (span) {
+    const days = Math.round((new Date(span[2] + 'T12:00:00Z') - new Date(span[1] + 'T12:00:00Z')) / 86400000) + 1;
+    return { type: 'span', from: span[1], to: span[2], days };
+  }
   const days = /^(\d+)d$/.exec(token);
   if (days) return parseRange(days[1] + 'd');
   return parseRange('');
