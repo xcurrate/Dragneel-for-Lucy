@@ -1295,15 +1295,60 @@ describe('leaderboard navigation buttons', () => {
     return updates[0];
   };
 
-  it('attaches four buttons to `top` and `global`', async () => {
+  it('attaches nav buttons plus the name toggle to `top` and `global`', async () => {
     const svc = require('../src/services/lucyReminder');
     for (const command of ['d top', 'd top pray', 'd g', 'd g pray']) {
       const msg = makeMessage(command);
       await svc.handleMessage(msg);
-      assert.deepEqual(labels(msg.replies[0]), ['⏮️', '◀️', '▶️', '⏭️'], command);
+      assert.deepEqual(labels(msg.replies[0]), ['⏮️', '◀️', '▶️', '⏭️', 'Nama Biru'], command);
       assert.match(idFor(msg.replies[0], '▶️'), /^lbtop\|/, command);
       assert.ok(idFor(msg.replies[0], '▶️').length <= 100, command + ': custom_id muat');
+      assert.ok(idFor(msg.replies[0], 'Nama Biru').length <= 100, command + ': custom_id tombol nama muat');
     }
+  });
+
+  it('toggles between display names and blue mentions', async () => {
+    const svc = require('../src/services/lucyReminder');
+    seedPlayers(2);
+    const msg = makeMessage('d top pray');
+    await svc.handleMessage(msg);
+    assert.match(msg.replies[0].embeds[0].data.description, /Pemain01/);
+    assert.doesNotMatch(msg.replies[0].embeds[0].data.description, /<@u1>/);
+
+    const on = await press(msg.replies[0], 'Nama Biru');
+    assert.match(on.embeds[0].data.description, /<@u1>/, 'menampilkan mention');
+    assert.match(on.embeds[0].data.description, /<@u2>/);
+    assert.doesNotMatch(on.embeds[0].data.description, /Pemain01/, 'nama diganti mention');
+    assert.match(foot(on), /tampilan mention/);
+    assert.deepEqual(labels(on), ['⏮️', '◀️', '▶️', '⏭️', 'Nama'], 'label berubah jadi "Nama"');
+
+    const off = await press(on, 'Nama');
+    assert.match(off.embeds[0].data.description, /Pemain01/, 'kembali ke displayName');
+    assert.doesNotMatch(off.embeds[0].data.description, /<@u1>/);
+    assert.doesNotMatch(foot(off), /tampilan mention/);
+  });
+
+  it('keeps mention mode when moving between pages', async () => {
+    const svc = require('../src/services/lucyReminder');
+    seedPlayers(23);
+    const msg = makeMessage('d top pray');
+    await svc.handleMessage(msg);
+    const on = await press(msg.replies[0], 'Nama Biru');
+    assert.match(on.embeds[0].data.description, /<@u1>/);
+
+    const next = await press(on, '▶️');
+    assert.match(foot(next), /Halaman 2\/3/);
+    assert.match(next.embeds[0].data.description, /<@u11>/, 'halaman 2 tetap memakai mention');
+    assert.doesNotMatch(next.embeds[0].data.description, /Pemain11/);
+    assert.deepEqual(labels(next), ['⏮️', '◀️', '▶️', '⏭️', 'Nama'], 'mode tetap aktif');
+  });
+
+  it('never actually pings the whole leaderboard', async () => {
+    const svc = require('../src/services/lucyReminder');
+    seedPlayers(3);
+    const msg = makeMessage('d top pray');
+    await svc.handleMessage(msg);
+    assert.deepEqual(msg.replies[0].allowedMentions, { parse: [] }, 'mention tampil tanpa notifikasi');
   });
 
   it('moves between pages, clamps at both ends, and jumps first/last', async () => {
@@ -1518,7 +1563,9 @@ describe('rentang tanggal eksplisit pada leaderboard', () => {
 
     const id = msg.replies[0].components[0].components.find(b => b.data.label === '▶️').data.custom_id;
     // custom_id = `<state>:<aksi tombol>`, state memuat rentang tanggalnya.
-    assert.match(id, /^lbtop\|pray\|span:2026-11-10:2026-11-18\|l\|1:/, 'rentang ikut di custom_id');
+    // `l`/`m` = mode nama (displayName / mention), jadi rentang tetap terbawa
+    // bersama status tampilan.
+    assert.match(id, /^lbtop\|pray\|span:2026-11-10:2026-11-18\|l\|n\|1:/, 'rentang ikut di custom_id');
     assert.ok(id.length <= 100, 'custom_id muat');
 
     const updates = [];

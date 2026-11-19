@@ -277,8 +277,18 @@ Catatan perilaku:
   sebelum data pertama bernilai nol, jadi tidak ada data yang dikarang.
 - Rentang panjang diagregasi otomatis: di atas 62 hari per minggu, di atas 130
   hari per bulan. Total pada judul tetap jumlah keseluruhan.
+- Garisnya **polyline lurus** antar titik, bukan kurva — sambungan tajam supaya
+  lonjakan dan jeda terbaca apa adanya.
 - Render memakai `@napi-rs/canvas` (binary prebuilt, tanpa compiler). Warna
   mengikuti token dashboard (`#10131b`, `#a6f36b`).
+
+### Tampilan nama di leaderboard
+
+Di samping tombol navigasi (`⏮️ ◀️ ▶️ ⏭️`) ada tombol **Nama Biru**. Tombol ini
+mengganti nama yang tampil dari displayName menjadi mention (`@user`, tampil biru
+dan bisa diklik). Labelnya berubah jadi **Nama** untuk kembali. Pilihan ini ikut
+terbawa saat pindah halaman, dan mention ditampilkan tanpa mengirim notifikasi
+(`allowedMentions: { parse: [] }`).
 
 ## Animal Dex
 Menangkap kartu **"Informasi animal"** yang dikirim bot Lucy (pesan Components V2) secara otomatis, lalu menyimpannya ke database SQLite (`data/animal-dex.db`). Dex bersifat **global** — satu entri per nama hewan, digabung dari semua server (hewan yang sama tidak diduplikasi antar server). Setiap kali bot Lucy mengirim/memperbarui kartu animal, datanya di-*upsert* per nama hewan sehingga dex selalu terbarui. Database skema lama (per-server) dimigrasikan otomatis ke global saat pertama dijalankan.

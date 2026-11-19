@@ -1,8 +1,8 @@
 // Chart "say Lucy" bergaya monitor detak jantung untuk `d chart`.
 //
-// Garis digambar sebagai kurva halus dengan glow, meniru trace monitor jantung:
-// puncak mengikuti jumlah harian, dan hari tanpa aksi jatuh ke garis dasar
-// sehingga jeda terlihat sebagai garis datar — bukan dilewati.
+// Garis digambar sebagai polyline tajam (bukan kurva) dengan glow, meniru trace
+// monitor jantung: puncak mengikuti jumlah harian, dan hari tanpa aksi jatuh ke
+// garis dasar sehingga jeda terlihat sebagai garis datar — bukan dilewati.
 //
 // Warna mengikuti token dashboard supaya senada dengan tampilan web.
 
@@ -63,22 +63,12 @@ function shortDate(key) {
   return `${Number(day)} ${formatIndonesianDate(key).split(' ')[1]}`;
 }
 
-// Catmull-Rom -> bezier. Memberi lekukan halus seperti trace monitor tanpa
-// library tambahan, dan tetap melewati setiap titik data.
-function smoothPath(ctx, coords) {
+// Polyline: sambungan LURUS antar titik, tanpa lekukan. Dipakai untuk garis
+// utama maupun area di bawahnya supaya bentuknya konsisten.
+function straightPath(ctx, coords) {
   ctx.beginPath();
   ctx.moveTo(coords[0].x, coords[0].y);
-  for (let i = 0; i < coords.length - 1; i++) {
-    const p0 = coords[i - 1] || coords[i];
-    const p1 = coords[i];
-    const p2 = coords[i + 1];
-    const p3 = coords[i + 2] || p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2.x, p2.y);
-  }
+  for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i].x, coords[i].y);
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -157,7 +147,7 @@ function renderLucyChart({ name, series, rangeLabel }) {
   const fill = ctx.createLinearGradient(0, plot.y, 0, baseY);
   fill.addColorStop(0, THEME.fillTop);
   fill.addColorStop(1, THEME.fillBottom);
-  smoothPath(ctx, coords);
+  straightPath(ctx, coords);
   ctx.lineTo(coords[coords.length - 1].x, baseY);
   ctx.lineTo(coords[0].x, baseY);
   ctx.closePath();
@@ -169,11 +159,11 @@ function renderLucyChart({ name, series, rangeLabel }) {
   ctx.lineCap = 'round';
   ctx.strokeStyle = 'rgba(166, 243, 107, 0.18)';
   ctx.lineWidth = 9;
-  smoothPath(ctx, coords);
+  straightPath(ctx, coords);
   ctx.stroke();
   ctx.strokeStyle = THEME.accent;
   ctx.lineWidth = 2.5;
-  smoothPath(ctx, coords);
+  straightPath(ctx, coords);
   ctx.stroke();
 
   // Titik pada hari yang ada aksinya

@@ -510,7 +510,7 @@ function rangeTitle(range) {
   return 'Harian';
 }
 
-function leaderboardView(guildId, category, range, page = 1, { global = false } = {}) {
+function leaderboardView(guildId, category, range, page = 1, { global = false, mention = false } = {}) {
   const cat = CATEGORIES[category] || CATEGORIES.pray;
   const rows = rankingFor(guildId, category, range, { global });
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -518,13 +518,13 @@ function leaderboardView(guildId, category, range, page = 1, { global = false } 
   const offset = (current - 1) * PAGE_SIZE;
   const slice = rows.slice(offset, offset + PAGE_SIZE);
   const desc = slice.length
-    ? slice.map((r, i) => `${MEDALS[offset + i] || (offset + i + 1) + '.'} **${r.count.toLocaleString('id-ID')}** — ${r.name || 'Pemain'}`).join('\n')
+    ? slice.map((r, i) => `${MEDALS[offset + i] || (offset + i + 1) + '.'} **${r.count.toLocaleString('id-ID')}** — ${mention ? `<@${r.userId}>` : (r.name || 'Pemain')}`).join('\n')
     : 'Belum ada data untuk rentang ini.';
   const embed = new EmbedBuilder()
     .setColor(0xEB459E)
     .setTitle(`🏆 Leaderboard ${cat.label} • ${rangeTitle(range)}`)
     .setDescription(desc)
-    .setFooter({ text: `Halaman ${current}/${totalPages} • ${rows.length} peserta • ${rangeLabel(range)} • ${global ? 'Global (semua server)' : 'Server ini'} (WIB)` });
+    .setFooter({ text: `Halaman ${current}/${totalPages} • ${rows.length} peserta • ${rangeLabel(range)} • ${global ? 'Global (semua server)' : 'Server ini'}${mention ? ' • tampilan mention' : ''} (WIB)` });
   return { embed, page: current, totalPages };
 }
 
@@ -1091,17 +1091,25 @@ function tokenToRange(token) {
   if (days) return parseRange(days[1] + 'd');
   return parseRange('');
 }
-function lbNavId(category, range, global) {
-  return [LB_NAV, category, rangeToken(range), global ? 'g' : 'l'].join('|');
+function lbNavId(category, range, global, mention = false) {
+  return [LB_NAV, category, rangeToken(range), global ? 'g' : 'l', mention ? 'm' : 'n'].join('|');
 }
 function isLeaderboardNav(customId) {
   return typeof customId === 'string' && customId.startsWith(LB_NAV + '|');
 }
-function lbNavRow(category, range, global, page) {
-  const id = lbNavId(category, range, global) + '|' + page;
-  return new ActionRowBuilder().addComponents(
-    LB_BUTTONS.map(b => new ButtonBuilder().setCustomId(id + ':' + b.action).setLabel(b.label).setStyle(b.style))
-  );
+function lbNavRow(category, range, global, page, mention = false) {
+  const id = lbNavId(category, range, global, mention) + '|' + page;
+  // Tombol "nama" mengganti tampilan displayName <-> mention (<@id>, tampil biru
+  // dan bisa diklik). Statusnya disimpan di customId supaya tetap konsisten saat
+  // pindah halaman.
+  const nameButton = new ButtonBuilder()
+    .setCustomId(id + ':name')
+    .setLabel(mention ? 'Nama' : 'Nama Biru')
+    .setStyle(mention ? ButtonStyle.Success : ButtonStyle.Secondary);
+  return new ActionRowBuilder().addComponents([
+    ...LB_BUTTONS.map(b => new ButtonBuilder().setCustomId(id + ':' + b.action).setLabel(b.label).setStyle(b.style)),
+    nameButton
+  ]);
 }
 
 async function sendLeaderboard(message, category, range, pageArg, global = false) {
@@ -1110,6 +1118,9 @@ async function sendLeaderboard(message, category, range, pageArg, global = false
   await message.reply({
     embeds: [view.embed],
     components: [lbNavRow(category, range, global, view.page)],
+    // Leaderboard memakai displayName; tombol "Nama Biru" memilih menampilkan
+    // mention. Tanpa allowedMentions ini, Discord akan benar-benar me-mention
+    // semua orang di papan dan mengirim notifikasi.
     allowedMentions: { parse: [] }
   });
   return true;
@@ -1120,17 +1131,26 @@ async function sendLeaderboard(message, category, range, pageArg, global = false
 async function handleLeaderboardNav(i) {
   if (!isLeaderboardNav(i.customId)) return false;
   const [id, action] = [i.customId.slice(0, i.customId.lastIndexOf(':')), i.customId.slice(i.customId.lastIndexOf(':') + 1)];
-  const [, category, rangeTok, flag, pageTok] = id.split('|');
+  const [, category, rangeTok, flag, modeTok, pageTok] = id.split('|');
   const range = tokenToRange(rangeTok);
   const global = flag === 'g';
+  let mention = modeTok === 'm';
   const page = Number(pageTok) > 0 ? Math.floor(Number(pageTok)) : 1;
-  const current = leaderboardView(i.guildId, category, range, page, { global });
+  const current = leaderboardView(i.guildId, category, range, page, { global, mention });
+
+  if (action === 'name') {
+    mention = !mention;
+    const toggled = leaderboardView(i.guildId, category, range, current.page, { global, mention });
+    await i.update({ embeds: [toggled.embed], components: [lbNavRow(category, range, global, toggled.page, mention)] });
+    return true;
+  }
+
   const target = action === 'first' ? 1
     : action === 'last' ? current.totalPages
     : action === 'prev' ? Math.max(1, current.page - 1)
     : Math.min(current.totalPages, current.page + 1);
-  const view = leaderboardView(i.guildId, category, range, target, { global });
-  await i.update({ embeds: [view.embed], components: [lbNavRow(category, range, global, view.page)] });
+  const view = leaderboardView(i.guildId, category, range, target, { global, mention });
+  await i.update({ embeds: [view.embed], components: [lbNavRow(category, range, global, view.page, mention)] });
   return true;
 }
 

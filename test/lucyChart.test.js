@@ -177,6 +177,28 @@ describe('d chart — detak jantung say Lucy', () => {
     assert.equal(points.reduce((s, p) => s + p.count, 0), 140);
   });
 
+  test('garis memakai sambungan lurus, bukan kurva', async () => {
+    // Data zigzag ekstrem: kurva halus akan membulat melewati titik, polyline
+    // akan tetap lurus dan tajam. Cek bahwa tiap kolom hanya memuat segmen
+    // tipis (tidak ada "gundukan" tebal hasil interpolasi).
+    seed([0, 12, 0, 12, 0, 12, 0]);
+    const msg = makeMessage('d chart 7d');
+    await svc.handleMessage(msg);
+    const png = PNG.sync.read(msg.replies[0].files[0].attachment);
+    const heights = [];
+    for (let x = 62; x < png.width - 40; x++) {
+      let n = 0;
+      for (let y = 84; y < 290; y++) {
+        const i = (png.width * y + x) << 2;
+        if (Math.abs(png.data[i] - 166) < 50 && Math.abs(png.data[i + 1] - 243) < 50 && Math.abs(png.data[i + 2] - 107) < 50) n++;
+      }
+      if (n) heights.push(n);
+    }
+    heights.sort((a, b) => a - b);
+    const median = heights[Math.floor(heights.length / 2)];
+    assert.ok(median <= 12, `segmen harus tipis (lurus), median ${median}px`);
+  });
+
   test('niceMax membulatkan ke atas dan tidak pernah nol', () => {
     assert.equal(chart.niceMax(0), 4);
     assert.ok(chart.niceMax(7) >= 7);
