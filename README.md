@@ -161,9 +161,14 @@ Rentang yang diterima:
 |--------|------|-------------|
 | `30m`, `45 menit`, `90m` | N menit terakhir | kejadian bertimestamp |
 | `2j`, `3 jam`, `1h`, `2 hour` | N jam terakhir | kejadian bertimestamp |
-| `7d`, `1 hari` | N hari terakhir | agregat harian |
+| `2d`, `7d`, `2 hari`, `1 day` | N hari **kalender** (sama seperti leaderboard) | agregat harian |
 | `all` | semua waktu | agregat harian |
 | `5 nov`, `10-18 nov` | tanggal / rentang tanggal | agregat harian |
+
+Satuan hari sengaja **tidak** dibaca sebagai jendela bergulir 24 jam. `2d` berarti
+"hari ini + kemarin" (kalender), persis seperti `d top 2d`. Ini penting supaya
+angkanya konsisten: hasil harus selalu naik saat rentang melebar
+(`hari ini` <= `2d` <= `all`).
 
 Catatan penting soal data:
 

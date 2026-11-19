@@ -1634,6 +1634,47 @@ describe('statistik aksi per orang (d stats)', () => {
     assert.match(footOf(sejam), /1 jam terakhir/);
   });
 
+  it('rentang melebar tidak boleh mengecil (hari ini <= 2d <= all)', async () => {
+    // Regresi: `2d` pernah dibaca sebagai 48 jam bergulir dari tabel kejadian,
+    // sehingga hasilnya bisa LEBIH KECIL dari `d stats` (hari ini) — kejadian
+    // hanya dicatat sejak fitur aktif, sementara agregat harian penuh.
+    const { dayKey } = require('../src/services/lucyCounter');
+    const store = require('../src/utils/lucyActionStorage');
+    const kemarin = dayKey(new Date(Date.now() - 86400000));
+    const lama = dayKey(new Date(Date.now() - 20 * 86400000));
+
+    seed([[A, 'Ani', 'hunt', 2, 60 * 1000]]);
+    store.recordAction({ guildId: 'guild1', userId: A, name: 'Ani', day: kemarin, action: 'hunt' });
+    for (let i = 0; i < 3; i++) {
+      store.recordAction({ guildId: 'guild1', userId: A, name: 'Ani', day: lama, action: 'battle' });
+    }
+
+    const total = async arg => Number(
+      embedOf(await ask(`d stats ${A}${arg ? ' ' + arg : ''}`))
+        .fields.find(f => f.name === 'Total aksi').value.replace(/[^0-9]/g, '')
+    );
+
+    const hariIni = await total('');
+    const duaHari = await total('2d');
+    const semua = await total('all');
+
+    assert.equal(hariIni, 2);
+    assert.equal(duaHari, 3, '2d memakai hari kalender, jadi mencakup kemarin');
+    assert.equal(semua, 6);
+    assert.ok(hariIni <= duaHari && duaHari <= semua,
+      `harus monoton naik, dapat ${hariIni} <= ${duaHari} <= ${semua}`);
+  });
+
+  it('satuan hari memakai kalender, bukan jendela bergulir', async () => {
+    const { parseClockSpan } = require('../src/services/lucyCounter');
+    const { parseRange } = require('../src/services/lucyReminder');
+    for (const bentuk of ['2d', '7d', '2 hari', '1 hari']) {
+      assert.equal(parseClockSpan(bentuk), null, `${bentuk} bukan rentang jam/menit`);
+      assert.notEqual(parseRange(bentuk).type, 'invalid', `${bentuk} harus dikenali kalender`);
+    }
+    assert.equal(parseRange('2d').from, parseRange('2 hari').from);
+  });
+
   it('mendukung rentang tanggal yang sama dengan leaderboard', async () => {
     seed([[A, 'Ani', 'pray', 4, 60 * 1000]]);
     const msg = await ask(`d stats ${A} all`);

@@ -164,11 +164,16 @@ function parseIndonesianDateRange(input, today = new Date()) {
 
 // Rentang berbasis jam/menit, mis. `30m`, `45 menit`, `2j`, `3 jam`, `1h`.
 // Dikembalikan sebagai epoch ms karena tabel harian tidak menyimpan jam.
-// Satuan: m/menit/minute, j/jam/h/hour, d/hari/day.
+//
+// Sengaja HANYA menit dan jam. Satuan hari (`2d`, `7d`, `1 hari`) sengaja tidak
+// diterima di sini: `parseRange` sudah menanganinya sebagai hari KALENDER, dan
+// itu yang dipakai leaderboard. Kalau hari juga diterima di sini, `2d` jadi
+// jendela bergulir 48 jam dari tabel kejadian — hasilnya bisa lebih kecil
+// daripada `d stats` (hari ini) untuk orang yang sama, karena kejadian hanya
+// dicatat sejak fitur ini aktif.
 const CLOCK_UNITS = {
   m: 'minute', menit: 'minute', minute: 'minute', minutes: 'minute', min: 'minute',
-  j: 'hour', jam: 'hour', h: 'hour', hour: 'hour', hours: 'hour',
-  d: 'day', hari: 'day', day: 'day', days: 'day'
+  j: 'hour', jam: 'hour', h: 'hour', hour: 'hour', hours: 'hour'
 };
 const CLOCK_RE = /^(\d{1,4})\s*([a-z]+)$/;
 
@@ -181,7 +186,7 @@ function parseClockSpan(input, now = new Date()) {
   if (!unit) return null;
   const n = Number(m[1]);
   if (!Number.isFinite(n) || n < 1) return null;
-  const ms = unit === 'minute' ? n * 60 * 1000 : unit === 'hour' ? n * 3600 * 1000 : n * 86400 * 1000;
+  const ms = unit === 'minute' ? n * 60 * 1000 : n * 3600 * 1000;
   return { unit, amount: n, ms, from: now.getTime() - ms, to: now.getTime() };
 }
 
@@ -189,8 +194,7 @@ function parseClockSpan(input, now = new Date()) {
 function formatClockSpan(span) {
   if (!span) return '';
   if (span.unit === 'minute') return span.amount + ' menit terakhir';
-  if (span.unit === 'hour') return span.amount + ' jam terakhir';
-  return span.amount + ' hari terakhir';
+  return span.amount + ' jam terakhir';
 }
 
 // Ambil tanggal dari daftar argumen. Mengembalikan { date, rest, invalid }:

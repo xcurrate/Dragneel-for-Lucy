@@ -418,7 +418,7 @@ function parseRange(input, today = new Date()) {
   if (!text) return { type: 'today', from: dayKey(today), to: dayKey(today) };
   if (text === 'all' || text === 'alltime' || text === 'semua') return { type: 'alltime' };
   if (text === 'today' || text === 'harian' || text === 'hari') return { type: 'today', from: dayKey(today), to: dayKey(today) };
-  const days = /^(\d+)\s*d(?:ay|ays)?$/.exec(text);
+  const days = /^(\d+)\s*(?:d(?:ay|ays)?|hari)$/.exec(text);
   if (days) {
     const n = Math.max(1, Number(days[1]));
     const to = dayKey(today);
@@ -662,11 +662,12 @@ async function handleStatsCommand(message, prefix, parts) {
     && statsTotal(stats) === 0
     && !store.getUserName(message.guildId, userId);
   if (never) {
-    await message.reply({
-      content: `${name} belum punya catatan aksi di server ini, atau ID-nya salah.\n` +
-        `Coba \`${prefix} stats\` untuk statistik kamu sendiri.`,
-      allowedMentions: { parse: [] }
-    });
+    // Untuk diri sendiri jangan sebut "ID-nya salah" — tidak ada ID yang diketik.
+    const text = self
+      ? `Kamu belum punya catatan aksi di server ini.`
+      : `${name} belum punya catatan aksi di server ini, atau ID-nya salah.\n` +
+        `Coba \`${prefix} stats\` untuk statistik kamu sendiri.`;
+    await message.reply({ content: text, allowedMentions: { parse: [] } });
     return true;
   }
 
