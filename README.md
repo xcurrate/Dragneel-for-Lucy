@@ -143,13 +143,15 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
 Yang ditampilkan: rincian **per kategori**, sama seperti reminder, diurutkan
 dari yang terbanyak, plus total aksi:
 
-- `Lucy Battle/Hunt` — hunt dan battle dihitung satu kategori
-- `Lucy Pray/Curse` — pray dan curse dihitung satu kategori
+- `Lucy Battle/Hunt` — hunt dan battle berbagi satu jendela tunggu
+- `Lucy Pray/Curse` — pray dan curse berbagi satu jendela tunggu
 - `Lucy (say Lucy)`
 
-Jadi kalau kamu hunt lalu battle, itu **2 aksi** di kategori Battle/Hunt (bukan
-1). Yang digabung adalah *kategorinya* menjadi satu baris, supaya arti "aksi"
-sama dengan reminder: hunt/battle berbagi satu jendela tunggu, pray/curse juga. Nama diambil dari cache member, mention,
+**Satu jendela tunggu = satu aksi.** Jadi `lh` lalu `lb` dalam 15 detik dihitung
+**1** aksi Battle/Hunt, dan `pray` lalu `curse` dalam 5 menit dihitung **1** aksi
+Pray/Curse. Aksi berikutnya baru dihitung setelah jendela tunggu kategori itu
+habis. Ini aturan yang sama untuk leaderboard dan `d stats`, sehingga angkanya
+selalu cocok. Nama diambil dari cache member, mention,
 lalu catatan terakhir di database — jadi target lewat ID tetap tampil bernama.
 
 Tanpa argumen rentang, `d stats` memakai **hari ini**. Jadi:

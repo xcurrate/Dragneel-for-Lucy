@@ -345,14 +345,41 @@ describe('lucy reminder engine', () => {
     for (const t of svc.timers.values()) clearTimeout(t);
   });
 
-  it('counts each action separately even though the reminder is shared', async () => {
+  it('hunt lalu battle dalam satu jendela tunggu dihitung SATU aksi', async () => {
+    // Dulu test ini menuntut hunt dan battle dihitung masing-masing 1, sehingga
+    // `lh` lalu `lb` berjarak 2 detik menambah 2 ke leaderboard. Yang benar:
+    // satu jendela tunggu = satu aksi untuk seluruh kategori Battle/Hunt.
     const svc = require('../src/services/lucyReminder');
     const store = require('../src/utils/lucyActionStorage');
     await svc.handleMessage(makeMessage('lh'));
     await svc.handleMessage(makeMessage('lb'));
     const day = svc.dayKey();
-    assert.equal(store.topByDay('guild1', day, ['hunt'])[0].count, 1);
-    assert.equal(store.topByDay('guild1', day, ['battle'])[0].count, 1);
+    assert.equal(store.topByDay('guild1', day, ['battle', 'hunt'])[0].count, 1, 'satu aksi');
+    assert.equal(store.topByDay('guild1', day, ['hunt'])[0]?.count || 0, 1, 'yang tercatat `lh`');
+    assert.equal(store.topByDay('guild1', day, ['battle'])[0]?.count || 0, 0, '`lb` tidak menambah');
+    for (const t of svc.timers.values()) clearTimeout(t);
+  });
+
+  it('aksi kategori lain tetap dihitung walau Battle/Hunt sedang cooldown', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    await svc.handleMessage(makeMessage('lh'));
+    await svc.handleMessage(makeMessage('lucy pray'));
+    const day = svc.dayKey();
+    assert.equal(store.topByDay('guild1', day, ['battle', 'hunt'])[0].count, 1);
+    assert.equal(store.topByDay('guild1', day, ['pray'])[0].count, 1, 'pray tidak ikut terblokir');
+    for (const t of svc.timers.values()) clearTimeout(t);
+  });
+
+  it('aksi baru dihitung lagi setelah jendela tunggu habis', async () => {
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    await svc.handleMessage(makeMessage('lh'));
+    // Mundurkan cooldown supaya jendela 15 detik dianggap sudah lewat.
+    store.setCooldown('guild1', 'user1', 'battle', Date.now() - 1);
+    await svc.handleMessage(makeMessage('lb'));
+    const day = svc.dayKey();
+    assert.equal(store.topByDay('guild1', day, ['battle', 'hunt'])[0].count, 2);
     for (const t of svc.timers.values()) clearTimeout(t);
   });
 

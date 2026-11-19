@@ -825,11 +825,20 @@ async function handleAction(message, action) {
   const name = message.member?.displayName || message.author?.username || 'Pemain';
   const now = Date.now();
 
-  // Cooldown per JENIS reminder (battle/hunt berbagi satu jendela), sementara
-  // penghitungan tetap per AKSI supaya leaderboard battle dan hunt terpisah.
+  // Satu jendela tunggu = satu aksi, untuk seluruh KATEGORI. Jadi `lh` lalu `lb`
+  // dalam 15 detik dihitung SATU aksi Battle/Hunt, dan `pray` lalu `curse` dalam
+  // 5 menit dihitung SATU aksi Pray/Curse. Ini yang membuat angka leaderboard
+  // sebanding dengan `d stats`: keduanya membaca kategori yang sama.
+  //
+  // Gerbang ini sempat hilang: `setCooldown` dipanggil tapi `getCooldown` tidak
+  // pernah dibaca, sehingga setiap pesan aksi menambah hitungan walau masih di
+  // dalam jendela tunggu.
   if (counting) {
-    store.recordAction({ guildId: message.guildId, userId, name, day: dayKey(new Date(now)), action });
-    store.setCooldown(message.guildId, userId, kind, now + info.waitMs);
+    const readyAt = store.getCooldown(message.guildId, userId, kind);
+    if (now >= readyAt) {
+      store.recordAction({ guildId: message.guildId, userId, name, day: dayKey(new Date(now)), action });
+      store.setCooldown(message.guildId, userId, kind, now + info.waitMs);
+    }
   }
 
   // Aksi user TIDAK dibalas. Balasan sebelumnya memakai teks yang sama persis
