@@ -140,9 +140,16 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
 - contoh: d stats, d stats 30m, d stats 2j, d stats 7d, d stats all,
   d stats @user 2j, d stats 123456789012345678 10-18 nov
 
-Yang ditampilkan: rincian per aksi (Pray, Curse, Battle, Hunt, Lucy) diurutkan
-dari yang terbanyak, plus total aksi. Battle dan Hunt dipisah di sini walau
-leaderboard menggabungkan keduanya. Nama diambil dari cache member, mention,
+Yang ditampilkan: rincian **per kategori**, sama seperti reminder, diurutkan
+dari yang terbanyak, plus total aksi:
+
+- `Lucy Battle/Hunt` — hunt dan battle dihitung satu kategori
+- `Lucy Pray/Curse` — pray dan curse dihitung satu kategori
+- `Lucy (say Lucy)`
+
+Jadi kalau kamu hunt lalu battle, itu **2 aksi** di kategori Battle/Hunt (bukan
+1). Yang digabung adalah *kategorinya* menjadi satu baris, supaya arti "aksi"
+sama dengan reminder: hunt/battle berbagi satu jendela tunggu, pray/curse juga. Nama diambil dari cache member, mention,
 lalu catatan terakhir di database — jadi target lewat ID tetap tampil bernama.
 
 Tanpa argumen rentang, `d stats` memakai **hari ini**. Jadi:

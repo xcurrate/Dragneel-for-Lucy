@@ -534,12 +534,15 @@ function leaderboardView(guildId, category, range, page = 1, { global = false } 
 // Agregat harian dipilih untuk rentang tanggal karena sudah akurat dan tidak
 // terpotong retensi 365 hari.
 
-const STAT_ACTIONS = [
-  { action: 'pray', label: 'Lucy Pray' },
-  { action: 'curse', label: 'Lucy Curse' },
-  { action: 'battle', label: 'Lucy Battle' },
-  { action: 'hunt', label: 'Lucy Hunt' },
-  { action: 'lucy', label: 'Lucy (say Lucy)' }
+// Statistik memakai KATEGORI yang sama dengan reminder, bukan aksi mentah:
+// hunt lalu battle oleh orang yang sama dihitung SATU aksi, begitu juga
+// pray lalu curse. Ini menyamakan arti "aksi" di seluruh bot — leaderboard
+// memang memisah battle dan hunt, tapi statistik pribadi menjawab "berapa kali
+// aku beraksi", dan itu per kategori.
+const STAT_CATEGORIES = [
+  { key: 'HUNT_BATTLE', label: 'Lucy Battle/Hunt', actions: ['battle', 'hunt'] },
+  { key: 'PRAY_CURSE', label: 'Lucy Pray/Curse', actions: ['pray', 'curse'] },
+  { key: 'LUCY', label: 'Lucy (say Lucy)', actions: ['lucy'] }
 ];
 
 // Statistik satu orang untuk rentang tanggal (harian). Dihitung dari tabel
@@ -547,21 +550,18 @@ const STAT_ACTIONS = [
 function dailyStats(guildId, userId, range) {
   const filter = rangeFilter(range);
   const result = {};
-  for (const { action } of STAT_ACTIONS) {
-    if (action === 'lucy') {
+  for (const { key, actions } of STAT_CATEGORIES) {
+    if (key === 'LUCY') {
       const user = lucyStore.getGuildData(guildId)?.users?.[userId];
-      result.lucy = user ? sumDays(user, filter) : 0;
+      result[key] = user ? sumDays(user, filter) : 0;
       continue;
     }
-    // Per aksi, bukan per grup: battle dan hunt dilaporkan terpisah di sini
-    // walau leaderboard menggabungkan keduanya.
-    const actions = [action];
     if (range.type === 'alltime') {
-      result[action] = store.userTotal(guildId, userId, '0000-01-01', '9999-12-31', actions);
+      result[key] = store.userTotal(guildId, userId, '0000-01-01', '9999-12-31', actions);
     } else {
       const from = range.type === 'date' ? range.date : range.from;
       const to = range.type === 'date' ? range.date : range.to;
-      result[action] = store.userTotal(guildId, userId, from, to, actions);
+      result[key] = store.userTotal(guildId, userId, from, to, actions);
     }
   }
   return result;
@@ -571,7 +571,9 @@ function dailyStats(guildId, userId, range) {
 function clockStats(guildId, userId, span) {
   const byAction = store.userEventsBetween(guildId, userId, span.from, span.to);
   const result = {};
-  for (const { action } of STAT_ACTIONS) result[action] = byAction[action] || 0;
+  for (const { key, actions } of STAT_CATEGORIES) {
+    result[key] = actions.reduce((sum, action) => sum + (byAction[action] || 0), 0);
+  }
   return result;
 }
 
@@ -579,10 +581,10 @@ function statsTotal(stats) {
   return Object.values(stats).reduce((sum, n) => sum + Number(n || 0), 0);
 }
 
-// Urutkan aksi dari yang paling banyak, buang yang nol.
+// Urutkan kategori dari yang paling banyak, buang yang nol.
 function statsBreakdown(stats) {
-  return STAT_ACTIONS
-    .map(({ action, label }) => ({ action, label, count: stats[action] || 0 }))
+  return STAT_CATEGORIES
+    .map(({ key, label }) => ({ key, label, count: stats[key] || 0 }))
     .filter(row => row.count > 0)
     .sort((a, b) => b.count - a.count);
 }

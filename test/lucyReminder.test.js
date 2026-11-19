@@ -1497,6 +1497,12 @@ describe('statistik aksi per orang (d stats)', () => {
   const now = () => Date.now();
   const embedOf = m => m.replies[0].embeds[0].data;
   const footOf = m => embedOf(m).footer.text;
+  const statsBreakdownOf = m => (embedOf(m).description || '')
+    .split('\n').filter(Boolean)
+    .map(line => {
+      const [label, count] = line.split(': ');
+      return { label, count: Number(count.replace(/[^0-9]/g, '')) };
+    });
 
   const seed = entries => {
     const store = require('../src/utils/lucyActionStorage');
@@ -1520,26 +1526,44 @@ describe('statistik aksi per orang (d stats)', () => {
     seed([[ME, 'Saya', 'pray', 2, 60 * 1000]]);
     const msg = await ask('d stats');
     assert.match(embedOf(msg).title, /Statistik Tester/, 'memakai displayName, bukan mention');
-    assert.match(embedOf(msg).description, /Lucy Pray: \*\*2\*\*/);
+    assert.match(embedOf(msg).description, /Lucy Pray\/Curse: \*\*2\*\*/);
   });
 
   it('menerima mention dan ID mentah sebagai target', async () => {
     seed([[A, 'Ani', 'pray', 3, 60 * 1000]]);
     const byMention = await ask(`d stats <@${A}>`);
-    assert.match(embedOf(byMention).description, /Lucy Pray: \*\*3\*\*/);
+    assert.match(embedOf(byMention).description, /Lucy Pray\/Curse: \*\*3\*\*/);
     const byId = await ask(`d stats ${A}`);
-    assert.match(embedOf(byId).description, /Lucy Pray: \*\*3\*\*/);
+    assert.match(embedOf(byId).description, /Lucy Pray\/Curse: \*\*3\*\*/);
     // `<@!id>` (mention nickname) juga harus dikenali.
     const byNick = await ask(`d stats <@!${A}>`);
-    assert.match(embedOf(byNick).description, /Lucy Pray: \*\*3\*\*/);
+    assert.match(embedOf(byNick).description, /Lucy Pray\/Curse: \*\*3\*\*/);
   });
 
-  it('memisahkan battle dan hunt, tidak menggabungkannya', async () => {
+  it('menggabungkan battle dan hunt jadi satu kategori, seperti reminder', async () => {
     seed([[A, 'Ani', 'battle', 2, 60 * 1000], [A, 'Ani', 'hunt', 1, 60 * 1000]]);
     const msg = await ask(`d stats ${A}`);
     const desc = embedOf(msg).description;
-    assert.match(desc, /Lucy Battle: \*\*2\*\*/);
-    assert.match(desc, /Lucy Hunt: \*\*1\*\*/);
+    assert.match(desc, /Lucy Battle\/Hunt: \*\*3\*\*/, 'battle+hunt = 3 aksi');
+    assert.doesNotMatch(desc, /Lucy Hunt:/, 'tidak lagi dipisah');
+    assert.doesNotMatch(desc, /Lucy Battle:/, 'tidak lagi dipisah');
+  });
+
+  it('menggabungkan pray dan curse jadi satu kategori, seperti reminder', async () => {
+    seed([[A, 'Ani', 'pray', 2, 60 * 1000], [A, 'Ani', 'curse', 1, 60 * 1000]]);
+    const msg = await ask(`d stats ${A}`);
+    assert.match(embedOf(msg).description, /Lucy Pray\/Curse: \*\*3\*\*/);
+    assert.doesNotMatch(embedOf(msg).description, /Lucy Curse:/);
+  });
+
+  it('hanya menampilkan tiga kategori yang sama dengan reminder', async () => {
+    seed([
+      [A, 'Ani', 'battle', 1, 60 * 1000], [A, 'Ani', 'hunt', 1, 60 * 1000],
+      [A, 'Ani', 'pray', 1, 60 * 1000], [A, 'Ani', 'curse', 1, 60 * 1000]
+    ]);
+    const rows = statsBreakdownOf(await ask(`d stats ${A}`));
+    assert.equal(rows.length, 2, 'battle/hunt dan pray/curse saja');
+    assert.deepEqual(rows.map(r => r.label).sort(), ['Lucy Battle/Hunt', 'Lucy Pray/Curse']);
   });
 
   it('membaca rentang jam dan menit dari data bertimestamp', async () => {
@@ -1551,23 +1575,25 @@ describe('statistik aksi per orang (d stats)', () => {
 
     const m30 = await ask(`d stats ${A} 30m`);
     assert.match(footOf(m30), /30 menit terakhir/);
-    assert.match(embedOf(m30).description, /Lucy Pray: \*\*3\*\*/);
-    assert.doesNotMatch(embedOf(m30).description, /Curse/, 'curse 3 jam lalu di luar 30 menit');
+    assert.match(embedOf(m30).description, /Lucy Pray\/Curse: \*\*3\*\*/);
+    assert.equal(embedOf(m30).fields[0].value, '**3**', 'curse 3 jam lalu di luar 30 menit');
 
     const m4j = await ask(`d stats ${A} 4j`);
     assert.match(footOf(m4j), /4 jam terakhir/);
-    assert.match(embedOf(m4j).description, /Lucy Curse: \*\*2\*\*/);
-    assert.doesNotMatch(embedOf(m4j).description, /Battle/, 'battle 2 hari lalu di luar 4 jam');
+    // Kategori digabung: pray 3 (5 menit lalu) + curse 2 (3 jam lalu) = 5.
+    assert.match(embedOf(m4j).description, /Lucy Pray\/Curse: \*\*5\*\*/);
+    assert.equal(embedOf(m4j).fields[0].value, '**5**');
+    assert.doesNotMatch(embedOf(m4j).description, /Battle\/Hunt/, 'battle 2 hari lalu di luar 4 jam');
 
     const m7d = await ask(`d stats ${A} 7d`);
-    assert.match(embedOf(m7d).description, /Lucy Battle: \*\*1\*\*/, 'battle masuk dalam 7 hari');
+    assert.match(embedOf(m7d).description, /Lucy Battle\/Hunt: \*\*1\*\*/, 'battle masuk dalam 7 hari');
   });
 
   it('menerima satuan jam dalam bahasa Indonesia dan Inggris', async () => {
     seed([[A, 'Ani', 'pray', 2, 10 * 60 * 1000]]);
     for (const shape of ['2j', '2 jam', '2h', '2 hour', '120m', '120 menit']) {
       const msg = await ask(`d stats ${A} ${shape}`);
-      assert.match(embedOf(msg).description, /Lucy Pray: \*\*2\*\*/, shape);
+      assert.match(embedOf(msg).description, /Lucy Pray\/Curse: \*\*2\*\*/, shape);
     }
   });
 
@@ -1624,7 +1650,7 @@ describe('statistik aksi per orang (d stats)', () => {
 
     const hariIni = await ask(`d stats ${A}`);
     assert.equal(embedOf(hariIni).fields.find(f => f.name === 'Total aksi').value, '**2**');
-    assert.doesNotMatch(embedOf(hariIni).description, /Curse/, 'aksi 10 hari lalu bukan hari ini');
+    assert.equal(embedOf(hariIni).fields[0].value, '**2**', 'aksi 10 hari lalu bukan hari ini');
 
     const semua = await ask(`d stats ${A} all`);
     assert.equal(embedOf(semua).fields.find(f => f.name === 'Total aksi').value, '**7**');
@@ -1705,7 +1731,7 @@ describe('statistik aksi per orang (d stats)', () => {
     seed([[A, 'Ani', 'pray', 4, 60 * 1000]]);
     const msg = await ask(`d stats ${A} all`);
     assert.match(footOf(msg), /semua tanggal/);
-    assert.match(embedOf(msg).description, /Lucy Pray: \*\*4\*\*/);
+    assert.match(embedOf(msg).description, /Lucy Pray\/Curse: \*\*4\*\*/);
   });
 });
 
