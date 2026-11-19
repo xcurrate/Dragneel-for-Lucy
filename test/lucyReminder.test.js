@@ -1675,6 +1675,32 @@ describe('statistik aksi per orang (d stats)', () => {
     assert.equal(parseRange('2d').from, parseRange('2 hari').from);
   });
 
+  it('rentang lebar yang melewati awal data menyebut batas data server', async () => {
+    seed([[A, 'Ani', 'hunt', 3, 60 * 1000]]);
+    // 20d dan 300d keduanya lebih tua dari data server, jadi angkanya boleh
+    // sama — yang penting pengguna diberi tahu kenapa.
+    const dua = await ask(`d stats ${A} 20d`);
+    const tigaratus = await ask(`d stats ${A} 300d`);
+    assert.match(footOf(dua), /data server mulai/);
+    assert.match(footOf(tigaratus), /data server mulai/);
+    assert.equal(embedOf(dua).fields[0].value, embedOf(tigaratus).fields[0].value,
+      'angka sama itu wajar karena data tidak sepanjang itu');
+
+    // Rentang yang tercakup penuh tidak perlu peringatan.
+    const pendek = await ask(`d stats ${A} 1d`);
+    assert.doesNotMatch(footOf(pendek), /data server mulai/);
+  });
+
+  it('angka total sama dengan leaderboard all-time untuk orang yang sama', async () => {
+    seed([[A, 'Ani', 'hunt', 5, 60 * 1000], [A, 'Ani', 'battle', 4, 60 * 1000]]);
+    const stats = await ask(`d stats ${A} all`);
+    const total = embedOf(stats).fields.find(f => f.name === 'Total aksi').value;
+    assert.equal(total, '**9**');
+
+    const lb = await ask('d t battle all');
+    assert.match(embedOf(lb).description, /\*\*9\*\* — Ani/, 'leaderboard sepakat 9');
+  });
+
   it('mendukung rentang tanggal yang sama dengan leaderboard', async () => {
     seed([[A, 'Ani', 'pray', 4, 60 * 1000]]);
     const msg = await ask(`d stats ${A} all`);

@@ -170,6 +170,10 @@ Satuan hari sengaja **tidak** dibaca sebagai jendela bergulir 24 jam. `2d` berar
 angkanya konsisten: hasil harus selalu naik saat rentang melebar
 (`hari ini` <= `2d` <= `all`).
 
+Rentang yang lebih tua dari data server (mis. `300d` di server yang baru
+dipakai sebulan) menghasilkan angka yang sama dengan rentang yang lebih pendek.
+Itu wajar — footer akan menyebut `data server mulai <tanggal>` sebagai penjelasan.
+
 Catatan penting soal data:
 
 - Statistik per jam/menit butuh catatan **per kejadian**, yang baru ada sejak

@@ -164,6 +164,16 @@ function firstEventAt(guildId, userId) {
 
 // Nama terakhir yang tercatat untuk satu orang. Dipakai `d stats` supaya target
 // yang disebut lewat ID tetap tampil dengan nama, bukan mention mentah.
+// Hari paling awal yang punya data agregat di server ini. Dipakai untuk
+// menjelaskan kenapa rentang lebar (mis. 20d dan 300d) bisa menghasilkan angka
+// yang sama: datanya memang belum sepanjang itu.
+function firstDay(guildId) {
+  const row = getDb().prepare(
+    'SELECT MIN(day) AS day FROM lucy_action_daily WHERE guild_id = ?'
+  ).get(String(guildId));
+  return row?.day || null;
+}
+
 function getUserName(guildId, userId) {
   const row = getDb().prepare(
     'SELECT name FROM lucy_action_users WHERE guild_id = ? AND user_id = ?'
@@ -286,7 +296,7 @@ function resetGuild(guildId) {
 }
 
 module.exports = {
-  getDb, recordAction, recordEvent, pruneEvents, userEventsBetween, firstEventAt, getUserName,
+  getDb, recordAction, recordEvent, pruneEvents, userEventsBetween, firstEventAt, getUserName, firstDay,
   getCooldown, setCooldown, getPrefs, getPref, setPref,
   topByDay, topByRange, topAllTime, topByRangeAll, topAllTimeAll, userTotal, resetGuild,
   ACTIONS, GROUPS, RETENTION_DAYS

@@ -671,7 +671,17 @@ async function handleStatsCommand(message, prefix, parts) {
     return true;
   }
 
-  await message.reply({ embeds: [statsEmbed({ name, stats, rangeText: rangeLabel(range) })], allowedMentions: { parse: [] } });
+  // Rentang yang mulai sebelum data server ada tidak bisa "menambah" angka,
+  // jadi 20d dan 300d wajar sama. Sebutkan batasnya supaya tidak terlihat bug.
+  let subtitle = '';
+  const batas = store.firstDay(message.guildId);
+  if (batas && range.from && batas > range.from) {
+    subtitle = `data server mulai ${formatIndonesianDate(batas)}`;
+  }
+  await message.reply({
+    embeds: [statsEmbed({ name, stats, rangeText: rangeLabel(range), subtitle })],
+    allowedMentions: { parse: [] }
+  });
   return true;
 }
 
