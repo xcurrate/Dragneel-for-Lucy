@@ -1600,6 +1600,40 @@ describe('statistik aksi per orang (d stats)', () => {
     assert.match(msg.replies[0].content, /30m/);
   });
 
+  it('menampilkan nama dari catatan, bukan mention mentah', async () => {
+    seed([[A, 'Ani', 'pray', 1, 60 * 1000]]);
+    const msg = await ask(`d stats ${A}`);
+    assert.match(embedOf(msg).title, /Statistik Ani/);
+    assert.doesNotMatch(embedOf(msg).title, /<@/, 'jangan tampilkan mention mentah');
+  });
+
+  it('memberi pesan jelas untuk orang yang belum punya catatan', async () => {
+    const msg = await ask('d stats 123456789012345678');
+    assert.match(msg.replies[0].content, /belum punya catatan aksi/);
+    assert.match(msg.replies[0].content, /ID-nya salah/);
+  });
+
+  it('membedakan hari ini, all-time, dan jam pada orang yang sama', async () => {
+    const { dayKey } = require('../src/services/lucyCounter');
+    const lama = dayKey(new Date(Date.now() - 10 * 86400000));
+    seed([[A, 'Ani', 'pray', 2, 60 * 1000]]);
+    const store = require('../src/utils/lucyActionStorage');
+    for (let i = 0; i < 5; i++) {
+      store.recordAction({ guildId: 'guild1', userId: A, name: 'Ani', day: lama, action: 'curse', at: Date.now() - 10 * 86400000 });
+    }
+
+    const hariIni = await ask(`d stats ${A}`);
+    assert.equal(embedOf(hariIni).fields.find(f => f.name === 'Total aksi').value, '**2**');
+    assert.doesNotMatch(embedOf(hariIni).description, /Curse/, 'aksi 10 hari lalu bukan hari ini');
+
+    const semua = await ask(`d stats ${A} all`);
+    assert.equal(embedOf(semua).fields.find(f => f.name === 'Total aksi').value, '**7**');
+
+    const sejam = await ask(`d stat ${A} 1h`);
+    assert.equal(embedOf(sejam).fields.find(f => f.name === 'Total aksi').value, '**2**');
+    assert.match(footOf(sejam), /1 jam terakhir/);
+  });
+
   it('mendukung rentang tanggal yang sama dengan leaderboard', async () => {
     seed([[A, 'Ani', 'pray', 4, 60 * 1000]]);
     const msg = await ask(`d stats ${A} all`);

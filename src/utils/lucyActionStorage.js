@@ -162,6 +162,15 @@ function firstEventAt(guildId, userId) {
   return row?.at ? Number(row.at) : null;
 }
 
+// Nama terakhir yang tercatat untuk satu orang. Dipakai `d stats` supaya target
+// yang disebut lewat ID tetap tampil dengan nama, bukan mention mentah.
+function getUserName(guildId, userId) {
+  const row = getDb().prepare(
+    'SELECT name FROM lucy_action_users WHERE guild_id = ? AND user_id = ?'
+  ).get(String(guildId), String(userId));
+  return row?.name || null;
+}
+
 function getCooldown(guildId, userId, action) {
   const row = getDb().prepare(
     'SELECT ready_at FROM lucy_action_cooldowns WHERE guild_id = ? AND user_id = ? AND action = ?'
@@ -277,7 +286,7 @@ function resetGuild(guildId) {
 }
 
 module.exports = {
-  getDb, recordAction, recordEvent, pruneEvents, userEventsBetween, firstEventAt,
+  getDb, recordAction, recordEvent, pruneEvents, userEventsBetween, firstEventAt, getUserName,
   getCooldown, setCooldown, getPrefs, getPref, setPref,
   topByDay, topByRange, topAllTime, topByRangeAll, topAllTimeAll, userTotal, resetGuild,
   ACTIONS, GROUPS, RETENTION_DAYS

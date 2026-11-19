@@ -625,6 +625,7 @@ async function handleStatsCommand(message, prefix, parts) {
     ? (message.member?.displayName || message.author.username || 'Kamu')
     : (message.guild?.members?.cache?.get?.(userId)?.displayName
       || message.mentions?.users?.get?.(userId)?.username
+      || store.getUserName(message.guildId, userId)
       || `<@${userId}>`);
 
   const span = parseClockSpan(rangeText);
@@ -655,6 +656,20 @@ async function handleStatsCommand(message, prefix, parts) {
   }
 
   const stats = dailyStats(message.guildId, userId, range);
+  // Belum pernah beraksi sama sekali: katakan apa adanya, jangan tampilkan
+  // board nol yang terlihat seperti bot gagal membaca data.
+  const never = !store.firstEventAt(message.guildId, userId)
+    && statsTotal(stats) === 0
+    && !store.getUserName(message.guildId, userId);
+  if (never) {
+    await message.reply({
+      content: `${name} belum punya catatan aksi di server ini, atau ID-nya salah.\n` +
+        `Coba \`${prefix} stats\` untuk statistik kamu sendiri.`,
+      allowedMentions: { parse: [] }
+    });
+    return true;
+  }
+
   await message.reply({ embeds: [statsEmbed({ name, stats, rangeText: rangeLabel(range) })], allowedMentions: { parse: [] } });
   return true;
 }

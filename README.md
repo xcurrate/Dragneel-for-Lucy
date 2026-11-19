@@ -142,7 +142,18 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
 
 Yang ditampilkan: rincian per aksi (Pray, Curse, Battle, Hunt, Lucy) diurutkan
 dari yang terbanyak, plus total aksi. Battle dan Hunt dipisah di sini walau
-leaderboard menggabungkan keduanya.
+leaderboard menggabungkan keduanya. Nama diambil dari cache member, mention,
+lalu catatan terakhir di database — jadi target lewat ID tetap tampil bernama.
+
+Tanpa argumen rentang, `d stats` memakai **hari ini**. Jadi:
+
+- `d stats <id>` → angka hari ini
+- `d stats <id> all` → angka sepanjang waktu
+- `d stat <id> 1h` → angka 1 jam terakhir
+
+Ketiganya bisa berbeda jauh untuk orang yang sama; itu memang benar, bukan bug.
+Bila ID tidak punya catatan sama sekali, bot membalas dengan pesan "belum punya
+catatan aksi di server ini, atau ID-nya salah" alih-alih board nol.
 
 Rentang yang diterima:
 
