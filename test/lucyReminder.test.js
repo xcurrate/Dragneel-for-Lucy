@@ -371,6 +371,29 @@ describe('lucy reminder engine', () => {
     for (const t of svc.timers.values()) clearTimeout(t);
   });
 
+  it('cooldown dihitung dari aksi PERTAMA, bukan diperpanjang aksi berikutnya', async () => {
+    // Aturan bot Lucy: pray lalu curse tidak bisa sebelum 5 menit dari aksi
+    // PERTAMA selesai. Jadi aksi yang diblokir tidak boleh menggeser jendela.
+    const svc = require('../src/services/lucyReminder');
+    const store = require('../src/utils/lucyActionStorage');
+    await svc.handleMessage(makeMessage('lucy pray'));
+    const first = store.getCooldown('guild1', 'user1', 'pray');
+    assert.ok(first > Date.now(), 'jendela 5 menit terpasang');
+
+    // Curse di tengah jendela: diblokir dan TIDAK memperpanjang.
+    await svc.handleMessage(makeMessage('lucy curse'));
+    assert.equal(store.getCooldown('guild1', 'user1', 'pray'), first,
+      'aksi yang diblokir tidak menggeser waktu siap');
+    assert.equal(store.topByDay('guild1', svc.dayKey(), ['pray', 'curse'])[0].count, 1);
+
+    // Lewatkan jendela: aksi berikutnya dihitung dan memasang jendela baru.
+    store.setCooldown('guild1', 'user1', 'pray', Date.now() - 1);
+    await svc.handleMessage(makeMessage('lucy curse'));
+    assert.equal(store.topByDay('guild1', svc.dayKey(), ['pray', 'curse'])[0].count, 2);
+    assert.ok(store.getCooldown('guild1', 'user1', 'pray') > first, 'jendela baru dipasang');
+    for (const t of svc.timers.values()) clearTimeout(t);
+  });
+
   it('aksi baru dihitung lagi setelah jendela tunggu habis', async () => {
     const svc = require('../src/services/lucyReminder');
     const store = require('../src/utils/lucyActionStorage');
