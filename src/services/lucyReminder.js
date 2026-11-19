@@ -17,7 +17,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFl
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
-const { parseIndonesianDate, parseIndonesianDateRange, counterOffNotice, navRow } = require('./lucyCounter');
+const { parseIndonesianDate, parseIndonesianDateRange, parseClockSpan, formatClockSpan, counterOffNotice, navRow } = require('./lucyCounter');
 const trigger = require('../utils/lucyTrigger');
 const reminderResolve = require('../utils/reminderResolve');
 const reminderVariables = require('../utils/reminderVariables');
@@ -527,6 +527,138 @@ function leaderboardView(guildId, category, range, page = 1, { global = false } 
   return { embed, page: current, totalPages };
 }
 
+// --- Statistik per orang -------------------------------------------------
+// Sumber data berbeda menurut jenis rentang:
+// - rentang jam/menit memakai lucy_action_events (bertimestamp),
+// - rentang tanggal/harian/all-time memakai agregat harian yang sudah ada.
+// Agregat harian dipilih untuk rentang tanggal karena sudah akurat dan tidak
+// terpotong retensi 365 hari.
+
+const STAT_ACTIONS = [
+  { action: 'pray', label: 'Lucy Pray' },
+  { action: 'curse', label: 'Lucy Curse' },
+  { action: 'battle', label: 'Lucy Battle' },
+  { action: 'hunt', label: 'Lucy Hunt' },
+  { action: 'lucy', label: 'Lucy (say Lucy)' }
+];
+
+// Statistik satu orang untuk rentang tanggal (harian). Dihitung dari tabel
+// agregat, jadi tetap benar walau kejadian bertimestamp sudah dipangkas.
+function dailyStats(guildId, userId, range) {
+  const filter = rangeFilter(range);
+  const result = {};
+  for (const { action } of STAT_ACTIONS) {
+    if (action === 'lucy') {
+      const user = lucyStore.getGuildData(guildId)?.users?.[userId];
+      result.lucy = user ? sumDays(user, filter) : 0;
+      continue;
+    }
+    // Per aksi, bukan per grup: battle dan hunt dilaporkan terpisah di sini
+    // walau leaderboard menggabungkan keduanya.
+    const actions = [action];
+    if (range.type === 'alltime') {
+      result[action] = store.userTotal(guildId, userId, '0000-01-01', '9999-12-31', actions);
+    } else {
+      const from = range.type === 'date' ? range.date : range.from;
+      const to = range.type === 'date' ? range.date : range.to;
+      result[action] = store.userTotal(guildId, userId, from, to, actions);
+    }
+  }
+  return result;
+}
+
+// Statistik satu orang untuk jendela jam/menit (tabel kejadian).
+function clockStats(guildId, userId, span) {
+  const byAction = store.userEventsBetween(guildId, userId, span.from, span.to);
+  const result = {};
+  for (const { action } of STAT_ACTIONS) result[action] = byAction[action] || 0;
+  return result;
+}
+
+function statsTotal(stats) {
+  return Object.values(stats).reduce((sum, n) => sum + Number(n || 0), 0);
+}
+
+// Urutkan aksi dari yang paling banyak, buang yang nol.
+function statsBreakdown(stats) {
+  return STAT_ACTIONS
+    .map(({ action, label }) => ({ action, label, count: stats[action] || 0 }))
+    .filter(row => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+// Ambil target statistik dari argumen: mention, ID mentah, atau tanpa target.
+// Tanpa target = diri sendiri.
+const USER_ID_RE = /^\d{15,25}$/;
+function parseStatsTarget(parts, message) {
+  for (let i = 0; i < parts.length; i++) {
+    const token = parts[i];
+    const mention = /^<@!?(\d{15,25})>$/.exec(token);
+    if (mention) return { userId: mention[1], rest: parts.slice(0, i).concat(parts.slice(i + 1)) };
+    if (USER_ID_RE.test(token)) return { userId: token, rest: parts.slice(0, i).concat(parts.slice(i + 1)) };
+  }
+  return { userId: message.author.id, rest: parts };
+}
+
+function statsEmbed({ name, stats, rangeText, subtitle }) {
+  const total = statsTotal(stats);
+  const rows = statsBreakdown(stats);
+  const desc = rows.length
+    ? rows.map(row => `${row.label}: **${row.count.toLocaleString('id-ID')}**`).join('\n')
+    : 'Belum ada aksi pada rentang ini.';
+  return new EmbedBuilder()
+    .setColor(0xEB459E)
+    .setTitle(`📊 Statistik ${name}`)
+    .setDescription(desc)
+    .addFields({ name: 'Total aksi', value: `**${total.toLocaleString('id-ID')}**`, inline: true })
+    .setFooter({ text: `${rangeText}${subtitle ? ' • ' + subtitle : ''} • Server ini (WIB)` });
+}
+
+// `d stats` / `d dstats` — statistik aksi satu orang.
+// Bentuk: `d stats [user] [rentang]`, user = mention atau ID.
+async function handleStatsCommand(message, prefix, parts) {
+  const { userId, rest } = parseStatsTarget(parts.slice(1), message);
+  const rangeText = rest.join(' ').trim();
+
+  const self = userId === message.author.id;
+  const name = self
+    ? (message.member?.displayName || message.author.username || 'Kamu')
+    : (message.guild?.members?.cache?.get?.(userId)?.displayName
+      || message.mentions?.users?.get?.(userId)?.username
+      || `<@${userId}>`);
+
+  const span = parseClockSpan(rangeText);
+  if (span) {
+    const stats = clockStats(message.guildId, userId, span);
+    const firstAt = store.firstEventAt(message.guildId, userId);
+    // Jendela yang lebih tua dari aktivitas paling awal orang ini tidak bisa
+    // dipastikan kosong, jadi sebutkan batas datanya agar angka nol tidak
+    // disalahartikan sebagai "tidak pernah beraksi".
+    let subtitle = '';
+    if (firstAt && firstAt > span.from) {
+      const sejak = new Date(firstAt).toLocaleString('id-ID', { timeZone: WIB, dateStyle: 'medium', timeStyle: 'short' });
+      subtitle = `catatan paling awal ${sejak}`;
+    }
+    await message.reply({ embeds: [statsEmbed({ name, stats, rangeText: formatClockSpan(span), subtitle })], allowedMentions: { parse: [] } });
+    return true;
+  }
+
+  const range = parseRange(rangeText);
+  if (range.type === 'invalid') {
+    await message.reply({
+      content: `Rentang tidak dikenali: **${rangeText}**.\n` +
+        `Contoh: \`${prefix} stats\`, \`${prefix} stats 30m\`, \`${prefix} stats 2j\`, ` +
+        `\`${prefix} stats 7d\`, \`${prefix} stats 10-18 nov\`, \`${prefix} stats @user 2j\`.`,
+      allowedMentions: { parse: [] }
+    });
+    return true;
+  }
+
+  const stats = dailyStats(message.guildId, userId, range);
+  await message.reply({ embeds: [statsEmbed({ name, stats, rangeText: rangeLabel(range) })], allowedMentions: { parse: [] } });
+  return true;
+}
+
 // --- Perintah -----------------------------------------------------------
 function isModerator(message) {
   return Boolean(message.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild));
@@ -576,6 +708,7 @@ async function handleCommand(message) {
   if (['top', 't', 'tglobal', 'tall', 'llb', 'llbboard', 'lboard'].includes(command)) {
     return handleLeaderboardCommand(message, prefix, parts, { forceGlobal: command === 'tglobal' || command === 'tall' });
   }
+  if (['stats', 'stat', 'dstats', 'statistik', 'mystats'].includes(command)) return handleStatsCommand(message, prefix, parts);
   if (['lucyprefix', 'lprefix', 'lucyconfig', 'lconfig'].includes(command)) return handleLucyPrefixCommand(message, prefix, parts);
   return false;
 }
@@ -914,6 +1047,7 @@ async function handleMessage(message) {
 }
 
 module.exports = {
+  handleStatsCommand, dailyStats, clockStats, parseStatsTarget, statsBreakdown,
   handleMessage, handleCommand, handleComponent, isReminderNav, helpText,
   handleLeaderboardNav, isLeaderboardNav,
   panelEmbed, panelComponents, leaderboardView, parseRange, rangeLabel,

@@ -1489,3 +1489,153 @@ describe('rentang tanggal eksplisit pada leaderboard', () => {
     assert.match(msg.replies[0], /10-18 nov/, 'contoh rentang ikut ditampilkan');
   });
 });
+
+describe('statistik aksi per orang (d stats)', () => {
+  const A = '111111111111111111';
+  const B = '222222222222222222';
+  const ME = '999999999999999999';
+  const now = () => Date.now();
+  const embedOf = m => m.replies[0].embeds[0].data;
+  const footOf = m => embedOf(m).footer.text;
+
+  const seed = entries => {
+    const store = require('../src/utils/lucyActionStorage');
+    const { dayKey } = require('../src/services/lucyCounter');
+    for (const [userId, name, action, count, agoMs] of entries) {
+      for (let i = 0; i < count; i++) {
+        const at = now() - agoMs;
+        store.recordAction({ guildId: 'guild1', userId, name, day: dayKey(new Date(at)), action, at });
+      }
+    }
+  };
+
+  const ask = async (content, userId = ME) => {
+    const svc = require('../src/services/lucyReminder');
+    const msg = makeMessage(content, { userId });
+    await svc.handleMessage(msg);
+    return msg;
+  };
+
+  it('tanpa argumen menampilkan statistik diri sendiri', async () => {
+    seed([[ME, 'Saya', 'pray', 2, 60 * 1000]]);
+    const msg = await ask('d stats');
+    assert.match(embedOf(msg).title, /Statistik Tester/, 'memakai displayName, bukan mention');
+    assert.match(embedOf(msg).description, /Lucy Pray: \*\*2\*\*/);
+  });
+
+  it('menerima mention dan ID mentah sebagai target', async () => {
+    seed([[A, 'Ani', 'pray', 3, 60 * 1000]]);
+    const byMention = await ask(`d stats <@${A}>`);
+    assert.match(embedOf(byMention).description, /Lucy Pray: \*\*3\*\*/);
+    const byId = await ask(`d stats ${A}`);
+    assert.match(embedOf(byId).description, /Lucy Pray: \*\*3\*\*/);
+    // `<@!id>` (mention nickname) juga harus dikenali.
+    const byNick = await ask(`d stats <@!${A}>`);
+    assert.match(embedOf(byNick).description, /Lucy Pray: \*\*3\*\*/);
+  });
+
+  it('memisahkan battle dan hunt, tidak menggabungkannya', async () => {
+    seed([[A, 'Ani', 'battle', 2, 60 * 1000], [A, 'Ani', 'hunt', 1, 60 * 1000]]);
+    const msg = await ask(`d stats ${A}`);
+    const desc = embedOf(msg).description;
+    assert.match(desc, /Lucy Battle: \*\*2\*\*/);
+    assert.match(desc, /Lucy Hunt: \*\*1\*\*/);
+  });
+
+  it('membaca rentang jam dan menit dari data bertimestamp', async () => {
+    seed([
+      [A, 'Ani', 'pray', 3, 5 * 60 * 1000],
+      [A, 'Ani', 'curse', 2, 3 * 60 * 60 * 1000],
+      [A, 'Ani', 'battle', 1, 2 * 24 * 60 * 60 * 1000]
+    ]);
+
+    const m30 = await ask(`d stats ${A} 30m`);
+    assert.match(footOf(m30), /30 menit terakhir/);
+    assert.match(embedOf(m30).description, /Lucy Pray: \*\*3\*\*/);
+    assert.doesNotMatch(embedOf(m30).description, /Curse/, 'curse 3 jam lalu di luar 30 menit');
+
+    const m4j = await ask(`d stats ${A} 4j`);
+    assert.match(footOf(m4j), /4 jam terakhir/);
+    assert.match(embedOf(m4j).description, /Lucy Curse: \*\*2\*\*/);
+    assert.doesNotMatch(embedOf(m4j).description, /Battle/, 'battle 2 hari lalu di luar 4 jam');
+
+    const m7d = await ask(`d stats ${A} 7d`);
+    assert.match(embedOf(m7d).description, /Lucy Battle: \*\*1\*\*/, 'battle masuk dalam 7 hari');
+  });
+
+  it('menerima satuan jam dalam bahasa Indonesia dan Inggris', async () => {
+    seed([[A, 'Ani', 'pray', 2, 10 * 60 * 1000]]);
+    for (const shape of ['2j', '2 jam', '2h', '2 hour', '120m', '120 menit']) {
+      const msg = await ask(`d stats ${A} ${shape}`);
+      assert.match(embedOf(msg).description, /Lucy Pray: \*\*2\*\*/, shape);
+    }
+  });
+
+  it('menjumlahkan semua aksi di total', async () => {
+    seed([[A, 'Ani', 'pray', 3, 60 * 1000], [A, 'Ani', 'curse', 2, 60 * 1000]]);
+    const msg = await ask(`d stats ${A}`);
+    assert.equal(embedOf(msg).fields.find(f => f.name === 'Total aksi').value, '**5**');
+  });
+
+  it('memberi angka nol tanpa catatan bila jendela tercakup data', async () => {
+    seed([[A, 'Ani', 'pray', 1, 10 * 60 * 1000]]);
+    // Aksi terakhir 10 menit lalu; jendela 1 menit sepenuhnya tercakup data,
+    // jadi nol berarti benar-benar tidak ada aksi.
+    const msg = await ask(`d stats ${A} 1m`);
+    assert.match(embedOf(msg).description, /Belum ada aksi/);
+    assert.doesNotMatch(footOf(msg), /catatan paling awal/);
+  });
+
+  it('menyebut batas data bila jendela lebih tua dari catatan paling awal', async () => {
+    seed([[A, 'Ani', 'pray', 1, 10 * 60 * 1000]]);
+    // Jendela 30 menit mulai sebelum catatan paling awal, jadi angka nol di
+    // bagian awal jendela tidak bisa dipastikan kosong.
+    const msg = await ask(`d stats ${A} 30m`);
+    assert.match(footOf(msg), /catatan paling awal/, 'menyebut batas data, bukan diam saja');
+  });
+
+  it('menolak rentang yang tidak dikenal dengan contoh', async () => {
+    const msg = await ask('d stats 30x');
+    assert.match(msg.replies[0].content, /Rentang tidak dikenali/);
+    assert.match(msg.replies[0].content, /30m/);
+  });
+
+  it('mendukung rentang tanggal yang sama dengan leaderboard', async () => {
+    seed([[A, 'Ani', 'pray', 4, 60 * 1000]]);
+    const msg = await ask(`d stats ${A} all`);
+    assert.match(footOf(msg), /semua tanggal/);
+    assert.match(embedOf(msg).description, /Lucy Pray: \*\*4\*\*/);
+  });
+});
+
+describe('retensi kejadian aksi', () => {
+  it('mencatat kejadian bertimestamp untuk tiap aksi', () => {
+    const store = require('../src/utils/lucyActionStorage');
+    const at = Date.now() - 1000;
+    store.recordAction({ guildId: 'guild1', userId: 'u1', name: 'Ani', day: '2026-11-19', action: 'pray', at });
+    const counts = store.userEventsBetween('guild1', 'u1', at - 10, at + 10);
+    assert.equal(counts.pray, 1);
+  });
+
+  it('menghapus kejadian yang lebih tua dari retensi', () => {
+    const store = require('../src/utils/lucyActionStorage');
+    const old = Date.now() - (store.RETENTION_DAYS + 5) * 24 * 60 * 60 * 1000;
+    const fresh = Date.now() - 1000;
+    store.recordAction({ guildId: 'guild1', userId: 'u2', name: 'Budi', day: '2025-01-01', action: 'pray', at: old });
+    store.recordAction({ guildId: 'guild1', userId: 'u2', name: 'Budi', day: '2026-11-19', action: 'curse', at: fresh });
+
+    const removed = store.pruneEvents();
+    assert.ok(removed >= 1, 'kejadian lama terhapus');
+    const left = store.userEventsBetween('guild1', 'u2', 0, Date.now() + 1000);
+    assert.equal(left.pray, undefined, 'yang lama hilang');
+    assert.equal(left.curse, 1, 'yang baru bertahan');
+  });
+
+  it('resetGuild ikut membersihkan kejadian', () => {
+    const store = require('../src/utils/lucyActionStorage');
+    store.recordAction({ guildId: 'guild1', userId: 'u3', name: 'Cici', day: '2026-11-19', action: 'pray' });
+    store.resetGuild('guild1');
+    const left = store.userEventsBetween('guild1', 'u3', 0, Date.now() + 1000);
+    assert.deepEqual(left, {});
+  });
+});

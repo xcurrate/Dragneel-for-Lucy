@@ -298,6 +298,11 @@ siap untuk integrasi giveaway nanti.
   `alltime`. Setiap tempat yang memeriksa `range.type` **harus** menangani `range` dan `span`
   berdampingan (ranking, filter, label, judul, token tombol). `span` disimpan di custom_id
   sebagai `span:<from>:<to>` karena jumlah harinya tidak bisa disingkat jadi `Nd`.
+- **Dua sumber data aksi**: `lucy_action_daily` / `lucy_daily` (agregat per hari,
+  permanen, dipakai leaderboard) dan `lucy_action_events` (satu baris per kejadian,
+  bertimestamp, retensi 365 hari, dipangkas `pruneEvents()` saat start). Rentang
+  harian/tanggal memakai agregat; rentang jam/menit (`30m`, `2j`) memakai kejadian.
+  Jangan membaca kejadian untuk rentang tanggal — datanya terpotong retensi.
 - **Jangan pakai backtick di dalam komentar SQL** pada template literal `db.exec(...)` di
   `reminderStorage.js` — backtick menutup literal dan bikin SyntaxError.
 - **Transfer** hanya untuk reminder `shareable`, perlu konfirmasi, dan memindahkan `owner_id`.

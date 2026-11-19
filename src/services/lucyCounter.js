@@ -162,6 +162,37 @@ function parseIndonesianDateRange(input, today = new Date()) {
   return { from: start, to: end, days };
 }
 
+// Rentang berbasis jam/menit, mis. `30m`, `45 menit`, `2j`, `3 jam`, `1h`.
+// Dikembalikan sebagai epoch ms karena tabel harian tidak menyimpan jam.
+// Satuan: m/menit/minute, j/jam/h/hour, d/hari/day.
+const CLOCK_UNITS = {
+  m: 'minute', menit: 'minute', minute: 'minute', minutes: 'minute', min: 'minute',
+  j: 'hour', jam: 'hour', h: 'hour', hour: 'hour', hours: 'hour',
+  d: 'day', hari: 'day', day: 'day', days: 'day'
+};
+const CLOCK_RE = /^(\d{1,4})\s*([a-z]+)$/;
+
+function parseClockSpan(input, now = new Date()) {
+  const text = String(input || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!text) return null;
+  const m = CLOCK_RE.exec(text);
+  if (!m) return null;
+  const unit = CLOCK_UNITS[m[2]];
+  if (!unit) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n < 1) return null;
+  const ms = unit === 'minute' ? n * 60 * 1000 : unit === 'hour' ? n * 3600 * 1000 : n * 86400 * 1000;
+  return { unit, amount: n, ms, from: now.getTime() - ms, to: now.getTime() };
+}
+
+// Label ramah untuk rentang jam/menit: `30 menit terakhir`, `2 jam terakhir`.
+function formatClockSpan(span) {
+  if (!span) return '';
+  if (span.unit === 'minute') return span.amount + ' menit terakhir';
+  if (span.unit === 'hour') return span.amount + ' jam terakhir';
+  return span.amount + ' hari terakhir';
+}
+
 // Ambil tanggal dari daftar argumen. Mengembalikan { date, rest, invalid }:
 // - date    : key YYYY-MM-DD bila ada tanggal valid, selain itu null
 // - rest    : argumen tanpa token tanggal (mis. nomor halaman)
@@ -547,6 +578,15 @@ async function handleMessage(message, { onCounted } = {}) {
     guildId: message.guildId, userId: message.author.id, name: displayName,
     day, cycleKey, targetActive, goal: currentConfig.targetGoal
   });
+  // Catat juga ke tabel kejadian agar statistik `d stats` bisa memakai
+  // resolusi jam untuk kategori Lucy, sama seperti aksi lain.
+  try {
+    const actionStore = require('../utils/lucyActionStorage');
+    const database = actionStore.getDb();
+    actionStore.recordEvent(database, message.guildId, message.author.id, 'lucy', messageTime);
+  } catch (error) {
+    console.warn('[LucyCounter] Gagal mencatat kejadian Lucy:', error.message);
+  }
 
   if (result.notifiedNow) {
     const channel = currentConfig.targetChannelId ? await message.guild.channels.fetch(currentConfig.targetChannelId).catch(() => null) : message.channel;
@@ -556,4 +596,4 @@ async function handleMessage(message, { onCounted } = {}) {
   }
 }
 module.exports = {
-  counterOffNotice, handleMessage, handleCommand, handleNavigation, isLucyNav, navRow, buildLeaderboard, countLucy, dayKey, parseIndonesianDate, parseIndonesianDateRange, formatIndonesianDate, extractDateArg, leaderboardEmbed, dailyLeaderboardView, targetLeaderboardEmbed, targetLeaderboardView, serverLeaderboardEmbed, serverLeaderboardView, ranking, targetRanking, serverRanking, pageRows, LEADERBOARD_PAGE_SIZE, targetSchedule, challengeCycleKey, isTargetWindow };
+  counterOffNotice, handleMessage, handleCommand, handleNavigation, isLucyNav, navRow, buildLeaderboard, countLucy, dayKey, parseIndonesianDate, parseIndonesianDateRange, parseClockSpan, formatClockSpan, formatIndonesianDate, extractDateArg, leaderboardEmbed, dailyLeaderboardView, targetLeaderboardEmbed, targetLeaderboardView, serverLeaderboardEmbed, serverLeaderboardView, ranking, targetRanking, serverRanking, pageRows, LEADERBOARD_PAGE_SIZE, targetSchedule, challengeCycleKey, isTargetWindow };

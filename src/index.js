@@ -70,6 +70,11 @@ client.once(Events.ClientReady, async c => {
   console.log('Logged in as ' + c.user.tag);
   await tracker.restoreSchedules();
   syncAnimalDexEmojis();
+  // Pangkas kejadian aksi yang melewati retensi sekali per start, bukan tiap aksi.
+  try {
+    const removed = require('./utils/lucyActionStorage').pruneEvents();
+    if (removed) console.log('[LucyStats] ' + removed + ' kejadian lama dihapus (retensi ' + require('./utils/lucyActionStorage').RETENTION_DAYS + ' hari).');
+  } catch (e) { console.warn('[LucyStats] Gagal memangkas kejadian:', e.message); }
 });
 client.on(Events.MessageCreate, async message => {
   lucyCounter.handleMessage(message, {

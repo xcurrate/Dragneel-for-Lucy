@@ -64,6 +64,19 @@ function getDb() {
       ready_at INTEGER NOT NULL,
       PRIMARY KEY (guild_id, user_id, action)
     );
+    -- Kejadian aksi bertimestamp, untuk statistik berbutir jam/menit.
+    -- Tabel harian di atas tetap jadi sumber leaderboard; tabel ini hanya
+    -- menambah resolusi waktu yang tidak bisa disimpan oleh kolom day (tanggal saja).
+    -- Disimpan maksimal RETENTION_DAYS hari, dibersihkan oleh pruneEvents().
+    CREATE TABLE IF NOT EXISTS lucy_action_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_action_events_lookup
+      ON lucy_action_events (guild_id, user_id, at);
     -- Preferensi reminder per orang per jenis: on/off + cara ping.
     -- TANPA guild_id: pengaturan berlaku global di semua server, sesuai
     -- permintaan (anggota mengatur sekali, berlaku di mana pun ia bermain).
@@ -85,7 +98,12 @@ function ensureUser(database, guildId, userId, name) {
     .run(String(guildId), String(userId), name || null);
 }
 
-function recordAction({ guildId, userId, name, day, action }) {
+// Retensi kejadian bertimestamp. Setahun penuh supaya chart tahunan tetap utuh;
+// lebih dari itu hanya membengkakkan berkas tanpa dipakai.
+const RETENTION_DAYS = 365;
+const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+function recordAction({ guildId, userId, name, day, action, at = Date.now() }) {
   if (!guildId || !userId || !day || !ACTIONS[action]) return;
   const database = getDb();
   database.exec('BEGIN IMMEDIATE');
@@ -95,11 +113,53 @@ function recordAction({ guildId, userId, name, day, action }) {
       INSERT INTO lucy_action_daily (guild_id, user_id, day, action, count) VALUES (?, ?, ?, ?, 1)
       ON CONFLICT(guild_id, user_id, day, action) DO UPDATE SET count = count + 1`)
       .run(String(guildId), String(userId), String(day), action);
+    recordEvent(database, guildId, userId, action, at);
     database.exec('COMMIT');
   } catch (error) {
     database.exec('ROLLBACK');
     throw error;
   }
+}
+
+// Dipakai juga oleh penghitung Lucy (tabelnya sendiri) supaya kategori `lucy`
+// punya resolusi jam yang sama dengan pray/curse/battle/hunt.
+function recordEvent(database, guildId, userId, action, at = Date.now()) {
+  database.prepare(
+    'INSERT INTO lucy_action_events (guild_id, user_id, action, at) VALUES (?, ?, ?, ?)'
+  ).run(String(guildId), String(userId), action, Number(at));
+}
+
+// Hapus kejadian yang lebih tua dari retensi. Dipanggil sekali saat bot start,
+// bukan tiap aksi, supaya tidak menambah biaya pada jalur panas.
+function pruneEvents(now = Date.now()) {
+  const cutoff = Number(now) - RETENTION_MS;
+  const result = getDb().prepare('DELETE FROM lucy_action_events WHERE at < ?').run(cutoff);
+  return Number(result.changes) || 0;
+}
+
+// Jumlah aksi satu orang dalam jendela waktu. `from`/`to` epoch ms, inklusif.
+// `actions` null = semua aksi.
+function userEventsBetween(guildId, userId, from, to, actions = null) {
+  const list = actions && actions.length ? actions : null;
+  const rows = getDb().prepare(`
+    SELECT action, COUNT(*) AS count FROM lucy_action_events
+    WHERE guild_id = ? AND user_id = ? AND at >= ? AND at <= ?
+      ${list ? `AND action IN (${inClause(list)})` : ''}
+    GROUP BY action`)
+    .all(String(guildId), String(userId), Number(from), Number(to), ...(list || []));
+  const byAction = {};
+  for (const row of rows) byAction[row.action] = Number(row.count) || 0;
+  return byAction;
+}
+
+// Kejadian paling awal yang tersimpan untuk satu orang, untuk memberi tahu
+// pengguna bahwa rentangnya melebihi data yang ada (bukan nol karena memang
+// tidak ada aktivitas).
+function firstEventAt(guildId, userId) {
+  const row = getDb().prepare(
+    'SELECT MIN(at) AS at FROM lucy_action_events WHERE guild_id = ? AND user_id = ?'
+  ).get(String(guildId), String(userId));
+  return row?.at ? Number(row.at) : null;
 }
 
 function getCooldown(guildId, userId, action) {
@@ -211,12 +271,14 @@ function userTotal(guildId, userId, fromDay, toDay, actions) {
 
 function resetGuild(guildId) {
   const database = getDb();
-  for (const table of ['lucy_action_daily', 'lucy_action_cooldowns', 'lucy_action_users']) {
+  for (const table of ['lucy_action_daily', 'lucy_action_events', 'lucy_action_cooldowns', 'lucy_action_users']) {
     database.prepare(`DELETE FROM ${table} WHERE guild_id = ?`).run(String(guildId));
   }
 }
 
 module.exports = {
-  getDb, recordAction, getCooldown, setCooldown, getPrefs, getPref, setPref,
-  topByDay, topByRange, topAllTime, topByRangeAll, topAllTimeAll, userTotal, resetGuild, ACTIONS, GROUPS
+  getDb, recordAction, recordEvent, pruneEvents, userEventsBetween, firstEventAt,
+  getCooldown, setCooldown, getPrefs, getPref, setPref,
+  topByDay, topByRange, topAllTime, topByRangeAll, topAllTimeAll, userTotal, resetGuild,
+  ACTIONS, GROUPS, RETENTION_DAYS
 };

@@ -133,6 +133,38 @@ pendek juga jalan (mis. `gb`, `gh`, `gfight`).
   (`5 nov`), atau **rentang tanggal** (`10-18 nov`, `1 nov - 5 nov 2026`). Daftar bentuk yang
   diterima ada di bagian "Rentang tanggal leaderboard" di bawah.
 - battle dan hunt digabung jadi satu kategori; lucy memakai penghitung Lucy yang sudah ada
+### Statistik aksi per orang
+
+- d stats (alias d stat, d dstats, d statistik) — statistik aksi kamu sendiri
+- d stats @user [rentang] — statistik orang lain (mention atau ID mentah)
+- contoh: d stats, d stats 30m, d stats 2j, d stats 7d, d stats all,
+  d stats @user 2j, d stats 123456789012345678 10-18 nov
+
+Yang ditampilkan: rincian per aksi (Pray, Curse, Battle, Hunt, Lucy) diurutkan
+dari yang terbanyak, plus total aksi. Battle dan Hunt dipisah di sini walau
+leaderboard menggabungkan keduanya.
+
+Rentang yang diterima:
+
+| Bentuk | Arti | Sumber data |
+|--------|------|-------------|
+| `30m`, `45 menit`, `90m` | N menit terakhir | kejadian bertimestamp |
+| `2j`, `3 jam`, `1h`, `2 hour` | N jam terakhir | kejadian bertimestamp |
+| `7d`, `1 hari` | N hari terakhir | agregat harian |
+| `all` | semua waktu | agregat harian |
+| `5 nov`, `10-18 nov` | tanggal / rentang tanggal | agregat harian |
+
+Catatan penting soal data:
+
+- Statistik per jam/menit butuh catatan **per kejadian**, yang baru ada sejak
+  tabel `lucy_action_events` aktif. Hari-hari sebelumnya tidak bisa dibuat
+  ulang, jadi rentang jam sebelum itu akan tampil kosong — bot menyebutkan
+  "catatan paling awal" di footer bila jendela yang diminta lebih tua dari
+  data yang ada.
+- Kejadian bertimestamp disimpan **365 hari** lalu dipangkas otomatis saat bot
+  start. Statistik per tanggal/all-time tidak terpengaruh karena memakai
+  agregat harian yang disimpan permanen.
+
 ### Rentang tanggal leaderboard
 
 Selain `7d` dan `all`, leaderboard menerima rentang tanggal eksplisit. Bulan dan tahun
