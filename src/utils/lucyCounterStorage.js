@@ -118,6 +118,37 @@ function getLastAcceptedAt(guildId, userId) {
   return row?.last_lucy_accepted_at == null ? 0 : Number(row.last_lucy_accepted_at);
 }
 
+// Hari pertama seorang user tercatat "say Lucy" di server ini. Dipakai oleh
+// `d chart -sincestart`; null bila belum pernah tercatat.
+function firstDayForUser(guildId, userId) {
+  const row = getDb().prepare(
+    'SELECT MIN(day) AS day FROM lucy_daily WHERE guild_id = ? AND user_id = ?'
+  ).get(String(guildId), String(userId));
+  return row?.day || null;
+}
+
+// Deret harian siap plot: SATU titik per hari, termasuk hari tanpa aksi (nol).
+// Tanpa pengisian ini, chart akan menyambung dua hari berjauhan seolah-olah
+// tidak ada jeda, sehingga garisnya berbohong.
+function dailySeries(guildId, userId, fromDay, toDay) {
+  const rows = getDb().prepare(`
+    SELECT day, count FROM lucy_daily
+    WHERE guild_id = ? AND user_id = ? AND day BETWEEN ? AND ?`)
+    .all(String(guildId), String(userId), String(fromDay), String(toDay));
+  const byDay = new Map(rows.map(r => [r.day, Number(r.count) || 0]));
+  const series = [];
+  for (let day = fromDay; day <= toDay; day = nextDay(day)) {
+    series.push({ day, count: byDay.get(day) || 0 });
+  }
+  return series;
+}
+
+function nextDay(key) {
+  const d = new Date(key + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function getGuildData(guildId) {
   const database = getDb();
   const users = {};
@@ -230,4 +261,4 @@ function getTargetCounts(guildId, cycleKey) {
   return { users };
 }
 
-module.exports = { getDb, getGuildData, getAllData, getLastAcceptedAt, markAccepted, recordLucy, resetChallenge, getTargetCounts };
+module.exports = { getDb, getGuildData, getAllData, getLastAcceptedAt, markAccepted, recordLucy, resetChallenge, getTargetCounts, firstDayForUser, dailySeries, nextDay };

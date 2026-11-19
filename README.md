@@ -256,6 +256,30 @@ diblokir hanya board per server.
 - d lservers [halaman] — leaderboard all-time per server (alias: d lserver).
 - d lucytarget on|off, d lucytarget target on|off, d lucytarget set <jumlah>, d lucytarget message <pesan>, d lucytarget status — pengaturan Target Lucy (moderator/admin).
 
+## Chart detak jantung (`d chart`)
+
+`d chart` mengirim **gambar PNG** berisi grafik garis gaya monitor detak jantung
+untuk "say Lucy". Garisnya kurva halus dengan glow, dan hari tanpa aksi turun ke
+garis dasar — jadi jeda terlihat sebagai garis datar, bukan dilewati.
+
+```
+d chart                 # 7 hari terakhir (default)
+d chart 30d             # 30 hari
+d chart -sincestart     # sejak catatan PERTAMA user itu di server ini
+d chart @user 14d       # orang lain
+```
+
+Catatan perilaku:
+
+- `-sincestart` memakai hari pertama **user tersebut**, bukan hari pertama server.
+  Kalau user belum pernah tercatat, bot membalas teks (bukan gambar kosong).
+- Rentang di bawah 7 hari dilebarkan ke 7 titik supaya chart tetap terbaca. Hari
+  sebelum data pertama bernilai nol, jadi tidak ada data yang dikarang.
+- Rentang panjang diagregasi otomatis: di atas 62 hari per minggu, di atas 130
+  hari per bulan. Total pada judul tetap jumlah keseluruhan.
+- Render memakai `@napi-rs/canvas` (binary prebuilt, tanpa compiler). Warna
+  mengikuti token dashboard (`#10131b`, `#a6f36b`).
+
 ## Animal Dex
 Menangkap kartu **"Informasi animal"** yang dikirim bot Lucy (pesan Components V2) secara otomatis, lalu menyimpannya ke database SQLite (`data/animal-dex.db`). Dex bersifat **global** — satu entri per nama hewan, digabung dari semua server (hewan yang sama tidak diduplikasi antar server). Setiap kali bot Lucy mengirim/memperbarui kartu animal, datanya di-*upsert* per nama hewan sehingga dex selalu terbarui. Database skema lama (per-server) dimigrasikan otomatis ke global saat pertama dijalankan.
 - d dex [nama...] — tampilkan detail satu atau beberapa hewan sekaligus.

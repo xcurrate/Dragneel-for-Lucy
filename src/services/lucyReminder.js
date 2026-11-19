@@ -13,11 +13,12 @@
 // aksi itu, lalu memasang pengingat. Setelah durasi habis, bot mengirim pesan
 // pengingat. Anggota mengatur cara ping (tag/reply/tanpa keduanya) lewat kotak
 // interaksi `lreminder`.
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
 const { parseIndonesianDate, parseIndonesianDateRange, parseClockSpan, formatClockSpan, counterOffNotice, navRow } = require('./lucyCounter');
+const chart = require('./lucyChart');
 const trigger = require('../utils/lucyTrigger');
 const reminderResolve = require('../utils/reminderResolve');
 const reminderVariables = require('../utils/reminderVariables');
@@ -616,6 +617,75 @@ function statsEmbed({ name, stats, rangeText, subtitle }) {
     .setFooter({ text: `${rangeText}${subtitle ? ' • ' + subtitle : ''} • Server ini (WIB)` });
 }
 
+// `d chart` / `d grafik` — gambar detak jantung "say Lucy" untuk satu orang.
+// Bentuk: `d chart [user] [rentang]`, rentang `7d`/`30d` atau `-sincestart`.
+async function handleChartCommand(message, prefix, parts) {
+  const { userId, rest } = parseStatsTarget(parts.slice(1), message);
+  const rangeText = rest.join(' ').trim().toLowerCase();
+  const self = userId === message.author.id;
+  const name = self
+    ? (message.member?.displayName || message.author.username || 'Kamu')
+    : (message.guild?.members?.cache?.get?.(userId)?.displayName
+      || message.mentions?.users?.get?.(userId)?.username
+      || store.getUserName(message.guildId, userId)
+      || `<@${userId}>`);
+
+  const today = dayKey();
+  const sinceStart = ['-sincestart', 'sincestart', 'all', 'semua'].includes(rangeText);
+
+  let fromDay;
+  let rangeLabel;
+  if (sinceStart) {
+    const first = lucyStore.firstDayForUser(message.guildId, userId);
+    if (!first) {
+      await message.reply({
+        content: self
+          ? `Kamu belum punya catatan "say Lucy" di server ini.`
+          : `**${name}** belum punya catatan "say Lucy" di server ini.`,
+        allowedMentions: { parse: [] }
+      });
+      return true;
+    }
+    fromDay = first;
+    rangeLabel = `sejak ${formatIndonesianDate(first)}`;
+  } else {
+    const match = rangeText.match(/^(\d{1,4})\s*(d|hari|h)?$/);
+    const days = match ? Math.max(1, Number(match[1])) : 7;
+    if (!match && rangeText && !/^(default|7d)$/.test(rangeText)) {
+      await message.reply({
+        content: `Rentang tidak dikenali: **${rangeText}**.\n` +
+          `Contoh: \`${prefix} chart\`, \`${prefix} chart 30d\`, \`${prefix} chart -sincestart\`, ` +
+          `\`${prefix} chart @user 14d\`.`,
+        allowedMentions: { parse: [] }
+      });
+      return true;
+    }
+    fromDay = dayKey(new Date(Date.now() - (days - 1) * 86400000));
+    rangeLabel = `${days} hari terakhir`;
+  }
+
+  // Chart terlalu pendek sulit dibaca; rentangkan ke minimal 7 hari. Hari
+  // sebelum catatan pertama bernilai nol, jadi tidak mengarang data.
+  const minFrom = dayKey(new Date(Date.now() - 6 * 86400000));
+  if (fromDay > minFrom) fromDay = minFrom;
+
+  const series = lucyStore.dailySeries(message.guildId, userId, fromDay, today);
+  if (!series.some(point => point.count > 0)) {
+    await message.reply({
+      content: `Belum ada "say Lucy" tercatat untuk **${name}** pada rentang itu.`,
+      allowedMentions: { parse: [] }
+    });
+    return true;
+  }
+
+  const buffer = chart.renderLucyChart({ name, series, rangeLabel });
+  await message.reply({
+    files: [new AttachmentBuilder(buffer, { name: 'say-lucy.png' })],
+    allowedMentions: { parse: [] }
+  });
+  return true;
+}
+
 // `d stats` / `d dstats` — statistik aksi satu orang.
 // Bentuk: `d stats [user] [rentang]`, user = mention atau ID.
 async function handleStatsCommand(message, prefix, parts) {
@@ -716,7 +786,12 @@ function helpText(prefix) {
     `\`${prefix} global\` (alias \`${prefix} g\`) — leaderboard lintas server, default jumlah LUCY`,
     `  contoh: \`${prefix} g\`, \`${prefix} g pray\`, \`${prefix} g battle 7d\``,
     `\`${prefix} lcount\` / \`${prefix} lcountall\` — leaderboard Lucy harian / all-time (dengan tombol)`,
-    `\`${prefix} s count on|off\` — sakelar counter Lucy seluruh server (admin/developer)`
+    `\`${prefix} s count on|off\` — sakelar counter Lucy seluruh server (admin/developer)`,
+    '',
+    '**Chart**',
+    `\`${prefix} chart [user] [rentang]\` — gambar detak jantung "say Lucy"`,
+    `  tanpa rentang = 7 hari terakhir; \`30d\` = 30 hari; \`-sincestart\` = sejak catatan pertama user`,
+    `  contoh: \`${prefix} chart\`, \`${prefix} chart 30d\`, \`${prefix} chart -sincestart\``
   ].join('\n');
 }
 
@@ -737,6 +812,7 @@ async function handleCommand(message) {
     return handleLeaderboardCommand(message, prefix, parts, { forceGlobal: command === 'tglobal' || command === 'tall' });
   }
   if (['stats', 'stat', 'dstats', 'statistik', 'mystats'].includes(command)) return handleStatsCommand(message, prefix, parts);
+  if (['chart', 'grafik', 'lchart'].includes(command)) return handleChartCommand(message, prefix, parts);
   if (['lucyprefix', 'lprefix', 'lucyconfig', 'lconfig'].includes(command)) return handleLucyPrefixCommand(message, prefix, parts);
   return false;
 }
