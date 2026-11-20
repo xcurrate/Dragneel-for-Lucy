@@ -299,7 +299,7 @@ selalu memberi hasil yang sama.
 
 ```
 d team new Alpha                      # buat tim
-d team add 1 snail level=50 weapon=gs # isi slot 1 dari hewan dex
+d team add 1 snail level=50 weapon=gs passive=12 # slot 1 + Great Sword + Critical
 d team add 2 hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=40   # atau stat manual
 d team pick Alpha                     # jadikan tim aktif (bisa lewat tombol)
 d sim -m 500 -s 42                    # 500 pertarungan, seed 42
@@ -312,7 +312,7 @@ Perintah:
 | `d team list` | daftar tim + tombol pilih tim |
 | `d team new/pick/show/del/rename` | kelola tim (maks 10 tim, 3 slot) |
 | `d team add <slot> <hewan\|stat> [opsi]` | isi slot; opsi `level=`, `weapon=`, `quality=`, `passive=`, `label=` |
-| `dtm s <senjata> [pasif...] [slot]` | pasang atau ganti senjata pada slot yang sudah terisi |
+| `dtm s <senjata> <pasif> [slot]` | pasang atau ganti senjata pada slot yang sudah terisi |
 | `d team clear <slot>` | kosongkan slot |
 | `d sim [lawan] [-m n] [-s seed] [-qp q] [-qe q]` | simulasi; lawan bisa nama tim, hewan dex, atau stat manual |
 | `d sim 1 vs blitz` | bentuk `vs` juga diterima, memakai tim setelah kata `vs` sebagai lawan |
@@ -328,26 +328,29 @@ hewan, level, dan statnya. `dtm s` hanya menyentuh kolom senjata: level, stat,
 dan label hewan di slot itu tetap.
 
 ```
-dtm s gsword           # Great Sword ke slot 1
 dtm s sword crit       # Great Sword + pasif Critical ke slot 1
-dtm s gsword 2         # Great Sword ke slot 2
 dtm s sword crit 2     # Great Sword + Critical ke slot 2
-dtm s orb crit th 1    # Orb of Potency punya 2 slot pasif
+dtm s orb crit th 1    # Orb of Potency: pasifnya 2, jadi sebut dua
+dtm s rune             # Rune of the Forgotten: justru tanpa pasif
 ```
 
 Aturannya:
 
 - **Slot default 1.** Angka `1`-`3` di akhir argumen dianggap nomor slot, jadi
-  `dtm s gsword 2` memasang ke slot 2, bukan slot 1 dengan pasif "2".
+  `dtm s gsword crit 2` memasang ke slot 2, bukan slot 1 dengan pasif "2".
 - **Nama lengkap maupun singkatan diterima.** `sword`, `gs`, dan `gsword` sama
   sama menunjuk Great Sword; `crit` sama dengan Critical.
-- **Jumlah pasif mengikuti senjata.** Tiap senjata punya `passiveCount` (Great
-  Sword 1, Orb of Potency 2). Menyebut lebih banyak ditolak, bukan dipotong.
-- **Tanpa nama pasif, pasif diundi** saat simulasi dengan RNG ber-seed, sama
-  seperti perilaku `d team add` tanpa `passive=`.
+- **Pasif wajib, persis sebanyak `passiveCount`.** OwO tidak memberi pasif acak
+  saat senjata dipasang, jadi senjata berpasif tidak boleh dipasang kosong:
+  Great Sword selalu butuh 1 pasif, Orb of Potency 2. Kurang atau lebih
+  sama-sama ditolak, bukan dipotong atau diundi.
+- **Pengecualian: senjata yang memang tanpa pasif.** Hanya Rune of the
+  Forgotten (`passiveCount` 0), dan ia justru ditolak kalau diberi pasif.
 - **Mengganti senjata mempertahankan `quality=` slot.** Tier yang sudah diatur
   tidak hilang diam-diam.
-- **Slot harus sudah berisi hewan.** `dtm s bow 3` pada slot kosong ditolak.
+- **Slot harus sudah berisi hewan.** `dtm s bow crit 3` pada slot kosong ditolak.
+- **`d team add ... weapon=` mengikuti aturan yang sama.** `weapon=gs` tanpa
+  `passive=` ditolak; `weapon=rune` diterima tanpa `passive=`.
 
 Senjata dan pasif yang namanya dikenal tetapi mekaniknya belum ada dijawab
 "belum punya mekanik simulasi", bukan "tidak dikenal". Daftarnya ada di
@@ -391,7 +394,7 @@ berubah setiap kali `d team show` dibuka.
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
 penentuannya: `quality=` di slot, lalu flag `-qp`/`-qe` saat simulasi, lalu
-**default tier tertinggi (100 = Fabled)**. Jadi `d team add 1 snail weapon=gs`
+**default tier tertinggi (100 = Fabled)**. Jadi `d team add 1 snail weapon=gs passive=12`
 langsung memakai Great Sword Fabled, dan ikon `fgreatsword` yang tampil di
 `d team show` memang senjata yang dipakai `d sim` — bukan roll terpisah.
 Pasif senjata ikut tier yang sama.

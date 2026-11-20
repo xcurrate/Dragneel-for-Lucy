@@ -102,7 +102,30 @@ function parseWeaponArgs(args) {
     }
     return { error: `Pasif \`${token}\` tidak dikenal. Contoh: ${passiveNames()}.` };
   }
+  const weaponDef = data.weapons().find(w => w.id === weapon.weaponId);
+  const countError = validatePassiveCount(weaponDef, passives);
+  if (countError) return { error: countError };
+
   return { slot, weaponId: weapon.weaponId, passives };
+}
+
+// OwO selalu memberi senjata tepat `passiveCount` pasif, tidak lebih dan tidak
+// kurang. Jadi senjata berpasif tidak boleh dipasang kosong, dan senjata tanpa
+// pasif (Rune of the Forgotten) tidak boleh diberi pasif.
+function validatePassiveCount(weapon, passives) {
+  if (!weapon) return null;
+  const limit = weapon.passiveCount ?? 0;
+  const given = passives.length;
+  if (given === limit) return null;
+
+  if (limit === 0) {
+    return `**${weapon.name}** tidak punya pasif, jadi jangan sebutkan pasif. Cukup \`dtm s ${weapon.aliases[0]}\`.`;
+  }
+  if (given === 0) {
+    const need = limit === 1 ? '1 pasif' : `${limit} pasif`;
+    return `**${weapon.name}** butuh ${need}. Contoh: \`dtm s ${weapon.aliases[0]} ${'crit'}${limit > 1 ? ' th' : ''}\`.`;
+  }
+  return `**${weapon.name}** punya ${limit} slot pasif, kamu menyebut ${given}.`;
 }
 
 // Nama pasif yang punya mekanik, dipakai untuk pesan bantuan.
@@ -251,6 +274,12 @@ function handleAdd(message, rest, prefix, send, guildId, userId) {
     ? (options.passive || options.passives).split(',').map(v => Number(v.trim())).filter(Number.isInteger)
     : undefined;
 
+  if (weapon.weaponId) {
+    const weaponDef = data.weapons().find(w => w.id === weapon.weaponId);
+    const countError = validatePassiveCount(weaponDef, passives || []);
+    if (countError) return say(send, message, `❌ ${countError}`);
+  }
+
   const payload = {
     level,
     label: options.label || null,
@@ -295,7 +324,7 @@ function handleWeaponCommand(message, rest, prefix, send, guildId, userId) {
 
   const parsed = parseWeaponArgs(rest);
   if (parsed.error) {
-    return say(send, message, `❌ ${parsed.error}\nContoh: \`${prefix}tm s gsword\`, \`${prefix}tm s sword crit 2\`.`);
+    return say(send, message, `❌ ${parsed.error}`);
   }
 
   const weapon = data.weapons().find(w => w.id === parsed.weaponId);
@@ -305,12 +334,6 @@ function handleWeaponCommand(message, rest, prefix, send, guildId, userId) {
   if (unsupported.length) {
     const names = unsupported.map(id => passiveData.get(id)?.name || `#${id}`).join(', ');
     return say(send, message, `❌ Pasif ${names} belum punya mekanik simulasi. Pakai salah satu: ${passiveNames()}.`);
-  }
-
-  // Jumlah pasif dibatasi passiveCount senjata, sama seperti roll otomatis.
-  const limit = weapon.passiveCount ?? 1;
-  if (parsed.passives.length > limit) {
-    return say(send, message, `❌ **${weapon.name}** hanya punya ${limit} slot pasif, kamu menyebut ${parsed.passives.length}.`);
   }
 
   // Quality slot dipertahankan saat mengganti senjata, supaya tier yang sudah
@@ -329,7 +352,7 @@ function handleWeaponCommand(message, rest, prefix, send, guildId, userId) {
   const rank = emoji.rankEmoji(quality);
   const passiveText = parsed.passives.length
     ? parsed.passives.map(id => `${emoji.passiveEmoji(id, quality)} ${passiveData.get(id).name}`).join(', ')
-    : 'otomatis (diundi saat simulasi)';
+    : 'tanpa pasif (senjata ini memang tidak punya pasif)';
 
   return say(send, message, `✅ Slot ${parsed.slot} tim **${team.name}**: ${rank}${icon} **${weapon.name}**\n` +
     `Pasif: ${passiveText}`);
