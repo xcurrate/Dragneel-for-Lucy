@@ -320,6 +320,21 @@ Semua balasan `d team` dan `d sim` berupa embed. Ikon hewan, senjata, pasif, dan
 stat diambil dari emoji OwO; emoji itu di-mirror ke aplikasi bot sekali saat start
 (mekanisme yang sama dengan dex), lalu dibaca dari cache.
 
+### Level
+
+Hewan yang dimasukkan ke tim tanpa `level=` memakai level **50**. Saat
+simulasi, `lvl` menimpa level tanpa mengubah data tim:
+
+| Argumen | Tim kamu | Lawan |
+| --- | --- | --- |
+| `lvl100` | 100 | 100 |
+| `lvl100/60` | 100 | 60 |
+| `lvl/40` | level tersimpan | 40 |
+
+`level=` di lawan (mis. `d sim snail level=60`) tetap menang atas `lvl`, karena
+lebih spesifik. Bentuk `lvl` yang salah (`lvl`, `lvl0`, `lvlabc`, `lvl9999`)
+dilaporkan sebagai error, bukan dianggap nama lawan.
+
 ### Tier senjata
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan

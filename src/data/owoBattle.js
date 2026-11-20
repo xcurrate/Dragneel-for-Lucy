@@ -30,6 +30,10 @@ const buffsById = new Map(data.buffs.map(b => [b.id, b]));
 // terlihat di `d team show` itulah yang dipakai `d sim`.
 const DEFAULT_QUALITY = 100;
 
+// Level default hewan saat dimasukkan ke tim, dan batas atas level.
+const DEFAULT_LEVEL = 50;
+const MAX_LEVEL = 1000;
+
 function findAnimal(query) {
   const key = String(query || '').trim().toLowerCase();
   if (!key) return null;
@@ -67,7 +71,7 @@ module.exports = {
   formulas: data.formulas,
   statOrder: data.statOrder,
   limits: data.limits,
-  DEFAULT_QUALITY,
+  DEFAULT_QUALITY, DEFAULT_LEVEL, MAX_LEVEL,
   animals: () => data.animals,
   weapons: () => data.weapons,
   buffs: () => data.buffs,

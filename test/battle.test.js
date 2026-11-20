@@ -695,6 +695,91 @@ describe('emoji battle', () => {
   });
 });
 
+describe('level default dan flag lvl', () => {
+  const { handleSimCommand, parseFlags } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+  const battleData = require(path.join(ROOT, 'src/data/owoBattle'));
+
+  let tempDir;
+  let replies;
+  const sendEmbed = (m, e) => { replies.push(e.toJSON()); };
+  const message = { guildId: 'g', author: { id: 'u' } };
+
+  function run(args) {
+    replies = [];
+    handleSimCommand(message, args, 'd', { sendEmbed });
+    return replies[0];
+  }
+
+  function composition(embed) {
+    return (embed.fields || []).find(f => f.name.toLowerCase().includes('komposisi')).value;
+  }
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-level-'));
+    process.chdir(tempDir);
+    store.createTeam('g', 'u', 'A');
+    store.setSlot('g', 'u', 'A', 1, { custom: COEFFS_STRONG, level: 50 });
+    store.createTeam('g', 'u', 'B');
+    store.setSlot('g', 'u', 'B', 1, { custom: COEFFS_WEAK, level: 70 });
+    store.setSlot('g', 'u', 'B', 2, { custom: COEFFS_WEAK, level: 20 });
+    store.setActiveTeam('g', 'u', 'A');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('level default hewan saat ditambah ke tim adalah 50', () => {
+    assert.strictEqual(battleData.DEFAULT_LEVEL, 50);
+    replies = [];
+    handleTeamCommand(message, ['add', '2', 'hp=14,att=6,pr=2,wp=3,mag=0,mr=1'], 'd', { sendEmbed });
+    assert.ok(replies[0].description.includes('level 50'));
+    assert.strictEqual(store.getTeam('g', 'u', 'A').slots.find(s => s.slot === 2).level, 50);
+  });
+
+  it('lvl<angka> menyamakan level kedua sisi', () => {
+    const body = composition(run(['B', 'lvl100']));
+    assert.ok(body.includes('Kamu:** 🐾 slot1 lv100'));
+    assert.ok(body.includes('slot1 lv100'));
+    assert.ok(!body.includes('lv70') && !body.includes('lv20'), 'level lawan ikut ditimpa');
+  });
+
+  it('lvl<n>/<m> memakai level berbeda per sisi', () => {
+    const body = composition(run(['B', 'lvl100/60']));
+    assert.ok(body.includes('Kamu:** 🐾 slot1 lv100'));
+    assert.ok(body.includes('slot1 lv60') && body.includes('slot2 lv60'));
+  });
+
+  it('lvl/<m> hanya menimpa level lawan', () => {
+    const body = composition(run(['B', 'lvl/40']));
+    assert.ok(body.includes('Kamu:** 🐾 slot1 lv50'));
+    assert.ok(body.includes('slot1 lv40') && body.includes('slot2 lv40'));
+  });
+
+  it('flag lvl tidak mengubah level tersimpan di tim', () => {
+    run(['B', 'lvl100/60']);
+    assert.deepStrictEqual(store.getTeam('g', 'u', 'A').slots.map(s => s.level), [50]);
+    assert.deepStrictEqual(store.getTeam('g', 'u', 'B').slots.map(s => s.level), [70, 20]);
+  });
+
+  it('bentuk lvl yang salah dilaporkan, bukan dianggap nama lawan', () => {
+    for (const bad of [['lvl'], ['lvl0'], ['lvlabc'], ['lvl9999'], ['lvl100/abc']]) {
+      const embed = run(bad);
+      assert.ok(embed.description.includes('Format level salah'), bad.join(' '));
+      assert.strictEqual(embed.color, 0xED4245);
+    }
+  });
+
+  it('token lvl tidak masuk ke daftar argumen lawan', () => {
+    const { rest, flags } = parseFlags(['B', 'lvl100/60', '-m', '5']);
+    assert.deepStrictEqual(rest, ['B']);
+    assert.deepStrictEqual(flags.lvl, { player: '100', enemy: '60' });
+    assert.strictEqual(flags['-m'], '5');
+  });
+});
+
 describe('lawan simulasi berupa tim', () => {
   const { resolveEnemy } = require(path.join(ROOT, 'src/commands/battleSim'));
   const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));

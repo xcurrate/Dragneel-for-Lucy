@@ -8,6 +8,7 @@
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const sim = require('../services/battleSim');
+const data = require('../data/owoBattle');
 const { simEmbed, renderMatchup, usageEmbed, errorEmbed } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
 
@@ -19,10 +20,44 @@ function usage(prefix = 'd') {
     `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
     '',
     'Opsi: `-m <jumlah>` (default 100, maks 1000), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+    '',
+    'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
 }
 
-// Opsi berbentuk flag: `-m 500`, `-s 42`, `-qp 80`, `-qe 50`.
+// Semua unit di satu sisi memakai level yang sama saat flag `lvl` dipakai.
+function withLevel(specs, level) {
+  if (level == null) return specs;
+  return specs.map(spec => ({ ...spec, level }));
+}
+
+// Level untuk satu sisi: angka = pakai itu, kosong = pakai level yang sudah ada.
+function levelOf(value) {
+  if (value == null || value === '') return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= data.MAX_LEVEL ? n : null;
+}
+
+// `lvl100` (kedua sisi), `lvl100/60` (kita 100, lawan 60), `lvl/40`
+// (kita tetap, lawan 40). Tanpa `lvl`, level tiap sisi tidak diubah.
+const LEVEL_PREFIX = /^-?lvl/;
+const LEVEL_PATTERN = /^-?lvl(\d*)(?:\/(\d*))?$/;
+
+function parseLevels(arg) {
+  if (!arg) return { player: undefined, enemy: undefined, invalid: false };
+  const player = levelOf(arg.player);
+  const enemy = levelOf(arg.enemy);
+  if (player === null || enemy === null) return { invalid: true };
+  // `lvl` tanpa angka sama sekali tidak mengubah apa pun, jadi dianggap salah.
+  if (player === undefined && enemy === undefined) return { invalid: true };
+  // Satu angka saja berarti kedua sisi memakai level itu.
+  if (player !== undefined && enemy === undefined && arg.enemy === undefined) {
+    return { player, enemy: player, invalid: false };
+  }
+  return { player, enemy, invalid: false };
+}
+
+// Opsi berbentuk flag: `-m 500`, `-s 42`, `-qp 80`, `-qe 50`, `lvl100/60`.
 function parseFlags(args) {
   const flags = {};
   const rest = [];
@@ -31,6 +66,13 @@ function parseFlags(args) {
     if (['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe'].includes(arg)) {
       flags[arg] = args[i + 1];
       i++;
+      continue;
+    }
+    // Token berawalan `lvl` selalu dianggap flag level, supaya bentuk yang
+    // salah tidak diam-diam jadi nama lawan.
+    if (LEVEL_PREFIX.test(arg)) {
+      const level = LEVEL_PATTERN.exec(arg);
+      flags.lvl = level ? { player: level[1], enemy: level[2] } : { malformed: arg };
       continue;
     }
     rest.push(args[i]);
@@ -56,6 +98,10 @@ function handleSimCommand(message, args, prefix, deps = {}) {
   }
 
   const { flags, rest } = parseFlags(args);
+  const levels = parseLevels(flags.lvl);
+  if (levels.invalid || flags.lvl?.malformed) {
+    return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
+  }
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 100;
   if (!Number.isFinite(Number(runs)) || Number(runs) < 1 || Number(runs) > 1000) {
     return send(message, errorEmbed('Jumlah simulasi harus 1-1000. Contoh: `d sim -m 500`.'));
@@ -74,10 +120,14 @@ function handleSimCommand(message, args, prefix, deps = {}) {
   const player = resolveTeamSpecs(team);
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
-  const enemy = resolveEnemy(guildId, userId, rest);
+  const enemy = resolveEnemy(guildId, userId, rest, levels.enemy);
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
-  const result = sim.simulate(player.specs, enemy.specs, {
+  // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
+  const playerSpecs = withLevel(player.specs, levels.player);
+  const enemySpecs = withLevel(enemy.specs, levels.enemy);
+
+  const result = sim.simulate(playerSpecs, enemySpecs, {
     runs: Number(runs),
     seed: seed != null ? Number(seed) : undefined,
     playerQuality,
@@ -87,7 +137,7 @@ function handleSimCommand(message, args, prefix, deps = {}) {
   return send(message, simEmbed(result, {
     playerLabel: team.name,
     enemyLabel: enemy.label,
-    matchup: renderMatchup(player.specs, enemy.specs),
+    matchup: renderMatchup(playerSpecs, enemySpecs),
   }));
 }
 
@@ -101,7 +151,7 @@ function resolveTeamSpecs(team) {
 }
 
 // Menentukan lawan: tim lain, hewan dex, atau stat manual.
-function resolveEnemy(guildId, userId, args) {
+function resolveEnemy(guildId, userId, args, overrideLevel) {
   const { options, rest } = parseOptions(args);
   const raw = rest.join(' ').trim();
 
@@ -139,7 +189,8 @@ function resolveEnemy(guildId, userId, args) {
     return { specs: specs.specs, label: ownTeam.name };
   }
 
-  const level = options.level ? Number(options.level) : 60;
+  // `level=` eksplisit menang atas flag `lvl`, karena lebih spesifik.
+  const level = options.level ? Number(options.level) : (overrideLevel ?? 60);
   const looksLikeStats = raw.includes('=') || /^[\d\s,-]+$/.test(raw);
   if (looksLikeStats) {
     const parsed = sim.parseCustomStats(raw);

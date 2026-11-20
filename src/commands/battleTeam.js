@@ -16,6 +16,7 @@ const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const sim = require('../services/battleSim');
 const data = require('../data/owoBattle');
+const { DEFAULT_LEVEL, MAX_LEVEL } = data;
 const {
   teamEmbed, teamListEmbed, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
@@ -31,7 +32,7 @@ function usage(prefix = 'd') {
     `\`${prefix} team clear <slot>\` — kosongkan slot`,
     `\`${prefix} team del <nama>\` / \`${prefix} team rename <lama> <baru>\``,
     '',
-    'Opsi slot: `level=50`, `weapon=gsword`, `quality=80`, `passive=1,12`, `label=tank`',
+    'Opsi slot: `level=50` (default 50), `weapon=gsword`, `quality=80`, `passive=1,12`, `label=tank`',
     'Stat manual: `hp=14,att=6,pr=2,wp=3,mag=0,mr=1` atau `14,6,2,3,0,1`',
   ].join('\n');
 }
@@ -173,8 +174,8 @@ function handleAdd(message, rest, prefix, send, guildId, userId) {
   const { options, rest: body } = parseOptions(rest.slice(1));
   if (!body.length) return say(send, message, `Sebutkan hewan dex atau stat manual. Contoh: \`${prefix} team add ${slot} snail level=50 weapon=gsword\``);
 
-  const level = options.level ? Number(options.level) : 1;
-  if (options.level && (!Number.isFinite(level) || level < 1 || level > 1000)) {
+  const level = options.level ? Number(options.level) : DEFAULT_LEVEL;
+  if (options.level && (!Number.isFinite(level) || level < 1 || level > MAX_LEVEL)) {
     return say(send, message, 'Level harus 1-1000.');
   }
 
