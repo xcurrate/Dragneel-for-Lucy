@@ -468,7 +468,8 @@
         "<:fshield:546552026084016149>"
       ],
       "aliases": [
-        "shield"
+        "shield",
+        "aegis"
       ],
       "type": "TAUNT",
       "qualityList": [],
@@ -564,7 +565,9 @@
       "aliases": [
         "pdagger",
         "poison",
-        "dagger"
+        "dagger",
+        "pdag",
+        "pd"
       ],
       "type": "PHYSICAL",
       "qualityList": [
@@ -755,7 +758,8 @@
       "aliases": [
         "scepter",
         "arcane",
-        "ascepter"
+        "ascepter",
+        "ascept"
       ],
       "type": "MANA",
       "qualityList": [
@@ -867,7 +871,8 @@
       "aliases": [
         "banner",
         "vanguard",
-        "vbanner"
+        "vbanner",
+        "vban"
       ],
       "type": "BUFF",
       "qualityList": [],
@@ -900,7 +905,11 @@
       ],
       "aliases": [
         "cscythe",
-        "culling"
+        "culling",
+        "sythe",
+        "csyth",
+        "csy",
+        "scythe"
       ],
       "type": "PHYSICAL",
       "qualityList": [
@@ -938,7 +947,8 @@
       ],
       "aliases": [
         "crune",
-        "celebration"
+        "celebration",
+        "cel"
       ],
       "type": "BUFF",
       "qualityList": [],
@@ -1011,7 +1021,9 @@
       ],
       "aliases": [
         "lscythe",
-        "leeching"
+        "leeching",
+        "lsyth",
+        "lsy"
       ],
       "type": "PHYSICAL",
       "qualityList": [

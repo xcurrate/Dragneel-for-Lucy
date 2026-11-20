@@ -10,7 +10,10 @@ const byId = new Map();
 const byName = new Map();
 for (const passive of data.passives) {
   byId.set(passive.id, passive);
-  byName.set(passive.name.toLowerCase(), passive);
+  for (const key of [passive.name, ...(passive.aliases || [])]) {
+    const k = String(key).toLowerCase();
+    if (!byName.has(k)) byName.set(k, passive);
+  }
 }
 
 // Nilai stat untuk satu quality (0-100). Sama dengan PassiveInterface.toStats,

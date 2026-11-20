@@ -335,6 +335,25 @@ simulasi, `lvl` menimpa level tanpa mengubah data tim:
 lebih spesifik. Bentuk `lvl` yang salah (`lvl`, `lvl0`, `lvlabc`, `lvl9999`)
 dilaporkan sebagai error, bukan dianggap nama lawan.
 
+### Tampilan `d team show`
+
+Tiap slot jadi satu blok, mengikuti format OwO: nomor slot, level, emoji hewan,
+nama, lalu stat final yang benar-benar dipakai simulasi.
+
+```
+[1] L.100 <a:lobbot:...> lobbot
+<:hp:...> `1200` <:wp:...> `780`
+<:att:...> `600` <:mg:...> `600`
+<:pr:...> `72%` <:mr:...> `72%`
+<a:fabled:...><:frstaff:...><:fhgen:...><:fhgen:...> 100%
+```
+
+Baris terakhir adalah rank, senjata, lalu pasif beserta quality-nya. Slot kosong
+hanya menampilkan perintah pengisiannya. Angka dihitung dengan `buildUnit` yang
+sama dengan `d sim`, jadi tidak ada selisih antara yang tampil dan yang bertarung.
+Pasif yang tidak disimpan di slot diundi dengan seed tetap, supaya tampilan tidak
+berubah setiap kali `d team show` dibuka.
+
 ### Tier senjata
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
@@ -362,6 +381,9 @@ memengaruhi hasil pertarungan.
 - `src/data/owoBattle.js` — 20 hewan, 22 senjata, 12 buff, plus formula.
   Angkanya dibaca langsung dari tabel OwO, bukan perkiraan.
 - `src/data/owoPassives.json` — 21 pasif (lihat bagian di bawah).
+- `src/data/owoPending.json` — senjata/pasif yang nama dan alias-nya sudah
+  dikenal tetapi stat serta ability-nya belum ada. Dipakai agar input seperti
+  `weapon=cstaff` dijawab "belum punya data simulasi", bukan "tidak dikenal".
 - `src/services/battleEngine.js` — turn loop, damage, resistensi, heal, WP.
 - `src/services/battleWeapon.js` — ability 22 senjata.
 - `src/services/battleBuffs.js` — 12 buff/debuff.

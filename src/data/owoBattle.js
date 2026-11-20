@@ -4,6 +4,7 @@
 // Angka di `owoBattle.json` dibaca dari kode `battle/` lalu divalidasi dengan
 // menjalankan class aslinya, bukan dari dokumentasi.
 const data = require('./owoBattle.json');
+const pending = require('./owoPending.json');
 
 const animalsByName = new Map();
 const animalAliases = new Map();
@@ -40,10 +41,26 @@ function findAnimal(query) {
   return animalsByName.get(key) || animalAliases.get(key) || null;
 }
 
+// Senjata yang namanya sudah dikenal tapi mekaniknya belum ada di
+// `owoBattle.json`. Dipisah supaya pesan errornya jelas, bukan "tidak dikenal".
+const pendingWeaponsByAlias = new Map();
+for (const weapon of pending.weapons) {
+  for (const key of [weapon.name, ...(weapon.aliases || [])]) {
+    const k = String(key).toLowerCase();
+    if (!pendingWeaponsByAlias.has(k)) pendingWeaponsByAlias.set(k, weapon);
+  }
+}
+
 function findWeapon(query) {
   const key = String(query || '').trim().toLowerCase();
   if (!key) return null;
   return weaponsByAlias.get(key) || null;
+}
+
+function findPendingWeapon(query) {
+  const key = String(query || '').trim().toLowerCase();
+  if (!key) return null;
+  return pendingWeaponsByAlias.get(key) || null;
 }
 
 // Stat dasar hewan pada level tertentu. Mengikuti animalUtil.parseStats.
@@ -78,6 +95,8 @@ module.exports = {
   buffById: id => buffsById.get(Number(id)) || null,
   findAnimal,
   findWeapon,
+  findPendingWeapon,
+  pending,
   baseStats,
   statsFromArray,
 };

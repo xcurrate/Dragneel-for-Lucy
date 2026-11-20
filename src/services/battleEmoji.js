@@ -14,6 +14,18 @@ const dex = require('./animalDex');
 const RANK_THRESHOLDS = [0.2, 0.2, 0.2, 0.2, 0.14, 0.05, 0.01];
 const RANK_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Mythical', 'Legendary', 'Fabled'];
 
+// Token asli OwO; setelah mirror, `resolve` mengembalikan token aplikasi bot.
+const RANK_TOKENS = [
+  '<:common:416520037713838081>',
+  '<:uncommon:416520056269176842>',
+  '<:rare:416520066629107712>',
+  '<:epic:416520722987614208>',
+  '<:mythic:416520808501084162>',
+  '<a:legendary:417955061801680909>',
+  '<a:fabled:438857004493307907>',
+];
+const RANK_FALLBACK = ['⚪', '🟢', '🔵', '🟣', '🟠', '🟡', '🔴'];
+
 const FALLBACK = { weapon: '⚔️', passive: '✨', animal: '🐾', stat: '•' };
 
 function rankIndex(quality) {
@@ -28,6 +40,11 @@ function rankIndex(quality) {
 
 function rankName(quality) {
   return RANK_NAMES[rankIndex(quality)];
+}
+
+function rankEmoji(quality) {
+  const index = rankIndex(quality);
+  return resolve(RANK_TOKENS[index], RANK_FALLBACK[index]);
 }
 
 // Token hasil mirror bila sudah ada, kalau belum pakai emoji unicode supaya
@@ -85,6 +102,7 @@ function allTokens() {
   const tokens = [];
   for (const weapon of data.weapons()) tokens.push(...(weapon.emojis || []));
   for (const passive of passiveData.passives) tokens.push(...(passive.emojis || []));
+  tokens.push(...RANK_TOKENS);
   tokens.push(...Object.values(dex.STAT_ICONS));
   return [...new Set(tokens)];
 }
@@ -94,7 +112,7 @@ async function syncEmojis() {
 }
 
 module.exports = {
-  RANK_NAMES, rankIndex, rankName,
+  RANK_NAMES, RANK_TOKENS, rankIndex, rankName, rankEmoji,
   weaponEmoji, passiveEmoji, animalEmoji, statIcon, allTokens, syncEmojis,
   weaponToken, passiveToken,
 };

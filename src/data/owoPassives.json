@@ -41,6 +41,9 @@
       ],
       "hooks": [
         "alterStats"
+      ],
+      "aliases": [
+        "str"
       ]
     },
     {
@@ -66,7 +69,8 @@
       ],
       "hooks": [
         "alterStats"
-      ]
+      ],
+      "aliases": []
     },
     {
       "id": 3,
@@ -91,6 +95,9 @@
       ],
       "hooks": [
         "alterStats"
+      ],
+      "aliases": [
+        "hp"
       ]
     },
     {
@@ -116,6 +123,9 @@
       ],
       "hooks": [
         "alterStats"
+      ],
+      "aliases": [
+        "wp"
       ]
     },
     {
@@ -141,6 +151,9 @@
       ],
       "hooks": [
         "alterStats"
+      ],
+      "aliases": [
+        "pr"
       ]
     },
     {
@@ -166,6 +179,9 @@
       ],
       "hooks": [
         "alterStats"
+      ],
+      "aliases": [
+        "mr"
       ]
     },
     {
@@ -191,6 +207,9 @@
       ],
       "hooks": [
         "postAttack"
+      ],
+      "aliases": [
+        "ls"
       ]
     },
     {
@@ -216,6 +235,9 @@
       ],
       "hooks": [
         "postAttacked"
+      ],
+      "aliases": [
+        "th"
       ]
     },
     {
@@ -241,6 +263,10 @@
       ],
       "hooks": [
         "postAttack"
+      ],
+      "aliases": [
+        "mtap",
+        "manatap"
       ]
     },
     {
@@ -266,6 +292,9 @@
       ],
       "hooks": [
         "postHealed"
+      ],
+      "aliases": [
+        "absv"
       ]
     },
     {
@@ -291,6 +320,9 @@
       ],
       "hooks": [
         "attacked"
+      ],
+      "aliases": [
+        "sg"
       ]
     },
     {
@@ -321,6 +353,9 @@
       "hooks": [
         "attack",
         "heal"
+      ],
+      "aliases": [
+        "crit"
       ]
     },
     {
@@ -346,6 +381,9 @@
       ],
       "hooks": [
         "postReplenished"
+      ],
+      "aliases": [
+        "dc"
       ]
     },
     {
@@ -371,6 +409,11 @@
       ],
       "hooks": [
         "postAttacked"
+      ],
+      "aliases": [
+        "kkaze",
+        "kamikaze",
+        "kk"
       ]
     },
     {
@@ -396,6 +439,11 @@
       ],
       "hooks": [
         "postTurn"
+      ],
+      "aliases": [
+        "hgen",
+        "regen",
+        "regeneration"
       ]
     },
     {
@@ -421,6 +469,11 @@
       ],
       "hooks": [
         "postTurn"
+      ],
+      "aliases": [
+        "wgen",
+        "energ",
+        "energize"
       ]
     },
     {
@@ -446,6 +499,9 @@
       ],
       "hooks": [
         "healed"
+      ],
+      "aliases": [
+        "sprt"
       ]
     },
     {
@@ -471,6 +527,9 @@
       ],
       "hooks": [
         "attack"
+      ],
+      "aliases": [
+        "enra"
       ]
     },
     {
@@ -500,6 +559,10 @@
       ],
       "hooks": [
         "postAttacked"
+      ],
+      "aliases": [
+        "sac",
+        "sacrifice"
       ]
     },
     {
@@ -525,7 +588,8 @@
       ],
       "hooks": [
         "postAttack"
-      ]
+      ],
+      "aliases": []
     },
     {
       "id": 21,
@@ -548,7 +612,12 @@
           15
         ]
       ],
-      "hooks": []
+      "hooks": [],
+      "aliases": [
+        "kno",
+        "knowledge",
+        "n"
+      ]
     }
   ]
 }

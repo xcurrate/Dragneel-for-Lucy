@@ -500,10 +500,36 @@ describe('embed UI', () => {
     assert.ok(json.color === panel.COLOR.ok, 'tim aktif memakai warna hijau');
   });
 
-  it('teamEmbed menandai slot kosong', () => {
+  it('teamEmbed menandai slot kosong dengan perintah pengisian', () => {
     const json = panel.teamEmbed(team, {}).toJSON();
-    assert.ok(json.fields[1].value.includes('kosong'));
+    assert.ok(json.fields[1].value.includes('d team add 2'));
     assert.strictEqual(json.color, panel.COLOR.info);
+  });
+
+  it('teamEmbed memakai format OwO: nomor, level, emoji, nama', () => {
+    const labelled = { id: 1, name: 'Tank', slots: [{ slot: 1, label: 'lobbot', custom: COEFFS_STRONG, level: 100 }] };
+    const name = panel.teamEmbed(labelled, { prefix: 'd' }).toJSON().fields[0].name;
+    assert.match(name, /^\[1\] L\.100 /, 'diawali [slot] L.level');
+    assert.ok(name.endsWith('lobbot'), 'nama hewan/label di akhir judul');
+  });
+
+  it('teamEmbed menampilkan stat final, bukan koefisien', () => {
+    const value = panel.teamEmbed(team, {}).toJSON().fields[0].value;
+    const lines = value.split('\n');
+    assert.strictEqual(lines.length, 4, 'empat baris stat');
+    assert.match(lines[0], /\d{3,}/, 'HP/WP berupa angka besar');
+    assert.match(lines[2], /\d+%/, 'PR/MR berupa persen');
+  });
+
+  it('teamEmbed menaruh jumlah slot di footer', () => {
+    const json = panel.teamEmbed(team, { prefix: 'd', active: true }).toJSON();
+    assert.ok(json.footer.text.includes('Team 1/3'));
+  });
+
+  it('teamEmbed menampilkan rank, senjata, dan pasif beserta quality', () => {
+    const entry = { slot: 1, custom: COEFFS_STRONG, level: 100, weaponId: 14, weaponQuality: 100, passives: [15] };
+    const value = panel.teamEmbed({ id: 1, name: 'T', slots: [entry] }, {}).toJSON().fields[0].value;
+    assert.match(value, /100%$/, 'diakhiri persen quality');
   });
 
   it('teamListEmbed memberi warna peringatan saat belum ada tim', () => {
@@ -692,6 +718,72 @@ describe('emoji battle', () => {
     const json = panel.teamEmbed(team, {}).toJSON();
     assert.ok(json.fields[0].value.includes('greatsword'));
     assert.ok(json.fields[0].value.includes('lifesteal'));
+  });
+});
+
+describe('alias senjata dan pasif', () => {
+  const battleData = require(path.join(ROOT, 'src/data/owoBattle'));
+  const passives = require(path.join(ROOT, 'src/data/owoPassives'));
+
+  it('mengenali semua alias senjata dari daftar resmi', () => {
+    const cases = {
+      aegis: 'Shield', gsword: 'Great Sword', sword: 'Great Sword',
+      hstaff: 'Healing Staff', rune: 'Rune of the Forgotten', orb: 'Orb of Potency',
+      vstaff: 'Vampiric Staff', pdag: 'Poison Dagger', pd: 'Poison Dagger',
+      awand: 'Wand of Absorption', ascept: 'Arcane Scepter', scepter: 'Arcane Scepter',
+      rstaff: 'Resurrection Staff', axe: 'Glacial Axe', gaxe: 'Glacial Axe',
+      vban: 'VanguardsBanner', banner: 'VanguardsBanner', sythe: 'Culling Scythe',
+      csy: 'Culling Scythe', scythe: 'Culling Scythe', cel: 'Rune of Celebration',
+      pstaff: 'Staff of Purity', lsy: 'Leeching Scythe', ffish: 'Foul Fish',
+      lrune: 'Rune of Luck',
+    };
+    for (const [alias, name] of Object.entries(cases)) {
+      const found = battleData.findWeapon(alias);
+      assert.ok(found, `alias ${alias} dikenali`);
+      assert.strictEqual(found.name, name, alias);
+    }
+  });
+
+  it('mengenali semua alias pasif dari daftar resmi', () => {
+    const cases = {
+      str: 1, strength: 1, magic: 2, hp: 3, wp: 4, pr: 5, mr: 6,
+      ls: 7, lifesteal: 7, th: 8, thorns: 8, mtap: 9, manatap: 9,
+      absv: 10, absolve: 10, sg: 11, safeguard: 11, crit: 12, critical: 12,
+      dc: 13, discharge: 13, kk: 14, kamikaze: 14, regen: 15, regeneration: 15,
+      energ: 16, energize: 16, sprt: 17, enra: 18, sac: 19, sacrifice: 19,
+      snail: 20, kno: 21, knowledge: 21,
+    };
+    for (const [alias, id] of Object.entries(cases)) {
+      const found = passives.get(alias);
+      assert.ok(found, `pasif ${alias} dikenali`);
+      assert.strictEqual(found.id, id, alias);
+    }
+  });
+
+  it('senjata tanpa data simulasi dilaporkan belum siap, bukan tidak dikenal', () => {
+    const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
+    const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-pending-'));
+    process.chdir(tempDir);
+    store.createTeam('g', 'u', 'T');
+    store.setActiveTeam('g', 'u', 'T');
+    const replies = [];
+    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=cstaff'], 'd', {
+      sendEmbed: (m, e) => replies.push(e.toJSON()),
+    });
+    assert.ok(replies[0].description.includes('belum punya data simulasi'));
+    assert.ok(!replies[0].description.includes('tidak dikenal'));
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('data pending tetap punya nama dan alias walau mekanik belum ada', () => {
+    const pending = battleData.pending;
+    assert.ok(pending.weapons.length > 0 && pending.passives.length > 0);
+    for (const w of pending.weapons) {
+      assert.ok(w.name && w.aliases.length, `${w.name} punya alias`);
+      assert.strictEqual(battleData.findWeapon(w.aliases[0]), null, 'belum masuk data simulasi');
+      assert.ok(battleData.findPendingWeapon(w.aliases[0]), 'terdaftar sebagai pending');
+    }
   });
 });
 

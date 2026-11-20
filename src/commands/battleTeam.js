@@ -64,11 +64,15 @@ function parseOptions(args) {
 function parseWeapon(value) {
   if (!value) return { weaponId: null };
   const weapon = data.findWeapon(value);
-  if (!weapon) {
-    const names = data.weapons().map(w => w.aliases[0]).join(', ');
-    return { error: `Senjata \`${value}\` tidak dikenal. Contoh: ${names}.` };
+  if (weapon) return { weaponId: weapon.id };
+
+  // Nama/alias dikenal tetapi stat dan ability-nya belum ada di data battle.
+  const pending = data.findPendingWeapon(value);
+  if (pending) {
+    return { error: `Senjata **${pending.name}** belum punya data simulasi (stat & ability). Catat dulu, tambahkan di update berikutnya.` };
   }
-  return { weaponId: weapon.id };
+  const names = data.weapons().map(w => w.aliases[0]).join(', ');
+  return { error: `Senjata \`${value}\` tidak dikenal. Contoh: ${names}.` };
 }
 
 // Pesan singkat ditulis sebagai teks di call site; helper ini mengubahnya jadi

@@ -5,18 +5,19 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const data = require('../data/owoBattle');
 const sim = require('../services/battleSim');
+const engine = require('../services/battleEngine');
+const { createRng } = require('../services/battleRng');
 const dexStore = require('../utils/animalDexStorage');
 const emoji = require('../services/battleEmoji');
 
 const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E };
 const TEAM_BUTTON = 'battle_team_pick';
 const ID_SEP = ':';
-const STAT_ORDER = ['hp', 'att', 'pr', 'wp', 'mag', 'mr'];
-const MAX_SLOTS = 3;
+const MAX_SLOTS = data.limits.maxSlots;
 
-function statLine(coeffs) {
-  return STAT_ORDER.map(k => `${emoji.statIcon(k)} **${coeffs[k] ?? 0}**`).join(' · ');
-}
+// Seed tetap supaya stat di `d team show` tidak berubah tiap kali dibuka
+// (pasif yang tidak disimpan di slot diundi dari RNG).
+const DISPLAY_SEED = 1;
 
 function weaponName(id) {
   if (!id) return null;
@@ -30,47 +31,107 @@ function bar(value, max, size = 12) {
   return '▰'.repeat(filled) + '▱'.repeat(size - filled);
 }
 
-// Ringkasan ikon satu slot: hewan, senjata, lalu pasif.
+// Ringkasan ikon satu slot: hewan, rank senjata, senjata, lalu pasif.
 function slotIcon(entry) {
   const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
   const parts = [emoji.animalEmoji(animal)];
-  if (entry.weaponId) parts.push(emoji.weaponEmoji(entry.weaponId, entry.weaponQuality));
+  if (entry.weaponId) {
+    parts.push(emoji.rankEmoji(entry.weaponQuality ?? data.DEFAULT_QUALITY));
+    parts.push(emoji.weaponEmoji(entry.weaponId, entry.weaponQuality));
+  }
   for (const id of entry.passives || []) parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
-  return parts.join(' ');
+  return parts.join('');
 }
 
-// Satu slot jadi satu field agar stat muat tanpa terpotong.
-function slotField(entry, slot) {
-  if (!entry) return { name: `Slot ${slot}`, value: '*kosong*', inline: false };
+// Stat final satu slot, dihitung lewat mesin yang sama dengan simulasi supaya
+// angka di `d team show` persis sama dengan yang dipakai battle.
+function slotStats(entry) {
+  if (!entry) return null;
+  // Slot hanya menyimpan `animalKey`; objek dex-nya diambil dari storage.
+  const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
+  const spec = {
+    slot: entry.slot,
+    label: entry.label || entry.animalKey || `slot${entry.slot}`,
+    level: entry.level || data.DEFAULT_LEVEL,
+    coeffs: entry.custom || (animal ? sim.dexStatsToCustom(animal) : null),
+    customStats: Boolean(entry.custom),
+    animal,
+    weapon: entry.weaponId
+      ? { id: entry.weaponId, quality: entry.weaponQuality, passives: entry.passives }
+      : null,
+  };
+  if (!spec.coeffs) return null;
+  try {
+    const unit = engine.buildUnit(spec, createRng(DISPLAY_SEED), entry.weaponQuality);
+    return {
+      hp: Math.ceil(engine.maxHp(unit)),
+      wp: Math.ceil(engine.maxWp(unit)),
+      att: Math.ceil(unit.stats.att[0] + unit.stats.att[1]),
+      mag: Math.ceil(unit.stats.mag[0] + unit.stats.mag[1]),
+      pr: Math.round(engine.resToPercent(unit.stats.pr) * 100),
+      mr: Math.round(engine.resToPercent(unit.stats.mr) * 100),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Emoji senjata + pasif beserta quality, mis. `<fabled><frstaff><fhgen> 100%`.
+function weaponLine(entry) {
+  if (!entry.weaponId) return '*tanpa senjata*';
+  const quality = entry.weaponQuality ?? data.DEFAULT_QUALITY;
+  const icons = [
+    emoji.rankEmoji(quality),
+    emoji.weaponEmoji(entry.weaponId, quality),
+    ...(entry.passives || []).map(id => emoji.passiveEmoji(id, quality)),
+  ].join('');
+  return `${icons} ${quality}%`;
+}
+
+// Nama field kosong: Discord menolak nama kosong, jadi pakai karakter tak
+// terlihat supaya slot kosong hanya menampilkan perintah pengisian.
+const BLANK = '\u200b';
+
+function addHint(prefix, slot) {
+  return `*\`${prefix} team add ${slot} [level] <animal> [weapon]\`*`;
+}
+
+// Satu slot jadi satu field: judul `[1] L.100 <emoji> nama`, isi stat 4 baris.
+function slotField(entry, slot, prefix) {
+  if (!entry) return { name: BLANK, value: addHint(prefix, slot), inline: false };
 
   const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
-  const icon = emoji.animalEmoji(animal);
-  const title = entry.label || animal?.name || entry.animalKey || 'custom';
-  const quality = entry.weaponQuality;
+  const name = entry.label || animal?.name || entry.animalKey || 'custom';
+  const level = entry.level || data.DEFAULT_LEVEL;
+  const stats = slotStats(entry);
 
-  const parts = [`Level **${entry.level}**`];
-  if (entry.weaponId) {
-    const rank = emoji.rankName(quality ?? data.DEFAULT_QUALITY);
-    parts.push(`${emoji.weaponEmoji(entry.weaponId, quality)} ${weaponName(entry.weaponId)} · ${rank}`);
-  }
-  // Pasif hanya disimpan sebagai id; rank emojinya ikut quality senjata karena
-  // quality tiap pasif tidak ikut tersimpan di tim.
-  if (Array.isArray(entry.passives) && entry.passives.length) {
-    parts.push(entry.passives.map(id => emoji.passiveEmoji(id, quality)).join(' '));
-  }
-  if (entry.custom) parts.push(statLine(entry.custom));
-  return { name: `${icon} Slot ${slot} — ${title}`, value: parts.join('\n'), inline: false };
+  const body = stats
+    ? [
+      `${emoji.statIcon('hp')} \`${stats.hp}\` ${emoji.statIcon('wp')} \`${stats.wp}\``,
+      `${emoji.statIcon('att')} \`${stats.att}\` ${emoji.statIcon('mag')} \`${stats.mag}\``,
+      `${emoji.statIcon('pr')} \`${stats.pr}%\` ${emoji.statIcon('mr')} \`${stats.mr}%\``,
+      weaponLine(entry),
+    ].join('\n')
+    : '*stat tidak terbaca*';
+
+  return {
+    name: `[${slot}] L.${level} ${emoji.animalEmoji(animal)} ${name}`,
+    value: body,
+    inline: false,
+  };
 }
 
 function teamEmbed(team, { prefix = 'd', active = false } = {}) {
   const embed = new EmbedBuilder()
     .setColor(active ? COLOR.ok : COLOR.info)
     .setTitle(`🐾 ${team.name}`)
-    .setDescription(`**${team.slots.length}/${MAX_SLOTS}** slot terisi` + (active ? ' · **tim aktif**' : ''))
-    .setFooter({ text: `Isi slot: ${prefix} team add <slot> <hewan|stat> · Simulasi: ${prefix} sim` });
+    .setFooter({
+      text: `Team ${team.slots.length}/${MAX_SLOTS}${active ? ' · tim aktif' : ''}`
+        + ` · Simulasi: ${prefix} sim`,
+    });
 
   for (let slot = 1; slot <= MAX_SLOTS; slot++) {
-    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot));
+    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot, prefix));
   }
   return embed;
 }
@@ -200,8 +261,8 @@ function parseTeamButton(customId) {
 }
 
 module.exports = {
-  COLOR, STAT_ORDER, TEAM_BUTTON, MAX_SLOTS,
-  statLine, weaponName, bar, slotField, slotIcon,
+  COLOR, TEAM_BUTTON, MAX_SLOTS,
+  weaponName, bar, slotField, slotStats, slotIcon,
   teamEmbed, teamListEmbed, simEmbed, simColor, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
 };
