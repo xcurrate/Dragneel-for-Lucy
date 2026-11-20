@@ -1394,6 +1394,26 @@ describe('wiring mesin battle', () => {
     assert.ok(withRune.stats.hp[3] > plain.stats.hp[3], 'hp bonus harus naik');
   });
 
+  it('Rune of the Forgotten sesuai deskripsi resmi: 5-15% semua stat, biaya 0, tanpa ability', () => {
+    // Deskripsi: "Increase ALL stats by 5-15%, changes physical attacks to 65%
+    // STR and 65% MAG as TRUE damage. Does not have an active ability."
+    const plain = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rngModule.createRng(1));
+    for (const [q, pct] of [[0, 5], [50, 10], [100, 15]]) {
+      const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, weapon: { id: 4, quality: q } }, rngModule.createRng(1));
+      for (const key of ['att', 'mag', 'pr', 'mr']) {
+        // Slot [0] = stat dasar, [1] = bonus dari senjata/pasif.
+        const got = (unit.stats[key][0] + unit.stats[key][1]) / plain.stats[key][0];
+        assert.ok(Math.abs(got - (1 + pct / 100)) < 1e-9, `${key} q${q} harus +${pct}%, dapat ${((got - 1) * 100).toFixed(2)}%`);
+      }
+      // hp/wp menyimpan bonus di slot [3] karena dipakai maxHp/maxWp.
+      assert.ok(Math.abs(unit.stats.hp[3] / plain.stats.hp[1] - pct / 100) < 1e-9, `hp q${q} +${pct}%`);
+      assert.ok(Math.abs(unit.stats.wp[3] / plain.stats.wp[1] - pct / 100) < 1e-9, `wp q${q} +${pct}%`);
+      // "Weapon Cost: 0" — tidak ada manaRange, jadi tidak pernah menahan ability.
+      assert.strictEqual(unit.weapon.manaCost, 0, 'biaya WP harus 0');
+      assert.strictEqual(weaponModule.weaponAbility({ rng: rngModule.createRng(1) }, unit.weapon, unit), false, 'tidak ada ability aktif');
+    }
+  });
+
   it('buffQuality memotong kualitas buff setelah entri stat senjata', () => {
     const { buffQuality, manaQuality } = weaponModule;
     // Poison Dagger: 1 entri stat + Poison (1 entri) + biaya → slot ke-2.
