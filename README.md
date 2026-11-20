@@ -318,9 +318,16 @@ Perintah:
 
 Semua balasan `d team` dan `d sim` berupa embed. Ikon hewan, senjata, pasif, dan
 stat diambil dari emoji OwO; emoji itu di-mirror ke aplikasi bot sekali saat start
-(mekanisme yang sama dengan dex), lalu dibaca dari cache. Bila quality senjata
-belum diset, ranknya belum diketahui sehingga ikon netral yang dipakai — rank
-ditentukan saat simulasi me-roll quality.
+(mekanisme yang sama dengan dex), lalu dibaca dari cache.
+
+### Tier senjata
+
+Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
+penentuannya: `quality=` di slot, lalu flag `-qp`/`-qe` saat simulasi, lalu
+**default tier tertinggi (100 = Fabled)**. Jadi `d team add 1 snail weapon=gs`
+langsung memakai Great Sword Fabled, dan ikon `fgreatsword` yang tampil di
+`d team show` memang senjata yang dipakai `d sim` — bukan roll terpisah.
+Pasif senjata ikut tier yang sama.
 
 Stat manual memakai skala koefisien OwO (0-14), bukan HP final: `hp` 8 di level 50
 menghasilkan HP jauh lebih besar daripada di level 1. Kekuatan berasal dari level.

@@ -25,6 +25,11 @@ for (const weapon of data.weapons) {
 
 const buffsById = new Map(data.buffs.map(b => [b.id, b]));
 
+// Tanpa `quality=` di slot dan tanpa `-qp`/`-qe`, senjata dianggap tier
+// tertinggi (Fabled). Ini membuat tampilan dan simulasi konsisten: apa yang
+// terlihat di `d team show` itulah yang dipakai `d sim`.
+const DEFAULT_QUALITY = 100;
+
 function findAnimal(query) {
   const key = String(query || '').trim().toLowerCase();
   if (!key) return null;
@@ -62,6 +67,7 @@ module.exports = {
   formulas: data.formulas,
   statOrder: data.statOrder,
   limits: data.limits,
+  DEFAULT_QUALITY,
   animals: () => data.animals,
   weapons: () => data.weapons,
   buffs: () => data.buffs,

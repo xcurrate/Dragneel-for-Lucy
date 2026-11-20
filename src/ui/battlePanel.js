@@ -50,7 +50,8 @@ function slotField(entry, slot) {
 
   const parts = [`Level **${entry.level}**`];
   if (entry.weaponId) {
-    parts.push(`${emoji.weaponEmoji(entry.weaponId, quality)} ${weaponName(entry.weaponId)}`);
+    const rank = emoji.rankName(quality ?? data.DEFAULT_QUALITY);
+    parts.push(`${emoji.weaponEmoji(entry.weaponId, quality)} ${weaponName(entry.weaponId)} · ${rank}`);
   }
   // Pasif hanya disimpan sebagai id; rank emojinya ikut quality senjata karena
   // quality tiap pasif tidak ikut tersimpan di tim.

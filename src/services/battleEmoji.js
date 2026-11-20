@@ -39,11 +39,11 @@ function resolve(token, fallback) {
   return mapped || fallback;
 }
 
-// Tanpa quality, rank tidak diketahui (simulasi me-roll acak), jadi pakai ikon
-// netral daripada menampilkan rank yang salah.
+// Quality kosong berarti tier tertinggi (lihat `DEFAULT_QUALITY`), bukan acak.
 function pick(list, quality) {
-  if (!Array.isArray(list) || !list.length || quality == null) return null;
-  return list[rankIndex(quality)] || null;
+  if (!Array.isArray(list) || !list.length) return null;
+  const q = quality == null ? data.DEFAULT_QUALITY : quality;
+  return list[rankIndex(q)] || null;
 }
 
 function emojiFor(list, quality, fallback) {

@@ -207,12 +207,12 @@ function createPassive(id, quality, rng) {
   return passive;
 }
 
-function rollPassives(count, rng) {
+function rollPassives(count, rng, quality) {
   const pool = Object.keys(PASSIVES).map(Number).filter(id => id !== 21);
   const picked = [];
   for (let i = 0; i < count; i++) {
     const id = pool[Math.floor((rng ? rng.next() : Math.random()) * pool.length)];
-    picked.push(createPassive(id, null, rng));
+    picked.push(createPassive(id, quality ?? null, rng));
   }
   return picked.filter(Boolean);
 }

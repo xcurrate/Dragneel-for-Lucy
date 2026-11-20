@@ -13,10 +13,10 @@ function statAt(range, quality) {
   return Math.round((min + (max - min) * (q / 100)) * 100) / 100;
 }
 
-function weaponStats(def, quality, rng) {
+function weaponStats(def, quality) {
   return def.qualityList.map(range => {
     const q = Array.isArray(quality) ? quality[def.qualityList.indexOf(range)] : quality;
-    return statAt(range, q == null ? Math.floor((rng ? rng.next() : Math.random()) * 101) : q);
+    return statAt(range, q);
   });
 }
 
@@ -25,8 +25,9 @@ function buildWeapon(spec, rng, globalQuality) {
   if (!def) return null;
 
   const explicit = typeof spec === 'object' ? spec : {};
-  const quality = explicit.quality ?? globalQuality;
-  const stats = weaponStats(def, quality, rng);
+  // Urutan: quality slot → flag global (-qp/-qe) → tier tertinggi.
+  const quality = explicit.quality ?? globalQuality ?? data.DEFAULT_QUALITY;
+  const stats = weaponStats(def, quality);
   // OwO menambahkan `manaRange` ke qualityList, lalu mengambil elemen terakhir
   // sebagai biaya WP. Jadi biaya punya quality sendiri, terpisah dari stat efek.
   const manaCost = def.manaRange
@@ -42,10 +43,12 @@ function buildWeapon(spec, rng, globalQuality) {
     passives: [],
   };
 
+  // Pasif memakai tier yang sama dengan senjatanya, supaya ikon rank di
+  // `d team show` sesuai dengan stat yang benar-benar dipakai simulasi.
   const chosen = explicit.passives;
   weapon.passives = Array.isArray(chosen) && chosen.length
-    ? chosen.map(id => createPassive(id, null, rng)).filter(Boolean)
-    : rollPassives(def.passiveCount, rng);
+    ? chosen.map(id => createPassive(id, quality, rng)).filter(Boolean)
+    : rollPassives(def.passiveCount, rng, quality);
 
   // Stat bonus dari pasif + efek Rune of the Forgotten (persen dari stat dasar).
   weapon.alterStats = statsObj => {

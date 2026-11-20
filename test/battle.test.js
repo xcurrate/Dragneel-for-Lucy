@@ -430,11 +430,27 @@ describe('senjata', () => {
     assert.ok(low.manaCost >= high.manaCost, 'manaRange OwO menurun terhadap quality');
   });
 
-  it('senjata tanpa quality tetap mendapat stat', () => {
+  it('tanpa quality senjata memakai tier tertinggi', () => {
     const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
-    const weapon = buildWeapon({ id: 1 }, rngModule.createRng(1));
-    assert.ok(weapon.stats.length > 0);
-    assert.ok(Number.isFinite(weapon.manaCost));
+    const plain = buildWeapon({ id: 1 }, rngModule.createRng(1));
+    const fabled = buildWeapon({ id: 1, quality: 100 }, rngModule.createRng(1));
+    assert.deepStrictEqual(plain.stats, fabled.stats);
+    assert.strictEqual(plain.manaCost, fabled.manaCost);
+    assert.ok(plain.passives.every(p => p.quality === 100), 'pasif ikut tier tertinggi');
+  });
+
+  it('flag -qp/-qe menimpa default tier', () => {
+    const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const weapon = buildWeapon({ id: 1 }, rngModule.createRng(1), 0);
+    const common = buildWeapon({ id: 1, quality: 0 }, rngModule.createRng(1));
+    assert.deepStrictEqual(weapon.stats, common.stats);
+  });
+
+  it('quality di slot menimpa flag global', () => {
+    const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const weapon = buildWeapon({ id: 1, quality: 40 }, rngModule.createRng(1), 100);
+    const explicit = buildWeapon({ id: 1, quality: 40 }, rngModule.createRng(1));
+    assert.deepStrictEqual(weapon.stats, explicit.stats);
   });
 
   it('senjata tidak dikenal menghasilkan null', () => {
@@ -634,8 +650,8 @@ describe('emoji battle', () => {
     assert.ok(be.weaponToken(1, 10).includes('cgreatsword'));
     assert.ok(be.weaponToken(1, 100).includes('fgreatsword'));
     assert.ok(be.passiveToken(7, 70).includes('elifesteal'));
-    assert.strictEqual(be.weaponToken(1, null), null);
-    assert.strictEqual(be.weaponEmoji(1, null), '⚔️');
+    assert.ok(be.weaponToken(1, null).includes('fgreatsword'), 'tanpa quality = fabled');
+    assert.ok(be.passiveToken(7, null).includes('flifesteal'));
     assert.strictEqual(be.weaponEmoji(999, 80), '⚔️');
     assert.strictEqual(be.passiveEmoji(7, null), '✨');
     assert.strictEqual(be.animalEmoji(null), '🐾');
