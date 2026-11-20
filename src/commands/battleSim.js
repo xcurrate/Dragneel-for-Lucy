@@ -44,7 +44,7 @@ function handleSimCommand(message, args, prefix, deps = {}) {
   const userId = message.author.id;
 
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
-    return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix).split('\n')));
+    return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix)));
   }
 
   const team = store.getActiveTeam(guildId, userId);

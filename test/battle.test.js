@@ -621,6 +621,23 @@ describe('balasan command memakai embed', () => {
     assert.strictEqual(replies.length, 1);
     assert.strictEqual(replies[0].color, 0xED4245);
   });
+
+  // Regresi: `...usage(prefix)` menyebar string menjadi per karakter, jadi
+  // panduan tampil satu huruf satu baris.
+  it('panduan d team tidak dipecah per huruf', () => {
+    handleTeamCommand(message('d team zzz'), ['zzz'], 'd', { sendEmbed });
+    const body = replies[0].description;
+    assert.ok(body.includes('Perintah tidak dikenal.'));
+    assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
+    assert.ok(body.includes('`d team list` — daftar tim kamu'), 'baris utuh');
+  });
+
+  it('panduan d sim tidak dipecah per huruf', () => {
+    handleSimCommand(message('d sim help'), ['help'], 'd', { sendEmbed });
+    const body = replies[0].description;
+    assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
+    assert.ok(body.includes('`d sim <nama-tim>`'), 'baris utuh');
+  });
 });
 
 describe('emoji battle', () => {

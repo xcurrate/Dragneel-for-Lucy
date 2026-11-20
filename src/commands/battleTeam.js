@@ -158,7 +158,7 @@ function handleTeamCommand(message, args, prefix, deps = {}) {
     return handleAdd(message, rest, prefix, send, guildId, userId);
   }
 
-  return send(message, usageEmbed('🐾 Tim Kustom', ['Perintah tidak dikenal.', '', ...usage(prefix)]));
+  return send(message, usageEmbed('🐾 Tim Kustom', ['Perintah tidak dikenal.', '', usage(prefix)]));
 }
 
 function handleAdd(message, rest, prefix, send, guildId, userId) {
