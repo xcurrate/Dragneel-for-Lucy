@@ -13,6 +13,7 @@ const mathRace = require('./services/mathRace');
 const lucyReminder = require('./services/lucyReminder');
 const bossRewards = require('./services/bossRewardNotifications');
 const animalDex = require('./services/animalDex');
+const battleEmoji = require('./services/battleEmoji');
 const reminders = require('./services/reminders');
 
 logBuffer.install();
@@ -29,6 +30,10 @@ animalDex.setClient(client);
 async function syncAnimalDexEmojis() {
   try { await animalDex.mirrorEmojiTokens(animalDex.allEmojiTokens()); }
   catch (e) { console.error('[AnimalDex] mirror emoji:', e.message); }
+  // Emoji senjata & pasif battle berasal dari aplikasi OwO, jadi perlu
+  // di-mirror juga agar `d team` dan `d sim` tampil dengan ikon.
+  try { await battleEmoji.syncEmojis(); }
+  catch (e) { console.error('[Battle] mirror emoji:', e.message); }
 }
 
 async function handleAutoThreadRep(message) {

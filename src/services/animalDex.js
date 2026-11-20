@@ -517,6 +517,6 @@ function formatDexUsage(prefix) {
 module.exports = {
   parseAnimalCard, isAnimalCard, captureMessage, buildDexResponse,
   formatAnimalEmbed, formatCompactTable, formatListEmbed, extractFlags, toQueries,
-  normalizeName, parseStats, STAT_LABELS, setClient, mirrorEmojiTokens, collectEmojiTokens,
-  applyEmojiMap, allEmojiTokens
+  normalizeName, parseStats, STAT_LABELS, STAT_ICONS, setClient, mirrorEmojiTokens, collectEmojiTokens,
+  applyEmojiMap, allEmojiTokens, animalEmoji
 };

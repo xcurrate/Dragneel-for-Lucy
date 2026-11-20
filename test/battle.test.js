@@ -607,6 +607,111 @@ describe('balasan command memakai embed', () => {
   });
 });
 
+describe('emoji battle', () => {
+  const be = require(path.join(ROOT, 'src/services/battleEmoji'));
+
+  it('memetakan quality ke rank OwO', () => {
+    assert.strictEqual(be.rankName(10), 'Common');
+    assert.strictEqual(be.rankName(30), 'Uncommon');
+    assert.strictEqual(be.rankName(70), 'Epic');
+    assert.strictEqual(be.rankName(96), 'Legendary');
+    assert.strictEqual(be.rankName(100), 'Fabled');
+    assert.strictEqual(be.rankName(0), 'Common');
+  });
+
+  it('setiap senjata dan pasif punya 7 emoji (satu per rank)', () => {
+    const battle = require(path.join(ROOT, 'src/data/owoBattle'));
+    const passives = require(path.join(ROOT, 'src/data/owoPassives.json')).passives;
+    for (const weapon of battle.weapons()) {
+      assert.strictEqual(weapon.emojis.length, 7, `${weapon.name} punya emoji lengkap`);
+    }
+    for (const passive of passives) {
+      assert.strictEqual(passive.emojis.length, 7, `${passive.name} punya emoji lengkap`);
+    }
+  });
+
+  it('memilih emoji sesuai rank dan jatuh ke ikon netral tanpa quality', () => {
+    assert.ok(be.weaponToken(1, 10).includes('cgreatsword'));
+    assert.ok(be.weaponToken(1, 100).includes('fgreatsword'));
+    assert.ok(be.passiveToken(7, 70).includes('elifesteal'));
+    assert.strictEqual(be.weaponToken(1, null), null);
+    assert.strictEqual(be.weaponEmoji(1, null), '⚔️');
+    assert.strictEqual(be.weaponEmoji(999, 80), '⚔️');
+    assert.strictEqual(be.passiveEmoji(7, null), '✨');
+    assert.strictEqual(be.animalEmoji(null), '🐾');
+  });
+
+  it('tidak pernah membocorkan token mentah ke tampilan', () => {
+    const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
+    const team = { id: 1, name: 'T', slots: [{ slot: 1, animalKey: null, custom: COEFFS_STRONG, level: 60, weaponId: 1, passives: [7] }] };
+    const text = JSON.stringify(panel.teamEmbed(team, {}).toJSON());
+    assert.ok(!/<a?:\w+:\d+>/.test(text), 'tidak ada token mentah saat cache kosong');
+  });
+
+  it('menyertakan emoji senjata dan pasif saat cache terisi', () => {
+    const dexStore = require(path.join(ROOT, 'src/utils/animalDexStorage'));
+    const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
+    for (const token of be.allTokens()) {
+      const id = /:(\d+)>$/.exec(token);
+      if (id) dexStore.setEmojiToken(id[1], token);
+    }
+    const team = { id: 1, name: 'T', slots: [{ slot: 1, custom: COEFFS_STRONG, level: 60, weaponId: 1, weaponQuality: 80, passives: [7] }] };
+    const json = panel.teamEmbed(team, {}).toJSON();
+    assert.ok(json.fields[0].value.includes('greatsword'));
+    assert.ok(json.fields[0].value.includes('lifesteal'));
+  });
+});
+
+describe('lawan simulasi berupa tim', () => {
+  const { resolveEnemy } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-enemy-'));
+    process.chdir(tempDir);
+    store.createTeam('g', 'u', '1');
+    store.setSlot('g', 'u', '1', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.createTeam('g', 'u', 'blitz');
+    store.setSlot('g', 'u', 'blitz', 1, { custom: COEFFS_WEAK, level: 70 });
+    store.setActiveTeam('g', 'u', '1');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('menerima nama tim sebagai lawan', () => {
+    const enemy = resolveEnemy('g', 'u', ['blitz']);
+    assert.ok(!enemy.error, enemy.error);
+    assert.strictEqual(enemy.label, 'blitz');
+  });
+
+  it('menerima bentuk "x vs y"', () => {
+    const enemy = resolveEnemy('g', 'u', ['1', 'vs', 'blitz']);
+    assert.ok(!enemy.error, enemy.error);
+    assert.strictEqual(enemy.label, 'blitz');
+  });
+
+  it('nama tim berupa angka tetap dikenali sebagai tim', () => {
+    const enemy = resolveEnemy('g', 'u', ['1']);
+    assert.ok(!enemy.error, enemy.error);
+    assert.strictEqual(enemy.label, '1');
+  });
+
+  it('tim kosong dilaporkan, bukan dianggap nama tidak dikenal', () => {
+    store.createTeam('g', 'u', 'kosong');
+    const enemy = resolveEnemy('g', 'u', ['kosong']);
+    assert.ok(enemy.error.includes('masih kosong'));
+  });
+
+  it('stat manual tetap didahulukan saat berbentuk angka', () => {
+    const enemy = resolveEnemy('g', 'u', ['hp=8,att=6,pr=2,wp=3,mag=5,mr=1']);
+    assert.ok(!enemy.error, enemy.error);
+    assert.strictEqual(enemy.label, 'stat manual');
+  });
+});
+
 describe('storage tim', () => {
   let tempDir;
   let store;

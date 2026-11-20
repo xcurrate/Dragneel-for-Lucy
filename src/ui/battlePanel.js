@@ -5,6 +5,8 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const data = require('../data/owoBattle');
 const sim = require('../services/battleSim');
+const dexStore = require('../utils/animalDexStorage');
+const emoji = require('../services/battleEmoji');
 
 const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E };
 const TEAM_BUTTON = 'battle_team_pick';
@@ -13,7 +15,7 @@ const STAT_ORDER = ['hp', 'att', 'pr', 'wp', 'mag', 'mr'];
 const MAX_SLOTS = 3;
 
 function statLine(coeffs) {
-  return STAT_ORDER.map(k => `${sim.STAT_LABELS[k]} **${coeffs[k] ?? 0}**`).join(' · ');
+  return STAT_ORDER.map(k => `${emoji.statIcon(k)} **${coeffs[k] ?? 0}**`).join(' · ');
 }
 
 function weaponName(id) {
@@ -28,14 +30,35 @@ function bar(value, max, size = 12) {
   return '▰'.repeat(filled) + '▱'.repeat(size - filled);
 }
 
+// Ringkasan ikon satu slot: hewan, senjata, lalu pasif.
+function slotIcon(entry) {
+  const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
+  const parts = [emoji.animalEmoji(animal)];
+  if (entry.weaponId) parts.push(emoji.weaponEmoji(entry.weaponId, entry.weaponQuality));
+  for (const id of entry.passives || []) parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
+  return parts.join(' ');
+}
+
 // Satu slot jadi satu field agar stat muat tanpa terpotong.
 function slotField(entry, slot) {
   if (!entry) return { name: `Slot ${slot}`, value: '*kosong*', inline: false };
-  const weapon = weaponName(entry.weaponId);
-  const title = entry.label || entry.animalKey || 'custom';
-  const parts = [`Level **${entry.level}**` + (weapon ? ` · ${weapon}` : '')];
+
+  const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
+  const icon = emoji.animalEmoji(animal);
+  const title = entry.label || animal?.name || entry.animalKey || 'custom';
+  const quality = entry.weaponQuality;
+
+  const parts = [`Level **${entry.level}**`];
+  if (entry.weaponId) {
+    parts.push(`${emoji.weaponEmoji(entry.weaponId, quality)} ${weaponName(entry.weaponId)}`);
+  }
+  // Pasif hanya disimpan sebagai id; rank emojinya ikut quality senjata karena
+  // quality tiap pasif tidak ikut tersimpan di tim.
+  if (Array.isArray(entry.passives) && entry.passives.length) {
+    parts.push(entry.passives.map(id => emoji.passiveEmoji(id, quality)).join(' '));
+  }
   if (entry.custom) parts.push(statLine(entry.custom));
-  return { name: `Slot ${slot} — ${title}`, value: parts.join('\n'), inline: false };
+  return { name: `${icon} Slot ${slot} — ${title}`, value: parts.join('\n'), inline: false };
 }
 
 function teamEmbed(team, { prefix = 'd', active = false } = {}) {
@@ -60,7 +83,9 @@ function teamListEmbed(teams, active, prefix = 'd') {
   }
   const lines = teams.map(team => {
     const mark = active && active.id === team.id ? ' ✅' : '';
-    return `**${team.name}**${mark} — ${team.slots.length}/${MAX_SLOTS} slot`;
+    const icons = team.slots.map(slot => slotIcon(slot)).join(' ');
+    const detail = icons ? `\n${icons}` : '';
+    return `**${team.name}**${mark} — ${team.slots.length}/${MAX_SLOTS} slot${detail}`;
   });
   return new EmbedBuilder()
     .setColor(COLOR.info)
@@ -109,8 +134,11 @@ function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matc
 function renderMatchup(playerSpecs, enemySpecs) {
   const describe = spec => {
     const label = spec.label || 'slot';
-    const weapon = spec.weapon ? ` + ${weaponName(spec.weapon.id) || 'senjata'}` : '';
-    return `${label} lv${spec.level}${weapon}`;
+    const icon = emoji.animalEmoji(spec.animal);
+    const weapon = spec.weapon
+      ? ` + ${emoji.weaponEmoji(spec.weapon.id, spec.weapon.quality)} ${weaponName(spec.weapon.id) || 'senjata'}`
+      : '';
+    return `${icon} ${label} lv${spec.level}${weapon}`;
   };
   return [
     `**Kamu:** ${playerSpecs.map(describe).join(', ')}`,
@@ -172,7 +200,7 @@ function parseTeamButton(customId) {
 
 module.exports = {
   COLOR, STAT_ORDER, TEAM_BUTTON, MAX_SLOTS,
-  statLine, weaponName, bar, slotField,
+  statLine, weaponName, bar, slotField, slotIcon,
   teamEmbed, teamListEmbed, simEmbed, simColor, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
 };

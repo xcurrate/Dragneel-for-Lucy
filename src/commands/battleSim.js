@@ -126,6 +126,19 @@ function resolveEnemy(guildId, userId, args) {
     };
   }
 
+  // `d sim blitz` / `d sim 1 vs blitz` → lawan tim milik user sendiri.
+  // Dicek sebelum stat manual karena nama tim bisa berupa angka ("1").
+  const enemyName = raw.includes(' vs ') ? raw.split(/\s+vs\s+/i).pop().trim() : raw;
+  const ownTeam = enemyName ? store.getTeam(guildId, userId, enemyName) : null;
+  if (ownTeam) {
+    if (!ownTeam.slots.length) {
+      return { error: `Tim **${ownTeam.name}** masih kosong. Isi dulu dengan \`d team add 1 <hewan>\`.` };
+    }
+    const specs = resolveTeamSpecs(ownTeam);
+    if (specs.error) return { error: specs.error };
+    return { specs: specs.specs, label: ownTeam.name };
+  }
+
   const level = options.level ? Number(options.level) : 60;
   const looksLikeStats = raw.includes('=') || /^[\d\s,-]+$/.test(raw);
   if (looksLikeStats) {
@@ -135,7 +148,7 @@ function resolveEnemy(guildId, userId, args) {
   }
 
   const animal = dexStore.getAnimal(raw.toLowerCase()) || dexStore.searchAnimals(raw)[0];
-  if (!animal) return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim, hewan dex, atau stat manual.` };
+  if (!animal) return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim (lihat \`d team list\`), hewan dex, atau stat manual.` };
   const coeffs = sim.dexStatsToCustom(animal);
   if (!coeffs) return { error: `Stat \`${animal.name}\` tidak lengkap di dex.` };
   return { specs: [{ slot: 1, coeffs, level, label: animal.name, animal }], label: animal.name };

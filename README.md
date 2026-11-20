@@ -314,6 +314,13 @@ Perintah:
 | `d team add <slot> <hewan\|stat> [opsi]` | isi slot; opsi `level=`, `weapon=`, `quality=`, `passive=`, `label=` |
 | `d team clear <slot>` | kosongkan slot |
 | `d sim [lawan] [-m n] [-s seed] [-qp q] [-qe q]` | simulasi; lawan bisa nama tim, hewan dex, atau stat manual |
+| `d sim 1 vs blitz` | bentuk `vs` juga diterima, memakai tim setelah kata `vs` sebagai lawan |
+
+Semua balasan `d team` dan `d sim` berupa embed. Ikon hewan, senjata, pasif, dan
+stat diambil dari emoji OwO; emoji itu di-mirror ke aplikasi bot sekali saat start
+(mekanisme yang sama dengan dex), lalu dibaca dari cache. Bila quality senjata
+belum diset, ranknya belum diketahui sehingga ikon netral yang dipakai — rank
+ditentukan saat simulasi me-roll quality.
 
 Stat manual memakai skala koefisien OwO (0-14), bukan HP final: `hp` 8 di level 50
 menghasilkan HP jauh lebih besar daripada di level 1. Kekuatan berasal dari level.
