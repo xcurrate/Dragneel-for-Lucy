@@ -6,6 +6,21 @@
 // quality 0/50/100, bukan hasil perkiraan dari dokumentasi.
 const data = require('./owoPassives.json');
 
+// Dibaca dari modul mekanik supaya daftar ini tidak pernah menyimpang dari
+// implementasinya. `battlePassives` tidak mengimpor balik file ini, jadi aman.
+const MECHANIC_IDS = new Set(
+  Object.keys(require('../services/battlePassives').PASSIVES).map(Number)
+);
+
+const pending = require('./owoPending.json');
+const pendingByAlias = new Map();
+for (const item of pending.passives) {
+  for (const key of [item.name, ...(item.aliases || [])]) {
+    const k = String(key).toLowerCase();
+    if (!pendingByAlias.has(k)) pendingByAlias.set(k, item);
+  }
+}
+
 const byId = new Map();
 const byName = new Map();
 for (const passive of data.passives) {
@@ -28,6 +43,19 @@ function get(idOrName) {
   return byName.get(String(idOrName).toLowerCase()) || null;
 }
 
+// Pasif yang punya implementasi hook di `battlePassives`. Dipakai untuk
+// membedakan "belum didukung" dari "tidak dikenal" saat dipasang ke senjata.
+function hasMechanic(id) {
+  return MECHANIC_IDS.has(Number(id));
+}
+
+// Pasif yang namanya dikenal tetapi hook-nya belum diimplementasikan.
+function findPending(query) {
+  const key = String(query || '').trim().toLowerCase();
+  if (!key) return null;
+  return pendingByAlias.get(key) || null;
+}
+
 module.exports = {
   source: data.source,
   sourceLicense: data.sourceLicense,
@@ -36,4 +64,7 @@ module.exports = {
   byCategory: category => data.passives.filter(p => p.category === category),
   get,
   statsAt,
+  hasMechanic,
+  findPending,
+  pending,
 };

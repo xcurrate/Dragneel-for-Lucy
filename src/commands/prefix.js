@@ -25,7 +25,7 @@ const ALIASES = {
   'admin-help': ['bantuan-admin', 'admin-help', 'admin'],
   count: ['count', 'counter', 'hitung'],
   settings: ['s', 'settings', 'setelan'],
-  team: ['team', 'tim', 'timku'],
+  team: ['team', 'tim', 'timku', 'tm'],
   sim: ['sim', 'simulasi', 'simbattle', 'battle-sim']
 };
 

@@ -312,6 +312,7 @@ Perintah:
 | `d team list` | daftar tim + tombol pilih tim |
 | `d team new/pick/show/del/rename` | kelola tim (maks 10 tim, 3 slot) |
 | `d team add <slot> <hewan\|stat> [opsi]` | isi slot; opsi `level=`, `weapon=`, `quality=`, `passive=`, `label=` |
+| `dtm s <senjata> [pasif...] [slot]` | pasang atau ganti senjata pada slot yang sudah terisi |
 | `d team clear <slot>` | kosongkan slot |
 | `d sim [lawan] [-m n] [-s seed] [-qp q] [-qe q]` | simulasi; lawan bisa nama tim, hewan dex, atau stat manual |
 | `d sim 1 vs blitz` | bentuk `vs` juga diterima, memakai tim setelah kata `vs` sebagai lawan |
@@ -319,6 +320,38 @@ Perintah:
 Semua balasan `d team` dan `d sim` berupa embed. Ikon hewan, senjata, pasif, dan
 stat diambil dari emoji OwO; emoji itu di-mirror ke aplikasi bot sekali saat start
 (mekanisme yang sama dengan dex), lalu dibaca dari cache.
+
+### Memasang senjata: `dtm s`
+
+`d team add` mengisi slot dari nol, jadi memakai senjata baru berarti mengulang
+hewan, level, dan statnya. `dtm s` hanya menyentuh kolom senjata: level, stat,
+dan label hewan di slot itu tetap.
+
+```
+dtm s gsword           # Great Sword ke slot 1
+dtm s sword crit       # Great Sword + pasif Critical ke slot 1
+dtm s gsword 2         # Great Sword ke slot 2
+dtm s sword crit 2     # Great Sword + Critical ke slot 2
+dtm s orb crit th 1    # Orb of Potency punya 2 slot pasif
+```
+
+Aturannya:
+
+- **Slot default 1.** Angka `1`-`3` di akhir argumen dianggap nomor slot, jadi
+  `dtm s gsword 2` memasang ke slot 2, bukan slot 1 dengan pasif "2".
+- **Nama lengkap maupun singkatan diterima.** `sword`, `gs`, dan `gsword` sama
+  sama menunjuk Great Sword; `crit` sama dengan Critical.
+- **Jumlah pasif mengikuti senjata.** Tiap senjata punya `passiveCount` (Great
+  Sword 1, Orb of Potency 2). Menyebut lebih banyak ditolak, bukan dipotong.
+- **Tanpa nama pasif, pasif diundi** saat simulasi dengan RNG ber-seed, sama
+  seperti perilaku `d team add` tanpa `passive=`.
+- **Mengganti senjata mempertahankan `quality=` slot.** Tier yang sudah diatur
+  tidak hilang diam-diam.
+- **Slot harus sudah berisi hewan.** `dtm s bow 3` pada slot kosong ditolak.
+
+Senjata dan pasif yang namanya dikenal tetapi mekaniknya belum ada dijawab
+"belum punya mekanik simulasi", bukan "tidak dikenal". Daftarnya ada di
+`src/data/owoPending.json`.
 
 ### Level
 

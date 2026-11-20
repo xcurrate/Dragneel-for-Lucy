@@ -721,6 +721,110 @@ describe('emoji battle', () => {
   });
 });
 
+describe('dtm s memasang senjata ke slot', () => {
+  const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+  const STATS = 'hp=14,att=6,pr=2,wp=3,mag=0,mr=1';
+
+  let dir;
+  const run = (...args) => {
+    const out = [];
+    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, args, 'd', {
+      sendEmbed: (m, e) => out.push(e.toJSON()),
+    });
+    return out[0]?.description || '';
+  };
+  const slotOf = n => store.getActiveTeam('g', 'u').slots.find(s => s.slot === n);
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-dtm-'));
+    process.chdir(dir);
+    store.createTeam('g', 'u', 'Alpha');
+    store.setActiveTeam('g', 'u', 'Alpha');
+    run('add', '1', STATS, 'level=100');
+    run('add', '2', STATS, 'level=80');
+  });
+
+  afterEach(() => {
+    process.chdir(ROOT);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('dtm s gsword memasang ke slot 1', () => {
+    run('s', 'gsword');
+    assert.strictEqual(slotOf(1).weaponId, 1);
+  });
+
+  it('dtm s sword crit memasang senjata + pasif', () => {
+    run('s', 'sword', 'crit');
+    assert.strictEqual(slotOf(1).weaponId, 1, 'alias sword = Great Sword');
+    assert.deepStrictEqual(slotOf(1).passives, [12], 'crit = Critical');
+  });
+
+  it('dtm s gsword 2 memasang ke slot 2', () => {
+    run('s', 'gsword', '2');
+    assert.strictEqual(slotOf(2).weaponId, 1);
+    assert.strictEqual(slotOf(1).weaponId, null, 'slot 1 tidak ikut terisi');
+  });
+
+  it('dtm s sword crit 2 memasang senjata + pasif ke slot 2', () => {
+    run('s', 'sword', 'crit', '2');
+    assert.strictEqual(slotOf(2).weaponId, 1);
+    assert.deepStrictEqual(slotOf(2).passives, [12]);
+  });
+
+  it('mengganti senjata tidak mengubah level dan stat hewan', () => {
+    run('s', 'gsword', '1');
+    run('s', 'rstaff', 'hgen', '1');
+    const slot = slotOf(1);
+    assert.strictEqual(slot.weaponId, 14);
+    assert.deepStrictEqual(slot.passives, [15]);
+    assert.strictEqual(slot.level, 100, 'level tetap');
+    assert.deepStrictEqual(slot.custom, { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 });
+  });
+
+  it('mempertahankan quality slot saat senjata diganti', () => {
+    store.setSlot('g', 'u', 'Alpha', 1, { custom: { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 }, level: 100, weaponId: 1, weaponQuality: 60 });
+    run('s', 'rstaff', '1');
+    assert.strictEqual(slotOf(1).weaponQuality, 60);
+  });
+
+  it('menolak jumlah pasif melebihi passiveCount senjata', () => {
+    const text = run('s', 'gs', 'crit', 'str', '1');
+    assert.ok(text.includes('hanya punya 1 slot pasif'));
+    assert.strictEqual(slotOf(1).weaponId, null, 'tidak tersimpan sebagian');
+  });
+
+  it('Orb of Potency menerima dua pasif', () => {
+    run('s', 'orb', 'crit', 'th', '1');
+    assert.strictEqual(slotOf(1).weaponId, 6);
+    assert.deepStrictEqual(slotOf(1).passives, [12, 8]);
+  });
+
+  it('menolak slot kosong dan slot di luar batas', () => {
+    assert.ok(run('s', 'bow', '3').includes('masih kosong'));
+    assert.ok(run('s', 'bow', '9').includes('Slot harus 1-3'));
+  });
+
+  it('membedakan senjata belum ada mekanik dari tidak dikenal', () => {
+    assert.ok(run('s', 'cstaff').includes('belum punya data simulasi'));
+    assert.ok(run('s', 'zzz').includes('tidak dikenal'));
+  });
+
+  it('membedakan pasif belum ada mekanik dari tidak dikenal', () => {
+    assert.ok(run('s', 'gs', 'gslay').includes('belum punya mekanik simulasi'));
+    assert.ok(run('s', 'gs', 'nope').includes('tidak dikenal'));
+  });
+
+  it('senjata yang dipasang benar-benar dipakai simulasi', () => {
+    run('s', 'rstaff', 'hgen', '1');
+    const specs = sim.toSpecs(store.getActiveTeam('g', 'u')).specs;
+    const unit = engine.buildUnit(specs[0], rngModule.createRng(1), undefined);
+    assert.strictEqual(unit.weapon.id, 14);
+    assert.deepStrictEqual(unit.weapon.passives.map(p => p.id), [15]);
+  });
+});
+
 describe('alias senjata dan pasif', () => {
   const battleData = require(path.join(ROOT, 'src/data/owoBattle'));
   const passives = require(path.join(ROOT, 'src/data/owoPassives'));

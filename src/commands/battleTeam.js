@@ -16,6 +16,8 @@ const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const sim = require('../services/battleSim');
 const data = require('../data/owoBattle');
+const passiveData = require('../data/owoPassives');
+const emoji = require('../services/battleEmoji');
 const { DEFAULT_LEVEL, MAX_LEVEL } = data;
 const {
   teamEmbed, teamListEmbed, usageEmbed, errorEmbed, okEmbed, warnEmbed,
@@ -29,6 +31,7 @@ function usage(prefix = 'd') {
     `\`${prefix} team pick <nama>\` — jadikan tim aktif`,
     `\`${prefix} team show [nama]\` — lihat isi tim`,
     `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
+    `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
     `\`${prefix} team clear <slot>\` — kosongkan slot`,
     `\`${prefix} team del <nama>\` / \`${prefix} team rename <lama> <baru>\``,
     '',
@@ -59,6 +62,55 @@ function parseOptions(args) {
     options[key] = m[2];
   }
   return { options, rest };
+}
+
+// `dtm s <senjata> [pasif...] [slot]`
+// Argumen terakhir yang berupa angka 1..3 adalah nomor slot; sisanya adalah
+// nama senjata (kata pertama) dan pasif (kata berikutnya). Karena itu
+// `dtm s gsword 2` memasang ke slot 2, sedangkan `dtm s gsword 2` tanpa slot
+// dianggap slot 1 bila tidak ada angka di akhir.
+function parseWeaponArgs(args) {
+  const tokens = args.map(a => String(a).trim()).filter(Boolean);
+  if (!tokens.length) return { error: 'Sebutkan senjatanya.' };
+
+  let slot = 1;
+  const last = tokens[tokens.length - 1];
+  if (/^\d+$/.test(last)) {
+    const n = Number(last);
+    if (n < 1 || n > store.MAX_SLOTS) {
+      return { error: `Slot harus 1-${store.MAX_SLOTS}.` };
+    }
+    slot = n;
+    tokens.pop();
+  }
+  if (!tokens.length) return { error: 'Sebutkan senjatanya.' };
+
+  const weaponQuery = tokens.shift();
+  const weapon = parseWeapon(weaponQuery);
+  if (weapon.error) return { error: weapon.error };
+
+  const passives = [];
+  for (const token of tokens) {
+    // `passive=12` tetap diterima supaya id numerik bisa dipakai langsung.
+    const byId = /^passive=(\d+)$/i.exec(token);
+    if (byId) { passives.push(Number(byId[1])); continue; }
+    const found = passiveData.get(token);
+    if (found) { passives.push(found.id); continue; }
+    const pendingPassive = passiveData.findPending(token);
+    if (pendingPassive) {
+      return { error: `Pasif **${pendingPassive.name}** belum punya mekanik simulasi.` };
+    }
+    return { error: `Pasif \`${token}\` tidak dikenal. Contoh: ${passiveNames()}.` };
+  }
+  return { slot, weaponId: weapon.weaponId, passives };
+}
+
+// Nama pasif yang punya mekanik, dipakai untuk pesan bantuan.
+function passiveNames() {
+  return passiveData.all()
+    .filter(p => passiveData.hasMechanic(p.id))
+    .map(p => p.aliases?.[0] || p.name.toLowerCase())
+    .join(', ');
 }
 
 function parseWeapon(value) {
@@ -159,6 +211,10 @@ function handleTeamCommand(message, args, prefix, deps = {}) {
     return say(send, message, `✅ Slot ${rest[0]} dikosongkan dari tim **${teamName.name}**.`);
   }
 
+  if (sub === 's' || sub === 'senjata' || sub === 'weapon') {
+    return handleWeaponCommand(message, rest, prefix, send, guildId, userId);
+  }
+
   if (sub === 'add' || sub === 'set' || sub === 'isi') {
     return handleAdd(message, rest, prefix, send, guildId, userId);
   }
@@ -228,6 +284,55 @@ function handleAdd(message, rest, prefix, send, guildId, userId) {
   if (result.error) return say(send, message, `❌ ${result.error}`);
   return say(send, message, `✅ Slot ${slot} tim **${team.name}**: **${animal.name}** level ${level}` +
     (weapon.weaponId ? ` + ${data.weapons().find(w => w.id === weapon.weaponId).name}` : '') + '.');
+}
+
+// `dtm s <senjata> [pasif...] [slot]`
+function handleWeaponCommand(message, rest, prefix, send, guildId, userId) {
+  const team = store.getActiveTeam(guildId, userId);
+  if (!team) {
+    return say(send, message, `Belum ada tim aktif. Buat dengan \`${prefix} team new <nama>\` lalu \`${prefix} team pick <nama>\`.`);
+  }
+
+  const parsed = parseWeaponArgs(rest);
+  if (parsed.error) {
+    return say(send, message, `❌ ${parsed.error}\nContoh: \`${prefix}tm s gsword\`, \`${prefix}tm s sword crit 2\`.`);
+  }
+
+  const weapon = data.weapons().find(w => w.id === parsed.weaponId);
+  // Pasif yang diminta harus didukung; kalau tidak, senjata tetap dipasang
+  // dengan pasif roll seperti biasa supaya user tidak kehilangan progres.
+  const unsupported = parsed.passives.filter(id => !passiveData.hasMechanic(id));
+  if (unsupported.length) {
+    const names = unsupported.map(id => passiveData.get(id)?.name || `#${id}`).join(', ');
+    return say(send, message, `❌ Pasif ${names} belum punya mekanik simulasi. Pakai salah satu: ${passiveNames()}.`);
+  }
+
+  // Jumlah pasif dibatasi passiveCount senjata, sama seperti roll otomatis.
+  const limit = weapon.passiveCount ?? 1;
+  if (parsed.passives.length > limit) {
+    return say(send, message, `❌ **${weapon.name}** hanya punya ${limit} slot pasif, kamu menyebut ${parsed.passives.length}.`);
+  }
+
+  // Quality slot dipertahankan saat mengganti senjata, supaya tier yang sudah
+  // diatur lewat `d team add ... quality=` tidak hilang tanpa disadari.
+  const previous = team.slots.find(x => x.slot === parsed.slot);
+  const result = store.setWeapon(guildId, userId, team.name, parsed.slot, {
+    weaponId: parsed.weaponId,
+    weaponQuality: previous?.weaponQuality ?? null,
+    passives: parsed.passives.length ? parsed.passives : null,
+  });
+  if (result.error) return say(send, message, `❌ ${result.error}`);
+
+  const slot = result.team.slots.find(x => x.slot === parsed.slot);
+  const quality = slot.weaponQuality ?? data.DEFAULT_QUALITY;
+  const icon = emoji.weaponEmoji(parsed.weaponId, quality);
+  const rank = emoji.rankEmoji(quality);
+  const passiveText = parsed.passives.length
+    ? parsed.passives.map(id => `${emoji.passiveEmoji(id, quality)} ${passiveData.get(id).name}`).join(', ')
+    : 'otomatis (diundi saat simulasi)';
+
+  return say(send, message, `✅ Slot ${parsed.slot} tim **${team.name}**: ${rank}${icon} **${weapon.name}**\n` +
+    `Pasif: ${passiveText}`);
 }
 
 // Klik tombol pemilih tim. Hanya pemilik panel yang boleh memakainya.

@@ -201,6 +201,29 @@ function setSlot(guildId, userId, teamName, slot, data) {
   return { team: getTeamById(team.id) };
 }
 
+// Memasang atau mengganti senjata pada slot yang sudah berisi hewan. Hanya
+// kolom senjata yang disentuh, jadi level dan stat hewan tidak ikut berubah.
+function setWeapon(guildId, userId, teamName, slot, { weaponId, weaponQuality = null, passives = null }) {
+  const team = getTeam(guildId, userId, teamName);
+  if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
+  const index = Number(slot);
+  if (!Number.isInteger(index) || index < 1 || index > MAX_SLOTS) {
+    return { error: `Slot harus 1-${MAX_SLOTS}.` };
+  }
+  const entry = team.slots.find(s => s.slot === index);
+  if (!entry) return { error: `Slot ${index} masih kosong. Isi hewannya dulu.` };
+
+  getDb().prepare(
+    'UPDATE team_slots SET weapon_id = ?, weapon_quality = ?, passives = ? WHERE team_id = ? AND slot = ?'
+  ).run(
+    weaponId ?? null, weaponQuality ?? null,
+    Array.isArray(passives) ? JSON.stringify(passives) : null,
+    team.id, index
+  );
+  touch(team.id);
+  return { team: getTeamById(team.id) };
+}
+
 function clearSlot(guildId, userId, teamName, slot) {
   const team = getTeam(guildId, userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
@@ -240,6 +263,7 @@ module.exports = {
   getTeamById,
   createTeam,
   renameTeam,
+  setWeapon,
   deleteTeam,
   setSlot,
   clearSlot,
