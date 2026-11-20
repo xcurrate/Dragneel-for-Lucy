@@ -19,7 +19,38 @@ function statAt(range, quality) {
 }
 
 function statsFor(def, quality) {
-  return def.qualityList.map(range => statAt(range, quality));
+  // OwO menyimpan satu quality per entri `qualityList`; skalar berarti semua
+  // entri memakai nilai yang sama.
+  return def.qualityList.map((range, i) => statAt(range, Array.isArray(quality) ? quality[i] : quality));
+}
+
+// Aturan penumpukan buff saat efek yang sama menempel lagi. OwO tidak seragam,
+// jadi tiap buff menentukan sendiri lewat `bind()` masing-masing:
+//   merge       — durasi instance lama ditambah, stat lama dipertahankan
+//   replace     — instance lama dibuang (Flame meledak dulu), lalu yang baru masuk
+//   independent — instance baru selalu ditambahkan
+// `sameFrom` membatasi merge pada pemberi yang sama (hanya Poison).
+const STACK = {
+  1: 'independent', // Taunt: tidak punya bind()
+  2: { merge: 'sameFrom' }, // Poison: id + from
+  3: 'replace', // Flame: buang yang lama, maksimal satu
+  4: 'merge', // Defense Up
+  5: 'independent', // Freeze
+  6: 'merge', // Attack Up
+  7: 'merge', // Attack Up+
+  8: 'merge', // Attack Up++
+  9: 'merge', // Mortality
+  10: 'independent', // Celebration
+  11: 'independent', // Leech
+  12: 'independent', // Stinky
+};
+
+// `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
+function stackOf(buff) {
+  const rule = STACK[buff.id] || 'merge';
+  if (rule === 'independent' || rule === 'replace') return { kind: rule };
+  if (typeof rule === 'object') return { kind: 'merge', sameFrom: rule.merge === 'sameFrom' };
+  return { kind: 'merge', sameFrom: false };
 }
 
 // Damage MAG/TRUE dari stat milik `from`, dipakai Poison/Flame/Stinky.
@@ -59,6 +90,13 @@ const FACTORIES = {
 
   3: (def, stats, from) => ({
     id: 3, name: def.name, debuff: true, stats, duration: 3, from,
+    // Flame baru meledakkan instance lama lalu menempel; persen ledakan dan
+    // pemberinya diambil dari buff baru (`replacement`), sama seperti OwO yang
+    // menghitung `this.stats[1]` di dalam bind() milik instance baru.
+    explode(ctx, unit, replacement) {
+      if (unit.stats.hp[0] <= 0) return;
+      buffDamage(ctx, replacement.from, unit, 'mag', replacement.stats[1] / 100, 'm');
+    },
     postTurn(ctx, unit) {
       if (unit.stats.hp[0] <= 0) return;
       buffDamage(ctx, from, unit, 'mag', stats[0] / 100, 'm');
@@ -134,16 +172,18 @@ const FACTORIES = {
   }),
 };
 
-// `quality` 0-100; tanpa itu di-roll dari RNG agar simulasi tetap deterministik.
+// `quality` 0-100, atau array sepanjang `qualityList`. Tanpa nilai, di-roll dari
+// RNG agar simulasi tetap deterministik.
 function createBuff(id, { quality, from, duration, rng } = {}) {
   const def = data.buffById(id);
   const factory = FACTORIES[Number(id)];
   if (!def || !factory) return null;
-  const q = quality == null ? Math.floor((rng ? rng.next() : Math.random()) * 101) : quality;
+  const roll = () => Math.floor((rng ? rng.next() : Math.random()) * 101);
+  const q = quality == null ? roll() : quality;
   const buff = factory(def, statsFor(def, q), from);
   buff.quality = q;
   if (duration != null) buff.duration = duration;
   return buff;
 }
 
-module.exports = { createBuff, statAt, statsFor, FACTORIES };
+module.exports = { createBuff, statAt, statsFor, stackOf, FACTORIES };

@@ -14,10 +14,31 @@ function statAt(range, quality) {
 }
 
 function weaponStats(def, quality) {
-  return def.qualityList.map(range => {
-    const q = Array.isArray(quality) ? quality[def.qualityList.indexOf(range)] : quality;
+  return def.qualityList.map((range, i) => {
+    const q = Array.isArray(quality) ? quality[i] : quality;
     return statAt(range, q);
   });
+}
+
+// OwO menyambung qualityList senjata dengan qualityList tiap buff di `buffList`
+// (WeaponInterface: "Buff qualities are always in the middle"), lalu menaruh
+// `manaRange` di paling akhir. Urutan slotnya: stat → buff → biaya WP.
+function buffSlots(def) {
+  return (def.buffList || []).reduce(
+    (n, id) => n + (data.buffById(id)?.qualityList.length || 0),
+    0
+  );
+}
+
+function buffQuality(def, quality) {
+  if (!Array.isArray(quality)) return quality;
+  const start = def.qualityList.length;
+  return quality.slice(start, start + buffSlots(def));
+}
+
+function manaQuality(def, quality) {
+  if (!Array.isArray(quality)) return quality;
+  return quality[def.qualityList.length + buffSlots(def)];
 }
 
 function buildWeapon(spec, rng, globalQuality) {
@@ -28,10 +49,10 @@ function buildWeapon(spec, rng, globalQuality) {
   // Urutan: quality slot → flag global (-qp/-qe) → tier tertinggi.
   const quality = explicit.quality ?? globalQuality ?? data.DEFAULT_QUALITY;
   const stats = weaponStats(def, quality);
-  // OwO menambahkan `manaRange` ke qualityList, lalu mengambil elemen terakhir
-  // sebagai biaya WP. Jadi biaya punya quality sendiri, terpisah dari stat efek.
+  // OwO menambahkan `manaRange` ke qualityList lalu memakai elemen terakhir
+  // sebagai biaya WP, jadi biaya punya slot kualitas sendiri di ujung array.
   const manaCost = def.manaRange
-    ? statAt(def.manaRange, Array.isArray(quality) ? quality[quality.length - 1] : quality)
+    ? statAt(def.manaRange, manaQuality(def, quality))
     : 0;
   const weapon = {
     id: def.id,
@@ -39,8 +60,8 @@ function buildWeapon(spec, rng, globalQuality) {
     def,
     stats,
     manaCost,
-    // Buff memakai quality senjata (OwO: buff quality ada di tengah qualityList
-    // senjata), jadi Poison dari dagger q100 selalu 50%, bukan diundi terpisah.
+    // Kualitas mentah (skalar atau array slot). Buff mengambil potongannya
+    // lewat buffQuality(); UI memakai nilai ini untuk memilih emoji rank.
     quality,
     ability: def.ability,
     passives: [],
@@ -54,9 +75,11 @@ function buildWeapon(spec, rng, globalQuality) {
     : rollPassives(def.passiveCount, rng, quality);
 
   // Stat bonus dari pasif + efek Rune of the Forgotten (persen dari stat dasar).
+  // Rune memakai satu persen yang sama untuk semua stat (stats[0]); qualityList-nya
+  // memang hanya satu entri, jadi `mixed` di sana bukan persen per-stat.
   weapon.alterStats = statsObj => {
     for (const passive of weapon.passives) passive.alterStats?.(statsObj);
-    if (def.ability.kind === 'stat_boost_all') {
+    if (def.statBoost === 'all') {
       const pct = weapon.stats[0] / 100;
       statsObj.hp[3] += statsObj.hp[1] * pct;
       statsObj.wp[3] += statsObj.wp[1] * pct;
@@ -106,7 +129,7 @@ const ABILITIES = {
     const raw = e.getDamage(actor.stats[ab.stat], pct / 100, ctx.rng);
     e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
     // Glacial Axe melewati buff kalau target sudah terkena Freeze.
-    if (!(ab.skipIfBuffed && already)) applyBuff(ctx, buffId, actor, target, ab.duration, weapon.quality);
+    if (!(ab.skipIfBuffed && already)) applyBuff(ctx, buffId, actor, target, ab.duration, buffQuality(weapon.def, weapon.quality));
     return true;
   },
 
@@ -156,7 +179,7 @@ const ABILITIES = {
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
     for (const unit of e.aliveOf(actor.team)) {
       e.heal(ctx, unit, raw, actor);
-      applyBuff(ctx, weapon.def.buffList[0], actor, unit, ab.duration, weapon.quality);
+      applyBuff(ctx, weapon.def.buffList[0], actor, unit, ab.duration, buffQuality(weapon.def, weapon.quality));
     }
     return true;
   },
@@ -189,7 +212,7 @@ const ABILITIES = {
     if (actor.buffs.some(b => b.id === 1)) return false;
     const e = require('./battleEngine');
     e.useMana(actor, weapon.manaCost);
-    applyBuff(ctx, 1, actor, actor, weapon.ability.duration, weapon.quality);
+    applyBuff(ctx, 1, actor, actor, weapon.ability.duration, buffQuality(weapon.def, weapon.quality));
     return true;
   },
 
@@ -201,7 +224,7 @@ const ABILITIES = {
     if (!target) return false;
     e.useMana(actor, weapon.manaCost);
     const owned = target.buffs.filter(b => tiers.includes(b.id)).length;
-    applyBuff(ctx, tiers[owned], actor, target, 2, weapon.quality);
+    applyBuff(ctx, tiers[owned], actor, target, 2, buffQuality(weapon.def, weapon.quality));
     return true;
   },
 
@@ -211,7 +234,7 @@ const ABILITIES = {
     if (!target) return false;
     if (target.stats.hp[0] + 1 >= e.maxHp(target)) return false;
     e.useMana(actor, weapon.manaCost);
-    applyBuff(ctx, 10, actor, target, weapon.ability.duration, weapon.quality);
+    applyBuff(ctx, 10, actor, target, weapon.ability.duration, buffQuality(weapon.def, weapon.quality));
     return true;
   },
 
@@ -251,16 +274,6 @@ const ABILITIES = {
     return true;
   },
 
-  stat_boost_all(ctx, weapon, actor) {
-    // Rune of the Forgotten: serangan fisik jadi TRUE damage campuran STR+MAG.
-    const e = require('./battleEngine');
-    const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
-    if (!target) return false;
-    const [pAtt, pMag] = weapon.ability.mixed;
-    const raw = e.getMixedDamage(actor.stats.att, pAtt, actor.stats.mag, pMag, ctx.rng);
-    e.inflictDamage(ctx, actor, target, raw, e.TRUE);
-    return true;
-  },
 };
 
 function applyBuff(ctx, buffId, from, target, duration, quality) {
@@ -278,4 +291,4 @@ function weaponAbility(ctx, weapon, actor) {
   return handler(ctx, weapon, actor) === true;
 }
 
-module.exports = { buildWeapon, weaponAbility, weaponStats, statAt, ABILITIES, applyBuff };
+module.exports = { buildWeapon, weaponAbility, weaponStats, buffQuality, manaQuality, statAt, ABILITIES, applyBuff };

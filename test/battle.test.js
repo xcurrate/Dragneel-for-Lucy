@@ -1205,3 +1205,207 @@ describe('storage tim', () => {
     } finally { cleanup(); }
   });
 });
+
+// Regresi untuk bug wiring: hook pasif dan aturan penumpukan hanya terlihat
+// kalau diuji lewat runTurn/runBattle, bukan dengan memanggil hook langsung.
+describe('wiring mesin battle', () => {
+  it('passive.postTurn dipanggil mesin untuk Regeneration', () => {
+    const rng = rngModule.createRng(6);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    unit.weapon = { passives: [createPassive(15, 100, rng)] };
+    unit.stats.hp[0] = engine.maxHp(unit) * 0.5;
+
+    let calls = 0;
+    const original = unit.weapon.passives[0].postTurn;
+    unit.weapon.passives[0].postTurn = function (...args) { calls++; return original.apply(this, args); };
+
+    const enemy = engine.buildUnit({ coeffs: COEFFS_WEAK, level: 40 }, rng);
+    unit.team = [unit]; unit.foes = [enemy];
+    enemy.team = [enemy]; enemy.foes = [unit];
+    const ctx = { rng, tags: new Set(), damageDealt: 0, playerFirst: true };
+
+    engine.runTurn(ctx, [unit], [enemy]);
+    assert.strictEqual(calls, 1, 'postTurn pasif harus dipanggil sekali per turn');
+  });
+
+  it('Regeneration benar-benar menyembuhkan lewat mesin', () => {
+    const rng = rngModule.createRng(6);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    unit.weapon = { passives: [createPassive(15, 100, rng)] };
+    unit.stats.hp[0] = engine.maxHp(unit) * 0.5;
+    const enemy = engine.buildUnit({ coeffs: COEFFS_WEAK, level: 1 }, rng);
+    unit.team = [unit]; unit.foes = [enemy];
+    enemy.team = [enemy]; enemy.foes = [unit];
+
+    const before = unit.stats.hp[0];
+    const ctx = { rng, tags: new Set(), damageDealt: 0, playerFirst: true };
+    engine.runTurn(ctx, [unit], [enemy]);
+    assert.ok(unit.stats.hp[0] > before, 'HP naik karena Regeneration');
+  });
+
+  it('Energize mengisi WP lewat mesin', () => {
+    const rng = rngModule.createRng(6);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    unit.weapon = { passives: [createPassive(16, 100, rng)] };
+    unit.stats.wp[0] = 0;
+    const enemy = engine.buildUnit({ coeffs: COEFFS_WEAK, level: 1 }, rng);
+    unit.team = [unit]; unit.foes = [enemy];
+    enemy.team = [enemy]; enemy.foes = [unit];
+
+    const ctx = { rng, tags: new Set(), damageDealt: 0, playerFirst: true };
+    engine.runTurn(ctx, [unit], [enemy]);
+    assert.ok(unit.stats.wp[0] > 0, 'WP terisi karena Energize');
+  });
+
+  it('Rune of the Forgotten menyerang sebagai TRUE damage campuran', () => {
+    // TRUE damage tidak dipotong resistensi, jadi target ber-PR tinggi dan
+    // ber-PR rendah harus menerima damage yang sama pada seed yang sama.
+    const hit = (pr) => {
+      const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, weapon: { id: 4, quality: 100 } }, rngModule.createRng(9));
+      const target = engine.buildUnit({ coeffs: { ...COEFFS_STRONG, pr }, level: 40 }, rngModule.createRng(9));
+      attacker.team = [attacker]; attacker.foes = [target];
+      target.team = [target]; target.foes = [attacker];
+      const before = target.stats.hp[0];
+      const ctx = { rng: rngModule.createRng(4), tags: new Set(), damageDealt: 0, playerFirst: true };
+      engine.runTurn(ctx, [attacker], [target]);
+      return before - target.stats.hp[0];
+    };
+    const lowPr = hit(0);
+    const highPr = hit(40);
+    assert.ok(lowPr > 0, 'target harus menerima damage');
+    assert.strictEqual(lowPr, highPr, 'TRUE damage tidak boleh terpengaruh PR');
+  });
+
+  it('Rune of the Forgotten memakai STR+MAG, bukan STR saja', () => {
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, weapon: { id: 4, quality: 100 } }, rngModule.createRng(9));
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rngModule.createRng(9));
+    attacker.team = [attacker]; attacker.foes = [target];
+    target.team = [target]; target.foes = [attacker];
+    const before = target.stats.hp[0];
+    const ctx = { rng: rngModule.createRng(4), tags: new Set(), damageDealt: 0, playerFirst: true };
+    engine.runTurn(ctx, [attacker], [target]);
+    const dealt = before - target.stats.hp[0];
+    const strOnly = attacker.stats.att[0] + attacker.stats.att[1];
+    assert.ok(dealt > strOnly, `damage ${dealt} harus melebihi serangan STR saja (${strOnly})`);
+  });
+
+  it('Defense Up dari dua pemberi bergabung, tidak dobel', () => {
+    const rng = rngModule.createRng(1);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    a.team = [a]; a.foes = [victim]; b.team = [a]; b.foes = [victim];
+    victim.team = [victim]; victim.foes = [a];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    engine.bindBuff(ctx, victim, createBuff(4, { quality: 100, from: a, duration: 2, rng }));
+    engine.bindBuff(ctx, victim, createBuff(4, { quality: 100, from: b, duration: 2, rng }));
+    assert.strictEqual(victim.buffs.filter(x => x.id === 4).length, 1, 'Defense Up harus satu instance');
+  });
+
+  it('Flame hanya satu instance; yang lama meledak saat ditimpa', () => {
+    const rng = rngModule.createRng(1);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    a.team = [a]; a.foes = [victim]; b.team = [a]; b.foes = [victim];
+    victim.team = [victim]; victim.foes = [a];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    engine.bindBuff(ctx, victim, createBuff(3, { quality: 100, from: a, duration: 3, rng }));
+    const before = victim.stats.hp[0];
+    engine.bindBuff(ctx, victim, createBuff(3, { quality: 100, from: b, duration: 3, rng }));
+    assert.strictEqual(victim.buffs.filter(x => x.id === 3).length, 1, 'Flame harus satu instance');
+    assert.ok(victim.stats.hp[0] < before, 'Flame lama harus meledak');
+  });
+
+  it('Flame yang menimpa memakai persen dan pemberi dari instance baru', () => {
+    const rng = rngModule.createRng(1);
+    // Pemberi lama MAG rendah, pemberi baru MAG tinggi, supaya salah sumber
+    // langsung terlihat dari besarnya ledakan.
+    const weak = engine.buildUnit({ coeffs: { ...COEFFS_STRONG, mag: 1 }, level: 40 }, rng);
+    const strong = engine.buildUnit({ coeffs: { ...COEFFS_STRONG, mag: 40 }, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    weak.team = [weak]; weak.foes = [victim];
+    strong.team = [strong]; strong.foes = [victim];
+    victim.team = [victim]; victim.foes = [strong];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    // Ledakan q0 = 60% MAG; q100 = 80% MAG.
+    engine.bindBuff(ctx, victim, createBuff(3, { quality: 0, from: weak, duration: 3, rng }));
+    const before = victim.stats.hp[0];
+    engine.bindBuff(ctx, victim, createBuff(3, { quality: 100, from: strong, duration: 3, rng }));
+    const dealt = before - victim.stats.hp[0];
+    const expected = strong.stats.mag[0] * 0.8;
+    assert.ok(
+      dealt > expected * 0.5,
+      `ledakan harus memakai MAG pemberi baru (~${Math.round(expected)}), bukan yang lama; dapat ${Math.round(dealt)}`
+    );
+    assert.ok(dealt > weak.stats.mag[0] * 0.6 * 5, 'tidak boleh memakai stat pemberi lama');
+  });
+
+  it('Taunt menumpuk antar instance', () => {
+    const rng = rngModule.createRng(1);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    engine.bindBuff(ctx, victim, createBuff(1, { quality: 100, from: a, duration: 2, rng }));
+    engine.bindBuff(ctx, victim, createBuff(1, { quality: 100, from: a, duration: 2, rng }));
+    assert.strictEqual(victim.buffs.filter(x => x.id === 1).length, 2, 'Taunt tidak digabung');
+  });
+
+  it('Poison bergabung hanya dari pemberi yang sama', () => {
+    const rng = rngModule.createRng(1);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    engine.bindBuff(ctx, victim, createBuff(2, { quality: 100, from: a, duration: 3, rng }));
+    engine.bindBuff(ctx, victim, createBuff(2, { quality: 100, from: a, duration: 3, rng }));
+    assert.strictEqual(victim.buffs.filter(x => x.id === 2).length, 1, 'pemberi sama digabung');
+    assert.strictEqual(victim.buffs.find(x => x.id === 2).duration, 6, 'durasi dijumlahkan');
+
+    engine.bindBuff(ctx, victim, createBuff(2, { quality: 100, from: b, duration: 3, rng }));
+    assert.strictEqual(victim.buffs.filter(x => x.id === 2).length, 2, 'pemberi beda tidak digabung');
+  });
+
+  it('createBuff menerima quality berupa array', () => {
+    const single = createBuff(2, { quality: [100, 100] });
+    assert.strictEqual(single.stats[0], 50, 'Poison q100 = 50%');
+    const flame = createBuff(3, { quality: [100, 100] });
+    assert.deepStrictEqual(flame.stats, [40, 80], 'Flame q100 = [40, 80]');
+  });
+
+  it('Rune of the Forgotten tidak punya ability aktif, hanya override serangan dasar', () => {
+    const rune = data.weapons().find(w => w.id === 4);
+    assert.strictEqual(rune.ability.kind, 'none', 'OwO: "does not have an active ability"');
+    assert.deepStrictEqual(rune.basicAttack, { kind: 'mixed_true', mixed: [0.65, 0.65] });
+    assert.strictEqual(rune.statBoost, 'all');
+  });
+
+  it('Rune of the Forgotten tetap menaikkan semua stat', () => {
+    const withRune = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, weapon: { id: 4, quality: 100 } }, rngModule.createRng(1));
+    const plain = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rngModule.createRng(1));
+    for (const key of ['att', 'mag', 'pr', 'mr']) {
+      assert.ok(withRune.stats[key][1] > plain.stats[key][1], `${key} harus dapat bonus`);
+    }
+    assert.ok(withRune.stats.hp[3] > plain.stats.hp[3], 'hp bonus harus naik');
+  });
+
+  it('buffQuality memotong kualitas buff setelah entri stat senjata', () => {
+    const { buffQuality, manaQuality } = weaponModule;
+    // Poison Dagger: 1 entri stat + Poison (1 entri) + biaya → slot ke-2.
+    const dagger = data.weapons().find(w => w.id === 8);
+    assert.deepStrictEqual(buffQuality(dagger, [70, 90, 50]), [90]);
+    // Leeching Scythe: 2 entri stat + Leech (2 entri) + biaya.
+    const scythe = data.weapons().find(w => w.id === 20);
+    assert.deepStrictEqual(buffQuality(scythe, [10, 20, 30, 40, 50]), [30, 40]);
+    // Biaya WP selalu slot terakhir, bukan elemen terakhir array masukan.
+    assert.strictEqual(manaQuality(scythe, [10, 20, 30, 40, 50]), 50);
+    // Tanpa array (tier tunggal) nilainya diteruskan apa adanya.
+    assert.strictEqual(buffQuality(dagger, 100), 100);
+    assert.strictEqual(manaQuality(dagger, 100), 100);
+  });
+});

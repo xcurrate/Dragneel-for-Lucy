@@ -446,7 +446,11 @@
       "passiveCount": 0,
       "buffList": [],
       "ability": {
-        "kind": "stat_boost_all",
+        "kind": "none"
+      },
+      "statBoost": "all",
+      "basicAttack": {
+        "kind": "mixed_true",
         "mixed": [
           0.65,
           0.65

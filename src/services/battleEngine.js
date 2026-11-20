@@ -11,6 +11,7 @@
 const data = require('../data/owoBattle');
 const { createRng } = require('./battleRng');
 const { buildWeapon, weaponAbility } = require('./battleWeapon');
+const { stackOf } = require('./battleBuffs');
 
 const MAX_TURNS = data.limits.maxTurns;
 const MAX_SLOTS = data.limits.maxSlots;
@@ -226,7 +227,24 @@ function bindBuff(ctx, target, buff) {
   if (!isAlive(target)) return;
   const stinky = target.buffs.find(b => b.id === 12);
   if (stinky) { stinky.preBind?.(ctx, target, buff); return; }
-  const existing = target.buffs.find(b => b.id === buff.id && b.from === buff.from);
+
+  const rule = stackOf(buff);
+  const same = b => b.id === buff.id && (!rule.sameFrom || b.from === buff.from);
+
+  if (rule.kind === 'independent') { target.buffs.push(buff); return; }
+
+  if (rule.kind === 'replace') {
+    // Flame: instance lama meledak lalu dibuang. OwO menghitung ledakan dari
+    // buff yang BARU menempel (`this.stats[1]`), bukan dari yang lama.
+    for (const old of target.buffs.filter(same)) {
+      old.explode?.(ctx, target, buff);
+      target.buffs = target.buffs.filter(b => b !== old);
+    }
+    target.buffs.push(buff);
+    return;
+  }
+
+  const existing = target.buffs.find(same);
   if (existing) { existing.duration += buff.duration; return; }
   target.buffs.push(buff);
 }
@@ -236,7 +254,10 @@ function runTurn(ctx, player, enemy) {
     for (const unit of team) {
       if (!isAlive(unit)) continue;
       for (const buff of unit.buffs) buff.preTurn?.(ctx, unit, team, foe);
-      if (unit.weapon) unit.weapon.preTurn?.(ctx, unit, team, foe);
+      if (unit.weapon) {
+        unit.weapon.preTurn?.(ctx, unit, team, foe);
+        for (const passive of unit.weapon.passives) passive.preTurn?.(ctx, unit, team, foe);
+      }
     }
   }
 
@@ -258,7 +279,12 @@ function runTurn(ctx, player, enemy) {
       allies = second; foes = first;
     }
     if (!actor || !isAlive(actor)) continue;
-    const blocked = actor.buffs.some(buff => buff.canAttack?.(ctx, actor, allies, foes) === false);
+    // OwO memanggil canAttack semua buff (tidak berhenti di yang pertama),
+    // karena Freeze menurunkan durasinya sendiri di sini.
+    let blocked = false;
+    for (const buff of actor.buffs) {
+      if (buff.canAttack?.(ctx, actor, allies, foes) === false) blocked = true;
+    }
     if (blocked) continue;
     act(ctx, actor, allies, foes);
   }
@@ -267,7 +293,10 @@ function runTurn(ctx, player, enemy) {
     for (const unit of team) {
       if (!isAlive(unit)) continue;
       for (const buff of [...unit.buffs]) buff.postTurn?.(ctx, unit, team, foe);
-      if (unit.weapon) unit.weapon.postTurn?.(ctx, unit, team, foe);
+      if (unit.weapon) {
+        unit.weapon.postTurn?.(ctx, unit, team, foe);
+        for (const passive of unit.weapon.passives) passive.postTurn?.(ctx, unit, team, foe);
+      }
     }
   }
 
@@ -294,6 +323,16 @@ function act(ctx, actor, allies, foes) {
 function basicAttack(ctx, actor, allies, foes) {
   const target = chooseTarget(actor, allies, foes, ctx.rng);
   if (!target) return;
+  // Sebagian senjata mengganti serangan dasarnya, bukan menambah ability aktif
+  // (OwO: override attackPhysical). Bentuknya `basicAttack` di data.
+  const weapon = actor.weapon;
+  const override = weapon && weapon.def && weapon.def.basicAttack;
+  if (override && override.kind === 'mixed_true') {
+    const [pAtt, pMag] = override.mixed;
+    const mixed = getMixedDamage(actor.stats.att, pAtt, actor.stats.mag, pMag, ctx.rng);
+    inflictDamage(ctx, actor, target, mixed, TRUE);
+    return;
+  }
   const damage = getDamage(actor.stats.att, 1, ctx.rng);
   inflictDamage(ctx, actor, target, damage, PHYSICAL);
 }
@@ -361,4 +400,5 @@ module.exports = {
   TRUE,
   MAX_TURNS,
   MAX_SLOTS,
+  runTurn,
 };

@@ -393,3 +393,26 @@ siap untuk integrasi giveaway nanti.
   (CRUD: `listNotes`/`addNote`/`updateNote`/`deleteNote`, judul ≤120, isi ≤4000). Endpoint:
   `GET/POST/PUT/DELETE /api/notes`. UI-nya panel `#notes` di dashboard (tambah/edit/hapus).
 - Test: `test/notes.test.js` (storage) dan `test/dashboardNotes.test.js` (API HTTP sungguhan).
+
+## Mesin simulasi battle (`src/services/battle*.js`)
+Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena memang begitu di sumber:
+
+- **Semua buff ikut dipanggil, jangan berhenti di yang pertama.** `runTurn` memanggil `canAttack`
+  pada *semua* buff (bukan `some(...)`), karena Freeze menurunkan durasinya sendiri di situ —
+  berhenti di Freeze pertama membuat durasinya tidak pernah turun saat ada dua Freeze.
+  Hook `preTurn`/`postTurn` juga wajib dipanggil untuk buff **dan** pasif senjata; dulu pasif
+  senjata terlewat, sehingga Regeneration/Energize tidak pernah jalan.
+- **Penumpukan buff tidak seragam.** Tiap buff OwO punya `bind()` sendiri; tabelnya ada di
+  `STACK` (`battleBuffs.js`): `merge` (durasi ditambah), `replace` (Flame: instance lama meledak
+  lalu dibuang), `independent` (selalu instance baru). `sameFrom` hanya untuk Poison.
+- **Flame meledak memakai buff BARU.** Di `Flame.js`, ledakan dihitung di `bind()` instance yang
+  baru menempel (`this.stats[1]` dan `this.from`), bukan dari instance lama. Karena itu
+  `bindBuff` mengoper buff baru ke `explode()`.
+- **Rune of the Forgotten** tidak punya ability aktif (`ability.kind = "none"`); efeknya hanya
+  `statBoost: "all"` plus override serangan dasar `basicAttack` (`mixed_true`, 65% STR + 65% MAG
+  TRUE). Menaruhnya sebagai ability membuat Rune kehilangan bonus stat-nya.
+- **Kualitas senjata adalah array slot**, bukan satu angka: `stat → buff → mana` (OwO menyambung
+  `qualityList` senjata dengan `qualityList` tiap buff, lalu `manaRange` di ujung). Pakai
+  `buffQuality()`/`manaQuality()` di `battleWeapon.js`; jangan ambil `quality[quality.length-1]`.
+- **Tes regresi harus lewat `runTurn`/`runBattle`**, bukan memanggil hook langsung — bug wiring
+  (hook tidak dipanggil mesin) hanya terlihat dari jalur itu. Lihat `test/battle.test.js`.
