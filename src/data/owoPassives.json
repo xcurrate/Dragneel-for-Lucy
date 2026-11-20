@@ -1,0 +1,365 @@
+{
+  "source": "https://github.com/ChristopherBThai/Discord-OwO-Bot",
+  "sourceLicense": "CC BY-NC-SA 4.0",
+  "note": "Data mentah hasil pembacaan kode passives/ dan divalidasi dengan menjalankan class aslinya (quality 0/50/100). Bukan data resmi OwO; angka bisa berubah bila upstream berubah.",
+  "formula": {
+    "stat": "stat = min + (max - min) * quality / 100",
+    "quality": "quality 0-100, di-roll acak per stat saat senjata dibuat"
+  },
+  "categories": {
+    "stat": "Menambah stat saat persiapan battle",
+    "damage": "Menambah damage serangan",
+    "sustain": "Memulihkan diri sendiri",
+    "heal": "Berinteraksi dengan heal",
+    "defense": "Mengurangi damage masuk",
+    "reflect": "Membalas damage",
+    "mana": "Bermain dengan WP",
+    "onDeath": "Berefek saat mati",
+    "utility": "Di luar battle"
+  },
+  "passives": [
+    {
+      "id": 1,
+      "name": "Strength",
+      "category": "stat",
+      "summary": "Menambah STR sebesar persen dari STR dasar.",
+      "sourceText": "Increases your STR by **?%**",
+      "qualityList": [
+        [
+          5,
+          20
+        ]
+      ],
+      "hooks": [
+        "alterStats"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Magic",
+      "category": "stat",
+      "summary": "Menambah MAG sebesar persen dari MAG dasar.",
+      "sourceText": "Increases your MAG by **?%**",
+      "qualityList": [
+        [
+          5,
+          20
+        ]
+      ],
+      "hooks": [
+        "alterStats"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Health Point",
+      "category": "stat",
+      "summary": "Menambah HP maksimum sebesar persen dari HP dasar.",
+      "sourceText": "Increases your HP by **?%**",
+      "qualityList": [
+        [
+          5,
+          20
+        ]
+      ],
+      "hooks": [
+        "alterStats"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Weapon Point",
+      "category": "stat",
+      "summary": "Menambah WP maksimum sebesar persen dari WP dasar.",
+      "sourceText": "Increases your WP by **?%**",
+      "qualityList": [
+        [
+          10,
+          30
+        ]
+      ],
+      "hooks": [
+        "alterStats"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Physical Resistance",
+      "category": "stat",
+      "summary": "Menambah PR sebesar persen dari PR dasar.",
+      "sourceText": "Increases your PR by **?%**",
+      "qualityList": [
+        [
+          15,
+          35
+        ]
+      ],
+      "hooks": [
+        "alterStats"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Magical Resistance",
+      "category": "stat",
+      "summary": "Menambah MR sebesar persen dari MR dasar.",
+      "sourceText": "Increases your MR by **?%**",
+      "qualityList": [
+        [
+          15,
+          35
+        ]
+      ],
+      "hooks": [
+        "alterStats"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Lifesteal",
+      "category": "sustain",
+      "summary": "Setiap damage yang diberikan menyerap HP sebesar persen dari damage itu.",
+      "sourceText": "All damage you deal heals you for **?%** of the damage dealt!",
+      "qualityList": [
+        [
+          15,
+          35
+        ]
+      ],
+      "hooks": [
+        "postAttack"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Thorns",
+      "category": "reflect",
+      "summary": "Membalas persen damage yang diterima sebagai TRUE damage (tembus resistensi).",
+      "sourceText": "Reflect **?**% of the damage dealt to you as true damage",
+      "qualityList": [
+        [
+          15,
+          35
+        ]
+      ],
+      "hooks": [
+        "postAttacked"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Mana Tap",
+      "category": "sustain",
+      "summary": "Setiap damage yang diberikan mengisi WP sebesar persen dari damage itu.",
+      "sourceText": "All damage you deal replenishes yourWPWP for **?%** of the damage dealt!",
+      "qualityList": [
+        [
+          15,
+          30
+        ]
+      ],
+      "hooks": [
+        "postAttack"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Absolve",
+      "category": "heal",
+      "summary": "Saat menerima heal, menyerang satu musuh acak sebesar persen dari jumlah heal, sebagai MAG.",
+      "sourceText": "When healed, deal **?%** of the healed amount to a random enemy as MAG damage",
+      "qualityList": [
+        [
+          60,
+          80
+        ]
+      ],
+      "hooks": [
+        "postHealed"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Safeguard",
+      "category": "defense",
+      "summary": "Membatalkan persen damage masuk dengan membakar WP sebanyak itu (WP habis = batal sebagian).",
+      "sourceText": "Negate **?**% of the damage dealt to you with WP",
+      "qualityList": [
+        [
+          20,
+          40
+        ]
+      ],
+      "hooks": [
+        "attacked"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Critical",
+      "category": "damage",
+      "summary": "Setiap serangan punya persen peluang menambah persen damage. Juga berlaku untuk heal.",
+      "sourceText": "Every attack has a **?%** chance to deal **?%** more damage. This can apply to heals.",
+      "qualityList": [
+        [
+          10,
+          30
+        ],
+        [
+          25,
+          50
+        ]
+      ],
+      "hooks": [
+        "attack",
+        "heal"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Discharge",
+      "category": "mana",
+      "summary": "Saat WP terisi, menyerang satu musuh acak sebesar persen dari jumlah WP yang terisi, sebagai MAG.",
+      "sourceText": "When WP is replenished, deal **?%** of the replenished amount to a random enemy as MAG damage",
+      "qualityList": [
+        [
+          100,
+          140
+        ]
+      ],
+      "hooks": [
+        "postReplenished"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Kamikaze",
+      "category": "onDeath",
+      "summary": "Saat mati, menyerang pembunuhnya sebesar persen HP maksimum sebagai MAG.",
+      "sourceText": "When the animal dies, deal **?%** of its max HP as MAG dmg to the attacker",
+      "qualityList": [
+        [
+          50,
+          75
+        ]
+      ],
+      "hooks": [
+        "postAttacked"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Regeneration",
+      "category": "sustain",
+      "summary": "Memulihkan persen HP maksimum setiap akhir turn.",
+      "sourceText": "Heal **?%** of your maxHPHP after every turn",
+      "qualityList": [
+        [
+          5,
+          10
+        ]
+      ],
+      "hooks": [
+        "postTurn"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Energize",
+      "category": "mana",
+      "summary": "Mengisi WP sejumlah nilai tetap setiap akhir turn.",
+      "sourceText": "Replenish **?** WP after every turn",
+      "qualityList": [
+        [
+          20,
+          40
+        ]
+      ],
+      "hooks": [
+        "postTurn"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Sprout",
+      "category": "heal",
+      "summary": "Semua heal yang diterima bertambah persen.",
+      "sourceText": "Increase all incoming healing by **?%**",
+      "qualityList": [
+        [
+          20,
+          40
+        ]
+      ],
+      "hooks": [
+        "healed"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Enrage",
+      "category": "damage",
+      "summary": "Setiap 10% HP yang hilang memberi tambahan persen damage.",
+      "sourceText": "Every 10% of missing health gives**?%** damage",
+      "qualityList": [
+        [
+          1,
+          4
+        ]
+      ],
+      "hooks": [
+        "attack"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Sacrifice",
+      "category": "onDeath",
+      "summary": "Saat mati, menyembuhkan rekan tim persen HP maks dan mengisi persen WP maks mereka.",
+      "sourceText": "When this animal dies, heal your teammates for **?%** of its Max HP and replenish for **?%** of its Max WP",
+      "qualityList": [
+        [
+          50,
+          75
+        ],
+        [
+          50,
+          75
+        ]
+      ],
+      "hooks": [
+        "postAttacked"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Snail",
+      "category": "damage",
+      "summary": "Setiap menyerang, siput memukul musuh acak sebesar persen damage yang diberikan (abaikan resistensi).",
+      "sourceText": "Your pet snail fights with you. Whenever you attack an animal, snail will slap a random enemy for **?%** of the damage dealt.",
+      "qualityList": [
+        [
+          5,
+          15
+        ]
+      ],
+      "hooks": [
+        "postAttack"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Knowledge",
+      "category": "utility",
+      "summary": "Tidak berefek di battle. Memberi persen XP ekstra setelah battle.",
+      "sourceText": "This passive does not do anything in battle. However, it will give this animal **?%** extra xp after each battle.",
+      "qualityList": [
+        [
+          5,
+          15
+        ]
+      ],
+      "hooks": []
+    }
+  ]
+}

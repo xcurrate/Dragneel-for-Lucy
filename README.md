@@ -290,6 +290,32 @@ dan bisa diklik). Labelnya berubah jadi **Nama** untuk kembali. Pilihan ini ikut
 terbawa saat pindah halaman, dan mention ditampilkan tanpa mengirim notifikasi
 (`allowedMentions: { parse: [] }`).
 
+## Data pasif battle (referensi simulasi)
+
+`src/data/owoPassives.json` berisi 21 pasif battle dari
+[Discord-OwO-Bot](https://github.com/ChristopherBThai/Discord-OwO-Bot) (CC BY-NC-SA 4.0).
+Ini **data referensi**, bukan bagian dari gameplay Lucy: belum ada perintah yang membacanya.
+Dipakai sebagai acuan kalau fitur simulasi battle mulai dikerjakan.
+
+Angka di dalamnya bukan hasil perkiraan. Semua diambil dengan membaca
+`src/commands/commandList/battle/passives/`, lalu diverifikasi dengan menjalankan class aslinya
+pada quality 0/50/100.
+
+Akses lewat `src/data/owoPassives.js`:
+
+```js
+const passives = require('./src/data/owoPassives');
+passives.get('Lifesteal');        // { id: 7, category: 'sustain', qualityList: [[15, 35]], ... }
+passives.statsAt(passives.get('Lifesteal'), 50);  // [25] -> 25% lifesteal
+passives.byCategory('reflect');   // [Thorns]
+```
+
+Formula: `stat = min + (max - min) × quality / 100`, dengan quality 0-100 di-roll per stat.
+Kategori yang dipakai: `stat`, `damage`, `sustain`, `heal`, `defense`, `reflect`, `mana`,
+`onDeath`, `utility`.
+
+Kalau upstream OwO berubah, ganti JSON-nya; tidak ada langkah build.
+
 ## Animal Dex
 Menangkap kartu **"Informasi animal"** yang dikirim bot Lucy (pesan Components V2) secara otomatis, lalu menyimpannya ke database SQLite (`data/animal-dex.db`). Dex bersifat **global** — satu entri per nama hewan, digabung dari semua server (hewan yang sama tidak diduplikasi antar server). Setiap kali bot Lucy mengirim/memperbarui kartu animal, datanya di-*upsert* per nama hewan sehingga dex selalu terbarui. Database skema lama (per-server) dimigrasikan otomatis ke global saat pertama dijalankan.
 - d dex [nama...] — tampilkan detail satu atau beberapa hewan sekaligus.

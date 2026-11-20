@@ -116,6 +116,10 @@
   kata depan (`yang`, `itu`, `di`, …), dan spasi/tanda hubung dibuang; salah ketik 1–2 huruf
   dimaafkan **hanya untuk jawaban satu kata** agar "goreng" tidak cocok dengan "nasi goreng".
   Pesan yang berawalan prefix (perintah) tidak pernah dihitung sebagai jawaban.
+- **Data pasif battle OwO** ada di `src/data/owoPassives.json` (+ loader `src/data/owoPassives.js`).
+  Murni referensi untuk rencana fitur simulasi battle; **belum dipakai kode produksi**. Sumber
+  `ChristopherBThai/Discord-OwO-Bot` (CC BY-NC-SA 4.0), angka sudah divalidasi dengan menjalankan
+  class aslinya di quality 0/50/100 — jangan diedit dari ingatan, ambil ulang dari sumbernya.
 - Bank soal: `src/data/family100.json` — 1.709 soal hasil deduplikasi dari
   [YangJunMing12/family100-database](https://github.com/YangJunMing12/family100-database)
   (Apache-2.0). Untuk memperbarui, ganti JSON-nya; `src/data/family100Bank.js` menormalkan
