@@ -11,6 +11,7 @@ const sim = require(path.join(ROOT, 'src/services/battleSim'));
 const rngModule = require(path.join(ROOT, 'src/services/battleRng'));
 const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
 const { createBuff } = require(path.join(ROOT, 'src/services/battleBuffs'));
+const weaponModule = require(path.join(ROOT, 'src/services/battleWeapon'));
 
 // Stat dasar dipakai berulang; level 40 cukup untuk battle selesai < 24 turn.
 const COEFFS_STRONG = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
@@ -334,6 +335,30 @@ describe('buff', () => {
     const bucket = { amount: 100, bonus: 0 };
     buff.attack({ rng }, unit, null, bucket);
     assert.ok(bucket.bonus > 0);
+  });
+
+  it('Poison Dagger: 70-100% STR, 200-100 WP, Poison 30-50% MAG 3 turn', () => {
+    const def = data.weapons().find(w => w.id === 8);
+    assert.strictEqual(def.name, 'Poison Dagger');
+    assert.deepStrictEqual(def.qualityList[0], [70, 100]);
+    assert.deepStrictEqual(def.manaRange, [200, 100]);
+    assert.deepStrictEqual(data.buffById(2).qualityList[0], [30, 50]);
+    assert.strictEqual(def.ability.duration, 3);
+
+    const at = q => weaponModule.buildWeapon({ id: 8, quality: q, passives: [12] }, rngModule.createRng(1), q).stats[0];
+    assert.strictEqual(at(0), 70);
+    assert.strictEqual(at(100), 100);
+  });
+
+  it('kualitas Poison mengikuti kualitas senjata, bukan diundi', () => {
+    const rng = rngModule.createRng(1);
+    const seen = [0, 50, 100].map(quality => createBuff(2, { quality, from: null, duration: 3, rng }).stats[0]);
+    assert.deepStrictEqual(seen, [30, 40, 50]);
+
+    // Lewat senjata: q100 harus memberi Poison 50%, bukan hasil undian.
+    const q100 = weaponModule.buildWeapon({ id: 8, quality: 100, passives: [12] }, rng, 100);
+    assert.strictEqual(q100.quality, 100);
+    assert.strictEqual(createBuff(2, { quality: q100.quality, from: null, duration: 3, rng }).stats[0], 50);
   });
 
   it('Poison memberi damage tiap akhir turn', () => {

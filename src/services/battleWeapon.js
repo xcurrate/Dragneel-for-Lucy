@@ -39,6 +39,9 @@ function buildWeapon(spec, rng, globalQuality) {
     def,
     stats,
     manaCost,
+    // Buff memakai quality senjata (OwO: buff quality ada di tengah qualityList
+    // senjata), jadi Poison dari dagger q100 selalu 50%, bukan diundi terpisah.
+    quality,
     ability: def.ability,
     passives: [],
   };
@@ -103,7 +106,7 @@ const ABILITIES = {
     const raw = e.getDamage(actor.stats[ab.stat], pct / 100, ctx.rng);
     e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
     // Glacial Axe melewati buff kalau target sudah terkena Freeze.
-    if (!(ab.skipIfBuffed && already)) applyBuff(ctx, buffId, actor, target, ab.duration);
+    if (!(ab.skipIfBuffed && already)) applyBuff(ctx, buffId, actor, target, ab.duration, weapon.quality);
     return true;
   },
 
@@ -153,7 +156,7 @@ const ABILITIES = {
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
     for (const unit of e.aliveOf(actor.team)) {
       e.heal(ctx, unit, raw, actor);
-      applyBuff(ctx, weapon.def.buffList[0], actor, unit, ab.duration);
+      applyBuff(ctx, weapon.def.buffList[0], actor, unit, ab.duration, weapon.quality);
     }
     return true;
   },
@@ -186,7 +189,7 @@ const ABILITIES = {
     if (actor.buffs.some(b => b.id === 1)) return false;
     const e = require('./battleEngine');
     e.useMana(actor, weapon.manaCost);
-    applyBuff(ctx, 1, actor, actor, weapon.ability.duration);
+    applyBuff(ctx, 1, actor, actor, weapon.ability.duration, weapon.quality);
     return true;
   },
 
@@ -198,7 +201,7 @@ const ABILITIES = {
     if (!target) return false;
     e.useMana(actor, weapon.manaCost);
     const owned = target.buffs.filter(b => tiers.includes(b.id)).length;
-    applyBuff(ctx, tiers[owned], actor, target, 2);
+    applyBuff(ctx, tiers[owned], actor, target, 2, weapon.quality);
     return true;
   },
 
@@ -208,7 +211,7 @@ const ABILITIES = {
     if (!target) return false;
     if (target.stats.hp[0] + 1 >= e.maxHp(target)) return false;
     e.useMana(actor, weapon.manaCost);
-    applyBuff(ctx, 10, actor, target, weapon.ability.duration);
+    applyBuff(ctx, 10, actor, target, weapon.ability.duration, weapon.quality);
     return true;
   },
 
@@ -260,10 +263,10 @@ const ABILITIES = {
   },
 };
 
-function applyBuff(ctx, buffId, from, target, duration) {
+function applyBuff(ctx, buffId, from, target, duration, quality) {
   const e = require('./battleEngine');
   if (!e.isAlive(target)) return;
-  const buff = createBuff(buffId, { from, duration, rng: ctx.rng });
+  const buff = createBuff(buffId, { quality, from, duration, rng: ctx.rng });
   if (buff) e.bindBuff(ctx, target, buff);
 }
 
