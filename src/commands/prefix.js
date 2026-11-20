@@ -3,6 +3,8 @@ const { modeLabel, warnLabel, personalPanel, statusEmbed, helpEmbed } = require(
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { handlePersonalCommand } = require('./bossRewardNotify');
 const { buildDexResponse } = require('../services/animalDex');
+const { handleTeamCommand } = require('./battleTeam');
+const { handleSimCommand } = require('./battleSim');
 const reminderStore = require('../utils/reminderStorage');
 const reminderCategories = require('../utils/reminderCategories');
 const reminderValidate = require('../utils/reminderValidate');
@@ -22,7 +24,9 @@ const ALIASES = {
   menu: ['menu', 'panel', 'pengaturan'],
   'admin-help': ['bantuan-admin', 'admin-help', 'admin'],
   count: ['count', 'counter', 'hitung'],
-  settings: ['s', 'settings', 'setelan']
+  settings: ['s', 'settings', 'setelan'],
+  team: ['team', 'tim', 'timku'],
+  sim: ['sim', 'simulasi', 'simbattle', 'battle-sim']
 };
 
 function expandAliases() {
@@ -40,7 +44,7 @@ const ALIAS_MAP = expandAliases();
 // mis. "duh"/"dah" saat prefix = "d" — tidak memicu balasan bot.
 const KNOWN_SUBS = new Set(Object.keys(ALIAS_MAP));
 // Perintah tingkat bot, tidak di bawah kategori `boss`: bantuan & ubah prefix.
-const TOP_SUBS = new Set(['help', 'prefix', 'count', 'settings']);
+const TOP_SUBS = new Set(['help', 'prefix', 'count', 'settings', 'team', 'sim']);
 
 function parsePrefixInput(content, prefix) {
   const matched = matchPrefix(content, prefix);
@@ -159,6 +163,14 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
       content: statusEmbed(settings, message.author.id),
       embeds: [helpEmbed(prefix, { isAdmin: _isAdmin(message) })]
     });
+  }
+
+  if (sub === 'team') {
+    return handleTeamCommand(message, args, prefix, { sendText: _sendText, sendPayload: _send });
+  }
+
+  if (sub === 'sim') {
+    return handleSimCommand(message, args, prefix, { sendText: _sendText });
   }
 
   if (sub === 'menu') {

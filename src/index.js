@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
 const command = require('./commands/boss');
 const { handlePrefixCommand } = require('./commands/prefix');
+const battleTeam = require('./commands/battleTeam');
 const { BossTracker } = require('./services/bossTracker');
 const { getGuildSettings } = require('./utils/storage');
 const logBuffer = require('./utils/logBuffer');
@@ -116,6 +117,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && mathRace.isMathNav(i.customId)) { await mathRace.handleNavigation(i); return; }
     if (i.isButton() && lucyReminder.isReminderNav(i.customId)) { await lucyReminder.handleComponent(i); return; }
     if (i.isButton() && reminders.isPanelNav(i.customId)) { await reminders.handleComponent(i); return; }
+    if (i.isButton() && battleTeam.isTeamButton(i.customId)) { await battleTeam.handleTeamButton(i); return; }
     if (i.isButton() || i.isStringSelectMenu()) { await command.handleComponent(i, tracker); return; }
   } catch (e) {
     console.error(e);

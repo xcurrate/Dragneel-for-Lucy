@@ -172,7 +172,9 @@ function helpEmbed(prefix, { isAdmin = false } = {}) {
       '`lucy battle` / `lb` / `l hunt` — aksi Lucy + pengingat otomatis (prefix bisa diatur admin)',
       '`' + prefix + ' lreminder` — kotak interaksi pengingat (on/off + cara ping, berlaku global)',
       '`' + prefix + ' lucyprefix set <prefix>` — atur prefix bot Lucy di server ini (admin)',
-      '`' + prefix + ' llb <pray|curse|battle|hunt|lucy|all> [rentang]` — leaderboard aksi Lucy'
+      '`' + prefix + ' llb <pray|curse|battle|hunt|lucy|all> [rentang]` — leaderboard aksi Lucy',
+      '`' + prefix + ' team` — tim battle kustom (new/add/pick/show, tombol pilih tim)',
+      '`' + prefix + ' sim [-m jumlah] [-s seed]` — simulasi battle gaya OwO'
     ].join('\n'), inline: false },
 
     // ⚙️ Admin — daftar perintah slash admin, hanya tampil jika isAdmin.

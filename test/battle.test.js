@@ -1,0 +1,596 @@
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..');
+const data = require(path.join(ROOT, 'src/data/owoBattle'));
+const engine = require(path.join(ROOT, 'src/services/battleEngine'));
+const sim = require(path.join(ROOT, 'src/services/battleSim'));
+const rngModule = require(path.join(ROOT, 'src/services/battleRng'));
+const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
+const { createBuff } = require(path.join(ROOT, 'src/services/battleBuffs'));
+
+// Stat dasar dipakai berulang; level 40 cukup untuk battle selesai < 24 turn.
+const COEFFS_STRONG = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
+const COEFFS_WEAK = { hp: 4, att: 2, pr: 3, wp: 1, mag: 1, mr: 2 };
+
+describe('data battle OwO', () => {
+  it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
+    assert.strictEqual(data.animals().length, 20);
+    assert.strictEqual(data.weapons().length, 22);
+    assert.strictEqual(data.buffs().length, 12);
+  });
+
+  it('mencari hewan lewat alias', () => {
+    assert.strictEqual(data.findAnimal('snail').name, 'snail');
+    assert.strictEqual(data.findAnimal('tiger2').name, 'tiger2');
+    assert.strictEqual(data.findAnimal('tidak-ada'), null);
+    assert.strictEqual(data.findWeapon('gs').name, 'Great Sword');
+  });
+
+  it('mengubah koefisien level menjadi stat final', () => {
+    const level1 = data.baseStats(data.findAnimal('snail'), 1);
+    const level100 = data.baseStats(data.findAnimal('snail'), 100);
+    assert.ok(level100.hp > level1.hp, 'HP naik seiring level');
+    assert.ok(level100.att > level1.att, 'ATT naik seiring level');
+  });
+
+  it('menolak senjata yang tidak ada', () => {
+    assert.strictEqual(data.findWeapon('tidak-ada-senjata'), null);
+  });
+});
+
+describe('RNG ber-seed', () => {
+  it('menghasilkan urutan yang sama untuk seed sama', () => {
+    const a = rngModule.createRng(123);
+    const b = rngModule.createRng(123);
+    const seqA = Array.from({ length: 10 }, () => a.next());
+    const seqB = Array.from({ length: 10 }, () => b.next());
+    assert.deepStrictEqual(seqA, seqB);
+  });
+
+  it('menghasilkan urutan berbeda untuk seed berbeda', () => {
+    const a = rngModule.createRng(1).next();
+    const b = rngModule.createRng(2).next();
+    assert.notStrictEqual(a, b);
+  });
+
+  it('fork memberi stream anak yang berbeda', () => {
+    const base = rngModule.createRng(7);
+    const childA = base.fork();
+    const childB = base.fork();
+    assert.notStrictEqual(childA.next(), childB.next());
+  });
+
+  it('next selalu di rentang [0,1)', () => {
+    const rng = rngModule.createRng(99);
+    for (let i = 0; i < 500; i++) {
+      const value = rng.next();
+      assert.ok(value >= 0 && value < 1, `nilai ${value} di luar rentang`);
+    }
+  });
+});
+
+describe('rumus damage', () => {
+  it('getDamage memakai roll ±50 seperti OwO', () => {
+    const rng = rngModule.createRng(5);
+    const value = engine.getDamage([200, 0], 1, rng);
+    assert.ok(value >= 150 && value <= 250, `damage ${value} di luar roll ±50`);
+  });
+
+  it('resistensi menjenuh dan tidak pernah mencapai 100%', () => {
+    assert.strictEqual(engine.resToPercent([0, 0]), 0);
+    const high = engine.resToPercent([10000, 0]);
+    assert.ok(high < 0.8, 'plafon resistensi 80%');
+    assert.ok(engine.resToPercent([425, 0]) > engine.resToPercent([100, 0]));
+  });
+
+  it('damage fisik dikurangi PR, magical dikurangi MR', () => {
+    const rng = rngModule.createRng(3);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    const physical = engine.inflictDamage(ctx, attacker, target, 1000, engine.PHYSICAL);
+    const magical = engine.inflictDamage(ctx, attacker, target, 1000, engine.MAGICAL);
+    const trueDamage = engine.inflictDamage(ctx, attacker, target, 1000, engine.TRUE);
+
+    assert.ok(physical < 1000, 'damage fisik kena PR');
+    assert.strictEqual(trueDamage, 1000, 'TRUE damage tidak kena resistensi');
+    assert.notStrictEqual(physical, magical);
+  });
+
+  it('damage tidak pernah negatif walau dikurangi shield besar', () => {
+    const rng = rngModule.createRng(11);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    target.buffs.push(createBuff(1, { quality: 100, from: target, rng }));
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const dealt = engine.inflictDamage(ctx, attacker, target, 10, engine.PHYSICAL);
+    assert.ok(dealt >= 0);
+    assert.ok(engine.isAlive(target));
+  });
+});
+
+describe('heal dan replenish', () => {
+  it('heal tidak melewati HP maksimum', () => {
+    const rng = rngModule.createRng(4);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    engine.heal(ctx, unit, 999999, unit);
+    assert.strictEqual(unit.stats.hp[0], engine.maxHp(unit));
+  });
+
+  it('heal dengan overheal boleh melewati HP maksimum', () => {
+    const rng = rngModule.createRng(4);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    engine.heal(ctx, unit, 999999, unit, { overheal: true });
+    assert.ok(unit.stats.hp[0] > engine.maxHp(unit));
+    assert.ok(unit.stats.hp[0] <= engine.maxHp(unit) * 1.5);
+  });
+
+  it('replenish tidak melewati WP maksimum', () => {
+    const rng = rngModule.createRng(4);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    unit.stats.wp[0] = 0;
+    engine.replenish(ctx, unit, 999999, unit);
+    assert.strictEqual(unit.stats.wp[0], engine.maxWp(unit));
+  });
+
+  it('useMana tidak membuat WP negatif', () => {
+    const rng = rngModule.createRng(4);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    engine.useMana(unit, 999999);
+    assert.strictEqual(unit.stats.wp[0], 0);
+  });
+});
+
+describe('pemilihan target', () => {
+  it('taunt diprioritaskan saat memilih target', () => {
+    const rng = rngModule.createRng(8);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, label: 'a' }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, label: 'b' }, rng);
+    const c = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, label: 'c' }, rng);
+    c.buffs.push(createBuff(1, { quality: 50, from: c, rng }));
+    for (let i = 0; i < 20; i++) {
+      assert.strictEqual(engine.chooseTarget(a, [a], [b, c], rng), c);
+    }
+  });
+
+  it('ignoreChoose melewati taunt', () => {
+    const rng = rngModule.createRng(8);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const c = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    c.buffs.push(createBuff(1, { quality: 50, from: c, rng }));
+    const seen = new Set();
+    for (let i = 0; i < 50; i++) {
+      const target = engine.chooseTarget(a, [a], [b, c], rng, { ignoreChoose: true });
+      seen.add(target.pid);
+    }
+    assert.strictEqual(seen.size, 2, 'kedua lawan bisa terpilih');
+  });
+
+  it('lowestHp memilih rasio HP terendah dan melewati yang mati', () => {
+    const rng = rngModule.createRng(2);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const dead = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    a.stats.hp[0] = engine.maxHp(a) * 0.9;
+    b.stats.hp[0] = engine.maxHp(b) * 0.2;
+    dead.stats.hp[0] = 0;
+    assert.strictEqual(engine.lowestHp([a, b, dead]), b);
+  });
+});
+
+describe('pasif senjata', () => {
+  it('pasif stat menambah bonus stat saat alterStats', () => {
+    const rng = rngModule.createRng(1);
+    const passive = createPassive(1, 100, rng); // Strength, +20%
+    const stats = engine.buildStats({ hp: 100, wp: 100, att: 100, mag: 100, pr: 100, mr: 100 });
+    passive.alterStats(stats);
+    assert.ok(Math.abs(stats.att[1] - 20) < 0.01, 'bonus ATT = 20% dari 100');
+  });
+
+  it('Critical menambah damage saat roll berhasil', () => {
+    const rng = rngModule.createRng(1);
+    const passive = createPassive(12, 100, rng); // 30% chance, +50%
+    const bucket = { amount: 100, bonus: 0 };
+    let crit = false;
+    for (let i = 0; i < 100; i++) {
+      bucket.bonus = 0;
+      passive.attack({ rng }, { pid: 1 }, { pid: 2 }, bucket);
+      if (bucket.bonus > 0) { crit = true; break; }
+    }
+    assert.ok(crit, 'critical pernah aktif');
+    if (crit) assert.ok(Math.abs(bucket.bonus - 50) < 0.01);
+  });
+
+  it('Lifesteal menyembuhkan penyerang sebesar persentase damage', () => {
+    const rng = rngModule.createRng(6);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const passive = createPassive(7, 100, rng); // 35%
+    attacker.weapon = { passives: [passive] };
+    attacker.stats.hp[0] = engine.maxHp(attacker) * 0.5;
+
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const before = attacker.stats.hp[0];
+    const dealt = engine.inflictDamage(ctx, attacker, target, 200, engine.TRUE);
+    assert.ok(dealt > 0);
+    assert.ok(attacker.stats.hp[0] > before, 'HP penyerang naik');
+  });
+
+  it('Lifesteal tidak memicu dirinya sendiri berulang kali', () => {
+    const rng = rngModule.createRng(6);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    attacker.weapon = { passives: [createPassive(7, 100, rng)] };
+    attacker.stats.hp[0] = engine.maxHp(attacker) * 0.5;
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    // Rekursi tak terkendali akan melempar RangeError stack overflow.
+    assert.doesNotThrow(() => engine.inflictDamage(ctx, attacker, target, 200, engine.TRUE));
+  });
+
+  it('Thorns memantulkan damage ke penyerang', () => {
+    const rng = rngModule.createRng(6);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    target.weapon = { passives: [createPassive(8, 100, rng)] }; // 35%
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const before = attacker.stats.hp[0];
+    engine.inflictDamage(ctx, attacker, target, 500, engine.TRUE);
+    assert.ok(attacker.stats.hp[0] < before, 'penyerang menerima pantulan');
+  });
+
+  it('Safeguard memakai WP untuk menahan damage', () => {
+    const rng = rngModule.createRng(6);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    target.weapon = { passives: [createPassive(11, 100, rng)] }; // 40%
+    const wpBefore = target.stats.wp[0];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const dealt = engine.inflictDamage(ctx, attacker, target, 300, engine.TRUE);
+    assert.ok(target.stats.wp[0] < wpBefore, 'WP terpakai');
+    assert.ok(dealt < 300, 'damage berkurang');
+  });
+
+  it('Regeneration menyembuhkan tiap akhir turn', () => {
+    const rng = rngModule.createRng(6);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    unit.weapon = { passives: [createPassive(15, 100, rng)] }; // 10%
+    unit.stats.hp[0] = engine.maxHp(unit) * 0.5;
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const before = unit.stats.hp[0];
+    unit.weapon.passives[0].postTurn(ctx, unit);
+    assert.ok(unit.stats.hp[0] > before);
+  });
+
+  it('Energize mengisi WP tiap akhir turn', () => {
+    const rng = rngModule.createRng(6);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    unit.weapon = { passives: [createPassive(16, 100, rng)] }; // +40 WP
+    unit.stats.wp[0] = 0;
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    unit.weapon.passives[0].postTurn(ctx, unit);
+    assert.ok(unit.stats.wp[0] > 0);
+  });
+
+  it('semua pasif bisa dibuat tanpa error', () => {
+    const rng = rngModule.createRng(1);
+    for (let id = 1; id <= 21; id++) {
+      const passive = createPassive(id, 50, rng);
+      assert.ok(passive, `pasif ${id} gagal dibuat`);
+      assert.strictEqual(passive.id, id);
+    }
+  });
+});
+
+describe('buff', () => {
+  it('Shield mengurangi damage masuk', () => {
+    const rng = rngModule.createRng(9);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+
+    const plain = engine.inflictDamage(ctx, attacker, target, 400, engine.TRUE);
+    target.stats.hp[0] = engine.maxHp(target);
+    target.buffs.push(createBuff(1, { quality: 100, from: target, rng }));
+    const shielded = engine.inflictDamage(ctx, attacker, target, 400, engine.TRUE);
+
+    assert.ok(shielded < plain, 'damage dengan shield lebih kecil');
+  });
+
+  it('Freeze baru berlaku setelah turn pembuatannya selesai', () => {
+    const rng = rngModule.createRng(9);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const freeze = createBuff(5, { quality: 50, from: unit, duration: 2, rng });
+    unit.buffs.push(freeze);
+
+    assert.strictEqual(freeze.canAttack(), true, 'turn pembuatan tidak terblokir');
+    freeze.postTurn();
+    // Durasi 2 = dua giliran serang yang hilang, lalu buff lepas.
+    assert.strictEqual(freeze.canAttack(), false, 'giliran pertama terblokir');
+    assert.ok(!freeze.expired, 'masih tersisa satu giliran');
+    assert.strictEqual(freeze.canAttack(), false, 'giliran kedua terblokir');
+    assert.ok(freeze.expired, 'freeze habis setelah durasinya selesai');
+  });
+
+  it('Freeze mengelola durasinya sendiri, bukan lewat tick mesin', () => {
+    const rng = rngModule.createRng(9);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const freeze = createBuff(5, { quality: 50, from: unit, duration: 2, rng });
+    assert.strictEqual(freeze.managesOwnDuration, true);
+  });
+
+  it('Attack Up menambah damage serangan', () => {
+    const rng = rngModule.createRng(9);
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const buff = createBuff(6, { quality: 100, from: unit, duration: 2, rng });
+    const bucket = { amount: 100, bonus: 0 };
+    buff.attack({ rng }, unit, null, bucket);
+    assert.ok(bucket.bonus > 0);
+  });
+
+  it('Poison memberi damage tiap akhir turn', () => {
+    const rng = rngModule.createRng(9);
+    const caster = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const poison = createBuff(2, { quality: 100, from: caster, duration: 3, rng });
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const before = victim.stats.hp[0];
+    poison.postTurn(ctx, victim);
+    assert.ok(victim.stats.hp[0] < before);
+  });
+
+  it('semua buff bisa dibuat dan punya id yang benar', () => {
+    const rng = rngModule.createRng(1);
+    for (let id = 1; id <= 12; id++) {
+      const buff = createBuff(id, { quality: 50, from: null, rng });
+      assert.ok(buff, `buff ${id} gagal dibuat`);
+      assert.strictEqual(buff.id, id);
+    }
+  });
+});
+
+describe('simulasi battle', () => {
+  const strong = [{ slot: 1, coeffs: COEFFS_STRONG, level: 40, label: 'kuat' }];
+  const weak = [{ slot: 1, coeffs: COEFFS_WEAK, level: 40, label: 'lemah' }];
+
+  it('deterministik untuk seed yang sama', () => {
+    const a = sim.simulate(strong, weak, { runs: 20, seed: 1234 });
+    const b = sim.simulate(strong, weak, { runs: 20, seed: 1234 });
+    assert.deepStrictEqual(a.tally, b.tally);
+    assert.strictEqual(a.turns.avg, b.turns.avg);
+  });
+
+  it('tim lebih kuat menang jauh lebih sering', () => {
+    const result = sim.simulate(strong, weak, { runs: 100, seed: 3 });
+    assert.ok(result.winRate > 80, `win rate ${result.winRate}% terlalu rendah`);
+  });
+
+  it('hasil terbalik saat posisi ditukar', () => {
+    const forward = sim.simulate(strong, weak, { runs: 100, seed: 3 });
+    const reverse = sim.simulate(weak, strong, { runs: 100, seed: 3 });
+    assert.ok(forward.winRate > 80);
+    assert.ok(reverse.winRate < 20);
+  });
+
+  it('pertarungan cermin mendekati 50% (tidak bias sisi)', () => {
+    const mirror = sim.simulate(strong, strong.map(s => ({ ...s, label: 'mirror' })), { runs: 300, seed: 11 });
+    assert.ok(mirror.winRate > 35 && mirror.winRate < 65, `mirror win rate ${mirror.winRate}% bias`);
+  });
+
+  it('cermin dengan senjata tetap mendekati 50%', () => {
+    const withWeapon = [{ slot: 1, coeffs: COEFFS_STRONG, level: 60, weapon: { id: 1, quality: 90 } }];
+    const result = sim.simulate(withWeapon, withWeapon.map(s => ({ ...s, label: 'mirror' })), { runs: 300, seed: 5 });
+    assert.ok(result.winRate > 35 && result.winRate < 65, `mirror senjata ${result.winRate}% bias`);
+  });
+
+  it('jumlah pertarungan dihitung tepat', () => {
+    const result = sim.simulate(strong, weak, { runs: 37, seed: 1 });
+    assert.strictEqual(result.runs, 37);
+    assert.strictEqual(result.tally.player + result.tally.enemy + result.tally.tie, 37);
+  });
+
+  it('membatasi jumlah pertarungan ke 1..1000', () => {
+    assert.strictEqual(sim.simulate(strong, weak, { runs: 0, seed: 1 }).runs, 1);
+    assert.strictEqual(sim.simulate(strong, weak, { runs: 99999, seed: 1 }).runs, 1000);
+  });
+
+  it('battle selalu selesai dalam batas turn', () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      const result = engine.runBattle(strong, weak, { seed });
+      assert.ok(result.turns >= 1 && result.turns <= engine.MAX_TURNS, `turn ${result.turns} di luar batas`);
+    }
+  });
+});
+
+describe('senjata', () => {
+  it('semua senjata bisa dipakai bertarung tanpa error', () => {
+    const rng = rngModule.createRng(7);
+    for (const weapon of data.weapons()) {
+      const player = [{ slot: 1, coeffs: COEFFS_STRONG, level: 60, weapon: { id: weapon.id, quality: 100 } }];
+      const enemy = [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }];
+      assert.doesNotThrow(
+        () => engine.runBattle(player, enemy, { rng: rngModule.createRng(7), playerQuality: 100 }),
+        `senjata ${weapon.name} error`
+      );
+    }
+  });
+
+  it('biaya WP turun saat quality naik', () => {
+    const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const low = buildWeapon({ id: 1, quality: 0 }, rngModule.createRng(1));
+    const high = buildWeapon({ id: 1, quality: 100 }, rngModule.createRng(1));
+    assert.ok(low.manaCost >= high.manaCost, 'manaRange OwO menurun terhadap quality');
+  });
+
+  it('senjata tanpa quality tetap mendapat stat', () => {
+    const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const weapon = buildWeapon({ id: 1 }, rngModule.createRng(1));
+    assert.ok(weapon.stats.length > 0);
+    assert.ok(Number.isFinite(weapon.manaCost));
+  });
+
+  it('senjata tidak dikenal menghasilkan null', () => {
+    const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    assert.strictEqual(buildWeapon('tidak-ada', rngModule.createRng(1)), null);
+  });
+});
+
+describe('parsing stat manual', () => {
+  it('menerima format nama=nilai', () => {
+    const parsed = sim.parseCustomStats('hp=14 att=6 pr=2 wp=3 mag=0 mr=1');
+    assert.deepStrictEqual(parsed.custom, { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 });
+  });
+
+  it('menerima format enam angka berurutan', () => {
+    const parsed = sim.parseCustomStats('14,6,2,3,0,1');
+    assert.deepStrictEqual(parsed.custom, { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 });
+  });
+
+  it('menerima nama stat dex (attack/protection/wisdom/magic)', () => {
+    const parsed = sim.parseCustomStats('attack=6 protection=2 wisdom=3 magic=5');
+    assert.deepStrictEqual(parsed.custom, { att: 6, pr: 2, wp: 3, mag: 5 });
+  });
+
+  it('menolak jumlah angka yang salah', () => {
+    assert.ok(sim.parseCustomStats('1,2,3').error);
+  });
+
+  it('menolak nama stat tak dikenal', () => {
+    assert.ok(sim.parseCustomStats('kekuatan=5').error);
+  });
+
+  it('menolak input kosong', () => {
+    assert.ok(sim.parseCustomStats('').error);
+  });
+});
+
+describe('storage tim', () => {
+  let tempDir;
+  let store;
+
+  function load() {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-team-'));
+    process.chdir(tempDir);
+    delete require.cache[require.resolve(path.join(ROOT, 'src/utils/battleTeamStorage'))];
+    store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+  }
+
+  function cleanup() {
+    try { store.getDb().close(); } catch {}
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+
+  it('membuat, membaca, dan menghapus tim', () => {
+    load();
+    try {
+      const created = store.createTeam('g1', 'u1', 'Alpha');
+      assert.ok(created.team);
+      assert.strictEqual(store.getTeam('g1', 'u1', 'Alpha').name, 'Alpha');
+      store.deleteTeam('g1', 'u1', 'Alpha');
+      assert.strictEqual(store.getTeam('g1', 'u1', 'Alpha'), null);
+    } finally { cleanup(); }
+  });
+
+  it('nama tim unik tanpa peduli huruf besar/kecil', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      assert.ok(store.createTeam('g1', 'u1', 'alpha').error);
+    } finally { cleanup(); }
+  });
+
+  it('tim terpisah per user dan per guild', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      assert.strictEqual(store.getTeam('g1', 'u2', 'Alpha'), null);
+      assert.strictEqual(store.getTeam('g2', 'u1', 'Alpha'), null);
+    } finally { cleanup(); }
+  });
+
+  it('menyimpan slot hewan dan slot stat manual', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'snail', level: 50, weaponId: 1 });
+      store.setSlot('g1', 'u1', 'Alpha', 2, { custom: { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 }, level: 20 });
+      const team = store.getTeam('g1', 'u1', 'Alpha');
+      assert.strictEqual(team.slots.length, 2);
+      assert.strictEqual(team.slots[0].animalKey, 'snail');
+      assert.strictEqual(team.slots[0].level, 50);
+      assert.deepStrictEqual(team.slots[1].custom, { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 });
+    } finally { cleanup(); }
+  });
+
+  it('slot di luar 1-3 ditolak', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 0, { animalKey: 'snail' }).error);
+      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 4, { animalKey: 'snail' }).error);
+    } finally { cleanup(); }
+  });
+
+  it('slot harus berisi hewan atau stat, tidak keduanya', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 1, {}).error);
+      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'snail', custom: { hp: 1 } }).error);
+    } finally { cleanup(); }
+  });
+
+  it('menimpa slot yang sama tanpa menduplikasi', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'snail', level: 10 });
+      store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'cat2', level: 30 });
+      const team = store.getTeam('g1', 'u1', 'Alpha');
+      assert.strictEqual(team.slots.length, 1);
+      assert.strictEqual(team.slots[0].animalKey, 'cat2');
+      assert.strictEqual(team.slots[0].level, 30);
+    } finally { cleanup(); }
+  });
+
+  it('menyimpan dan membaca tim aktif', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      store.createTeam('g1', 'u1', 'Beta');
+      store.setActiveTeam('g1', 'u1', 'Beta');
+      assert.strictEqual(store.getActiveTeam('g1', 'u1').name, 'Beta');
+      store.setActiveTeam('g1', 'u1', 'Alpha');
+      assert.strictEqual(store.getActiveTeam('g1', 'u1').name, 'Alpha');
+    } finally { cleanup(); }
+  });
+
+  it('mengganti nama tim dan menolak nama yang sudah dipakai', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      store.createTeam('g1', 'u1', 'Beta');
+      assert.ok(store.renameTeam('g1', 'u1', 'Alpha', 'Beta').error);
+      const renamed = store.renameTeam('g1', 'u1', 'Alpha', 'Gamma');
+      assert.strictEqual(renamed.team.name, 'Gamma');
+    } finally { cleanup(); }
+  });
+
+  it('menghapus tim juga membersihkan tim aktif', () => {
+    load();
+    try {
+      store.createTeam('g1', 'u1', 'Alpha');
+      store.setActiveTeam('g1', 'u1', 'Alpha');
+      store.deleteTeam('g1', 'u1', 'Alpha');
+      assert.strictEqual(store.getActiveTeam('g1', 'u1'), null);
+    } finally { cleanup(); }
+  });
+});

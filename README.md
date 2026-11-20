@@ -290,6 +290,59 @@ dan bisa diklik). Labelnya berubah jadi **Nama** untuk kembali. Pilihan ini ikut
 terbawa saat pindah halaman, dan mention ditampilkan tanpa mengirim notifikasi
 (`allowedMentions: { parse: [] }`).
 
+## Simulasi battle (gaya OwO)
+
+Simulasi pertarungan 1 lawan 1 sampai 3 lawan 3 yang meniru mekanik battle
+[Discord-OwO-Bot](https://github.com/ChristopherBThai/Discord-OwO-Bot). Hasilnya
+deterministik: seluruh randomness lewat RNG ber-seed, jadi `seed` yang sama
+selalu memberi hasil yang sama.
+
+```
+d team new Alpha                      # buat tim
+d team add 1 snail level=50 weapon=gs # isi slot 1 dari hewan dex
+d team add 2 hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=40   # atau stat manual
+d team pick Alpha                     # jadikan tim aktif (bisa lewat tombol)
+d sim -m 500 -s 42                    # 500 pertarungan, seed 42
+```
+
+Perintah:
+
+| Perintah | Fungsi |
+| --- | --- |
+| `d team list` | daftar tim + tombol pilih tim |
+| `d team new/pick/show/del/rename` | kelola tim (maks 10 tim, 3 slot) |
+| `d team add <slot> <hewan\|stat> [opsi]` | isi slot; opsi `level=`, `weapon=`, `quality=`, `passive=`, `label=` |
+| `d team clear <slot>` | kosongkan slot |
+| `d sim [lawan] [-m n] [-s seed] [-qp q] [-qe q]` | simulasi; lawan bisa nama tim, hewan dex, atau stat manual |
+
+Stat manual memakai skala koefisien OwO (0-14), bukan HP final: `hp` 8 di level 50
+menghasilkan HP jauh lebih besar daripada di level 1. Kekuatan berasal dari level.
+
+Yang **tidak** disimulasikan: wear senjata, takedown, dan XP. Ketiganya tidak
+memengaruhi hasil pertarungan.
+
+### Perbedaan yang disengaja dari OwO
+
+- **Sisi pembuka diacak.** OwO selalu memberi giliran pertama ke tim pemain; pada
+  simulasi itu membuat pertarungan cermin menang ~75%. Di sini sisi pembuka
+  diacak per pertarungan lewat seed, sehingga cermin mendekati 50%.
+- **Tanpa `Math.random`.** Semua roll memakai RNG ber-seed agar bisa diulang.
+
+### Sumber angka
+
+- `src/data/owoBattle.js` — 20 hewan, 22 senjata, 12 buff, plus formula.
+  Angkanya dibaca langsung dari tabel OwO, bukan perkiraan.
+- `src/data/owoPassives.json` — 21 pasif (lihat bagian di bawah).
+- `src/services/battleEngine.js` — turn loop, damage, resistensi, heal, WP.
+- `src/services/battleWeapon.js` — ability 22 senjata.
+- `src/services/battleBuffs.js` — 12 buff/debuff.
+- `src/services/battlePassives.js` — hook pasif.
+- `src/services/battleSim.js` — batch simulasi + parsing stat.
+- `src/utils/battleTeamStorage.js` — penyimpanan tim (`data/battle-teams.db`).
+
+Resistensi memakai `(res / (100 + res)) × 0.8`, jadi damage tidak pernah nol
+total tetapi juga tidak pernah kebal.
+
 ## Data pasif battle (referensi simulasi)
 
 `src/data/owoPassives.json` berisi 21 pasif battle dari
