@@ -8,7 +8,7 @@
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const sim = require('../services/battleSim');
-const { renderSimulation, renderMatchup } = require('../ui/battlePanel');
+const { simEmbed, renderMatchup, usageEmbed, errorEmbed } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
 
 function usage(prefix = 'd') {
@@ -39,29 +39,29 @@ function parseFlags(args) {
 }
 
 function handleSimCommand(message, args, prefix, deps = {}) {
-  const send = deps.sendText || ((m, content) => m.reply({ content }));
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const guildId = message.guildId;
   const userId = message.author.id;
 
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
-    return send(message, '**Simulasi battle**\n' + usage(prefix));
+    return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix).split('\n')));
   }
 
   const team = store.getActiveTeam(guildId, userId);
   if (!team) {
-    return send(message, `Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`);
+    return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
   }
   if (!team.slots.length) {
-    return send(message, `Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`);
+    return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
   }
 
   const { flags, rest } = parseFlags(args);
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 100;
   if (!Number.isFinite(Number(runs)) || Number(runs) < 1 || Number(runs) > 1000) {
-    return send(message, 'Jumlah simulasi harus 1-1000. Contoh: `dsim -m 500`.');
+    return send(message, errorEmbed('Jumlah simulasi harus 1-1000. Contoh: `d sim -m 500`.'));
   }
   const seed = flags['-s'] ?? flags['-seed'];
-  if (seed != null && !Number.isFinite(Number(seed))) return send(message, 'Seed harus angka.');
+  if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
 
   const quality = value => {
     if (value == null) return undefined;
@@ -72,10 +72,10 @@ function handleSimCommand(message, args, prefix, deps = {}) {
   const enemyQuality = quality(flags['-qe']);
 
   const player = resolveTeamSpecs(team);
-  if (player.error) return send(message, `❌ ${player.error}`);
+  if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
   const enemy = resolveEnemy(guildId, userId, rest);
-  if (enemy.error) return send(message, `❌ ${enemy.error}`);
+  if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
   const result = sim.simulate(player.specs, enemy.specs, {
     runs: Number(runs),
@@ -84,9 +84,11 @@ function handleSimCommand(message, args, prefix, deps = {}) {
     enemyQuality,
   });
 
-  return send(message,
-    renderMatchup(player.specs, enemy.specs) + '\n\n' +
-    renderSimulation(result, { playerLabel: team.name, enemyLabel: enemy.label }));
+  return send(message, simEmbed(result, {
+    playerLabel: team.name,
+    enemyLabel: enemy.label,
+    matchup: renderMatchup(player.specs, enemy.specs),
+  }));
 }
 
 // Tim aktif → spec engine, dengan stat diambil dari dex bila perlu.

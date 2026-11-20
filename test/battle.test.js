@@ -1,4 +1,4 @@
-const { describe, it } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -469,6 +469,141 @@ describe('parsing stat manual', () => {
 
   it('menolak input kosong', () => {
     assert.ok(sim.parseCustomStats('').error);
+  });
+});
+
+describe('embed UI', () => {
+  const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
+
+  const team = { id: 1, name: 'Tank', slots: [{ slot: 1, animalKey: null, custom: COEFFS_STRONG, level: 60, weaponId: 1 }] };
+
+  it('teamEmbed menghasilkan embed dengan field per slot', () => {
+    const json = panel.teamEmbed(team, { prefix: 'd', active: true }).toJSON();
+    assert.ok(json.title.includes('Tank'));
+    assert.strictEqual(json.fields.length, 3);
+    assert.ok(json.color === panel.COLOR.ok, 'tim aktif memakai warna hijau');
+  });
+
+  it('teamEmbed menandai slot kosong', () => {
+    const json = panel.teamEmbed(team, {}).toJSON();
+    assert.ok(json.fields[1].value.includes('kosong'));
+    assert.strictEqual(json.color, panel.COLOR.info);
+  });
+
+  it('teamListEmbed memberi warna peringatan saat belum ada tim', () => {
+    const json = panel.teamListEmbed([], null, 'd').toJSON();
+    assert.strictEqual(json.color, panel.COLOR.warn);
+    assert.ok(json.description.includes('d team new'));
+  });
+
+  it('simEmbed memuat tally, durasi, dan seed', () => {
+    const result = sim.simulate(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
+      { runs: 20, seed: 7 }
+    );
+    const json = panel.simEmbed(result, { playerLabel: 'Tank', enemyLabel: 'Lawan' }).toJSON();
+    const names = json.fields.map(f => f.name).join(' ');
+    assert.ok(names.includes('Total'));
+    assert.ok(names.includes('Durasi'));
+    assert.ok(names.includes('Seed'));
+    assert.ok(json.description.includes('Tank'));
+  });
+
+  it('warna simEmbed mengikuti hasil', () => {
+    assert.strictEqual(panel.simColor(90), panel.COLOR.ok);
+    assert.strictEqual(panel.simColor(50), panel.COLOR.warn);
+    assert.strictEqual(panel.simColor(10), panel.COLOR.error);
+  });
+
+  it('bar penuh saat nilai maksimum dan kosong saat nol', () => {
+    assert.strictEqual(panel.bar(10, 10, 4), '▰▰▰▰');
+    assert.strictEqual(panel.bar(0, 10, 4), '▱▱▱▱');
+    assert.strictEqual(panel.bar(5, 0, 3), '▱▱▱');
+  });
+
+  it('usageEmbed menerima string maupun array', () => {
+    assert.ok(panel.usageEmbed('Judul', 'satu baris').toJSON().description === 'satu baris');
+    assert.strictEqual(panel.usageEmbed('Judul', ['a', 'b']).toJSON().description, 'a\nb');
+  });
+
+  it('tombol tim dibatasi 5 per baris dan memuat index', () => {
+    const teams = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, name: `T${i + 1}`, slots: [] }));
+    const rows = panel.teamButtons(teams, teams[0], 'u1');
+    assert.strictEqual(rows.length, 2);
+    assert.strictEqual(rows[0].components.length, 5);
+    assert.strictEqual(rows[1].components.length, 2);
+    assert.strictEqual(panel.parseTeamButton(rows[1].components[1].data.custom_id).index, 6);
+  });
+
+  it('tombol menandai tim aktif dan menolak customId asing', () => {
+    const teams = [{ id: 1, name: 'A', slots: [] }, { id: 2, name: 'B', slots: [] }];
+    const rows = panel.teamButtons(teams, teams[1], 'u9');
+    assert.ok(rows[0].components[1].data.label.startsWith('✓'));
+    assert.strictEqual(panel.isTeamButton('boss_other'), false);
+    assert.strictEqual(panel.parseTeamButton('battle_team_pick:u9').ok, false);
+  });
+});
+
+describe('balasan command memakai embed', () => {
+  const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
+  const { handleSimCommand } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+  let replies;
+
+  function message(content) {
+    return { guildId: 'g', author: { id: 'u' }, content };
+  }
+
+  const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); };
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-embed-'));
+    process.chdir(tempDir);
+    store.getDb();
+    replies = [];
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('d team new membalas dengan embed, bukan teks polos', () => {
+    handleTeamCommand(message('d team new Tank'), ['new', 'Tank'], 'd', { sendEmbed });
+    assert.strictEqual(replies.length, 1);
+    assert.ok(replies[0].color, 'embed punya warna');
+    assert.ok(replies[0].description.includes('Tank'));
+  });
+
+  it('d team list mengirim embed beserta tombol', () => {
+    store.createTeam('g', 'u', 'Alpha');
+    store.createTeam('g', 'u', 'Beta');
+    let payload = null;
+    handleTeamCommand(message('d team list'), ['list'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; },
+    });
+    assert.ok(payload, 'payload terkirim');
+    assert.ok(payload.embeds[0].toJSON().title.includes('Tim Battle'));
+    assert.strictEqual(payload.components[0].components.length, 2);
+  });
+
+  it('d sim membalas dengan embed berisi statistik', () => {
+    store.createTeam('g', 'u', 'Solo');
+    store.setSlot('g', 'u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.setActiveTeam('g', 'u', 'Solo');
+    handleSimCommand(message('d sim -m 10 -s 3'), ['-m', '10', '-s', '3'], 'd', { sendEmbed });
+    assert.strictEqual(replies.length, 1);
+    assert.ok(replies[0].title.includes('Simulasi Battle'));
+    assert.ok(replies[0].fields.some(f => f.name.includes('Total')));
+  });
+
+  it('error d sim tetap berupa embed', () => {
+    handleSimCommand(message('d sim -m 5000'), ['-m', '5000'], 'd', { sendEmbed });
+    assert.strictEqual(replies.length, 1);
+    assert.strictEqual(replies[0].color, 0xED4245);
   });
 });
 

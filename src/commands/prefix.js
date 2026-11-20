@@ -134,6 +134,7 @@ function send(message, payload) {
 async function handlePrefixCommand(message, tracker, deps = {}) {
   const _send = deps.send || send;
   const _sendText = deps.sendText || ((m, content) => _send(m, { content }));
+  const _sendEmbed = deps.sendEmbed || ((m, embed) => _send(m, { embeds: [embed] }));
   const _isAdmin = deps.isAdmin || isAdmin;
   const _isDeveloper = deps.isDeveloper || isDeveloper;
 
@@ -166,11 +167,11 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   }
 
   if (sub === 'team') {
-    return handleTeamCommand(message, args, prefix, { sendText: _sendText, sendPayload: _send });
+    return handleTeamCommand(message, args, prefix, { sendEmbed: _sendEmbed, sendPayload: _send });
   }
 
   if (sub === 'sim') {
-    return handleSimCommand(message, args, prefix, { sendText: _sendText });
+    return handleSimCommand(message, args, prefix, { sendEmbed: _sendEmbed });
   }
 
   if (sub === 'menu') {
