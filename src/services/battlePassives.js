@@ -80,6 +80,16 @@ const PASSIVES = {
   // Adaptation: resistensi terhadap tipe damage TERAKHIR. Physical memberi
   // Stoneskin, Magical memberi Spellskin; menerima tipe lain menghapus semua
   // stack. Satu pool stack saja (bukan dua), maksimal 5.
+  // Giant Slayer: +10-25% damage hanya bila sasaran bertanda boss. Battle biasa
+  // (PvP, mirror) tidak punya boss, jadi pasif ini tidak berefek di sana.
+  22: (stats) => ({
+    id: 22, name: 'Giant Slayer', stats,
+    attack(ctx, unit, target, bucket) {
+      if (!target?.isBoss) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * (stats[0] / 100);
+    },
+  }),
+
   27: (stats) => ({
     id: 27, name: 'Adaptation', stats,
     stackType: null, // 'p' (Stoneskin) | 'm' (Spellskin) | null

@@ -620,6 +620,35 @@
       ]
     },
     {
+      "id": 22,
+      "name": "Giant Slayer",
+      "emojis": [
+        "<:fgslayer:1552764472253358132>"
+      ],
+      "aliases": [
+        "gslay",
+        "slay",
+        "slayer",
+        "gslayer",
+        "giantslayer"
+      ],
+      "category": "damage",
+      "summary": "Damage ke boss +10-25% (tidak berefek pada lawan non-boss).",
+      "sourceText": "Deal +**10-25%** more damage to bosses. Aliases: gslay, slay, slayer, gslayer",
+      "qualityList": [
+        [
+          10,
+          25
+        ]
+      ],
+      "note": "Hanya berlaku bila sasaran bertanda boss (ctx.isBoss). Battle PvP/mirror tidak terpengaruh karena lawan bukan boss.",
+      "defaultEmoji": "<:fgslayer:1552764472253358132>",
+      "emojiNote": "Hanya varian Fabled (`fgslayer`) yang diberikan sumber; satu token dipakai untuk semua rank.",
+      "hooks": [
+        "attack"
+      ]
+    },
+    {
       "id": 27,
       "name": "Adaptation",
       "emojis": [],

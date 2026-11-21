@@ -3,14 +3,15 @@ const assert = require('node:assert');
 
 const passives = require('../src/data/owoPassives');
 
-test('memuat 22 pasif dengan id unik', () => {
+test('memuat 23 pasif dengan id unik', () => {
   const all = passives.all();
-  assert.equal(all.length, 22);
+  assert.equal(all.length, 23);
   const ids = all.map(p => p.id).sort((a, b) => a - b);
-  assert.equal(new Set(ids).size, 22, 'id tidak boleh duplikat');
-  // Adaptation (27) mengisi celah setelah 21; id lama tidak boleh bergeser.
-  assert.deepEqual(ids, [...Array.from({ length: 21 }, (_, i) => i + 1), 27]);
-  assert.equal(new Set(all.map(p => p.name)).size, 22, 'nama tidak boleh duplikat');
+  assert.equal(new Set(ids).size, 23, 'id tidak boleh duplikat');
+  // Giant Slayer (22) mengisi celah kosong, Adaptation (27) di ujung; id lama
+  // tidak boleh bergeser karena dipakai penyimpanan tim.
+  assert.deepEqual(ids, [...Array.from({ length: 22 }, (_, i) => i + 1), 27]);
+  assert.equal(new Set(all.map(p => p.name)).size, 23, 'nama tidak boleh duplikat');
 });
 
 test('setiap pasif punya kategori yang dikenal dan qualityList tidak kosong', () => {

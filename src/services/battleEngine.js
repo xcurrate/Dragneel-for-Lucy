@@ -219,6 +219,8 @@ function buildUnit(spec, rng, quality) {
     level: spec.level || 1,
     custom: Boolean(spec.customStats),
     animal: spec.animal || null,
+    // Hanya sasaran bertanda boss yang terpengaruh pasif seperti Giant Slayer.
+    isBoss: Boolean(spec.isBoss),
     buffs: [],
     weapon: null,
     team: null,

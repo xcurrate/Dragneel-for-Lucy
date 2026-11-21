@@ -494,6 +494,13 @@ mewarisi stack Stoneskin. Damage TRUE menghapus stack juga, karena bukan
 Physical maupun Magical. Stack baru berlaku setelah damage yang memicunya,
 jadi hit pertama selalu penuh.
 
+### Giant Slayer (pasif 22)
+
+Damage ke boss +10-25% sesuai quality. Efek ini hanya berlaku bila sasaran
+**bertanda boss** (`spec.isBoss`); simulasi PvP, mirror, dan lawan tim biasa
+tidak terpengaruh karena lawannya bukan boss. Emoji yang tersedia dari sumber
+baru varian `fgslayer`, jadi token itu dipakai untuk semua rank.
+
 ### Tier senjata
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
@@ -520,7 +527,7 @@ memengaruhi hasil pertarungan.
 
 - `src/data/owoBattle.js` — 20 hewan, 28 senjata, 16 buff, plus formula.
   Angkanya dibaca langsung dari tabel OwO, bukan perkiraan.
-- `src/data/owoPassives.json` — 22 pasif (lihat bagian di bawah).
+- `src/data/owoPassives.json` — 23 pasif (lihat bagian di bawah).
 - `src/data/owoPending.json` — senjata/pasif yang nama dan alias-nya sudah
   dikenal tetapi stat serta ability-nya belum ada. Dipakai agar input seperti
   `weapon=stithe` dijawab "belum punya data simulasi", bukan "tidak dikenal".

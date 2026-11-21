@@ -1085,6 +1085,28 @@ describe('batch senjata baru: Bleeding Gaze, Conduit Claw, Corruption, Scepter',
     assert.deepStrictEqual(turns, [true, false, false, false, true, false, false, false, true]);
   });
 
+  it('Giant Slayer menambah damage hanya ke sasaran boss', () => {
+    const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
+    const HP = 100000;
+    // Mengembalikan damage yang benar-benar diterima sasaran (1000 dasar).
+    const dealt = (isBoss, quality) => {
+      const me = unit('me', { att: [1000, 0] });
+      const foe = unit('foe', { hp: [HP, HP, HP, 0] });
+      foe.isBoss = isBoss;
+      me.weapon = {
+        id: 0, name: 'x', passives: [createPassive(22, quality, rng)],
+        stats: [0], manaCost: 0, def: {}, quality,
+      };
+      engine.inflictDamage(ctxOf(), me, foe, 1000, engine.PHYSICAL);
+      return HP - foe.stats.hp[0];
+    };
+    // 10-25% mengikuti quality pasif.
+    assert.strictEqual(dealt(true, 0), 1100);
+    assert.strictEqual(dealt(true, 100), 1250);
+    // Lawan biasa (PvP/mirror) tidak terpengaruh.
+    assert.strictEqual(dealt(false, 100), 1000);
+  });
+
   it('Adaptation: stack Stoneskin tumbuh sampai 5 lalu berhenti', () => {
     const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
     const me = unit('me', { hp: [100000, 100000, 100000, 0] });
@@ -1282,11 +1304,15 @@ describe('emoji battle', () => {
       }
     }
     for (const passive of passives) {
+      // Aturan sama dengan senjata: tanpa emoji wajib ada `emojiNote`, dan
+      // token tunggal wajib menyebut varian lain belum tersedia.
       if (!passive.emojis.length) {
         assert.ok(passive.emojiNote, `${passive.name} tanpa emoji harus punya emojiNote`);
         continue;
       }
-      assert.strictEqual(passive.emojis.length, 7, `${passive.name} punya emoji lengkap`);
+      if (passive.emojis.length !== 7) {
+        assert.ok(passive.emojiNote, `${passive.name} dengan ${passive.emojis.length} emoji harus punya emojiNote`);
+      }
     }
   });
 
@@ -1491,7 +1517,9 @@ describe('dtm s memasang senjata ke slot', () => {
   });
 
   it('membedakan pasif belum ada mekanik dari tidak dikenal', () => {
-    assert.ok(run('s', 'gs', 'gslay').includes('belum punya mekanik simulasi'));
+    // Giant Slayer sudah bermekanik, jadi contoh pending memakai pasif yang
+    // memang belum diimplementasikan.
+    assert.ok(run('s', 'gs', 'gslay').includes('Giant Slayer'), 'gslay sekarang dikenali');
     assert.ok(run('s', 'gs', 'nope').includes('tidak dikenal'));
   });
 

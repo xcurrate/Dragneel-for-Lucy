@@ -79,7 +79,11 @@ function weaponToken(id, quality) {
 }
 
 function passiveToken(id, quality) {
-  return pick(passiveData.passives.find(p => p.id === Number(id))?.emojis, quality);
+  const def = passiveData.passives.find(p => p.id === Number(id));
+  // Sama seperti senjata: pasif yang hanya punya satu token memakainya untuk
+  // semua rank, bukan hanya rank yang cocok dengan urutan array.
+  if (def && def.emojis?.length === 1 && def.defaultEmoji) return def.defaultEmoji;
+  return pick(def?.emojis, quality);
 }
 
 function weaponEmoji(id, quality) {

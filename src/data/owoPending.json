@@ -90,16 +90,29 @@
   ],
   "passives": [
     {
-      "id": 22,
+      "id": 28,
       "name": "Giant Slayer",
       "emojis": [
+        "<:fgslayer:1552764472253358132>",
         "<:gslay:1462495687940767950>"
       ],
       "aliases": [
         "gslay",
         "slay",
-        "slayer"
-      ]
+        "slayer",
+        "gslayer",
+        "giantslayer"
+      ],
+      "category": "offense",
+      "summary": "Damage ke boss +10-25%.",
+      "sourceText": "Deal +**10-25%** more damage to bosses. Aliases: gslay, slay, slayer, gslayer",
+      "qualityList": [
+        [
+          10,
+          25
+        ]
+      ],
+      "note": "Hanya berlaku bila sasaran bertanda boss (ctx.isBoss). Battle PvP/mirror tidak terpengaruh karena lawan bukan boss."
     },
     {
       "id": 24,
