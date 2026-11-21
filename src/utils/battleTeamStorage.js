@@ -63,6 +63,14 @@ function getDb() {
       team_id INTEGER,
       PRIMARY KEY (guild_id, user_id)
     );
+    -- Cooldown perintah simulasi, per user dan per aksi. Disimpan di database
+    -- supaya tetap berlaku setelah bot restart, bukan hanya di memori.
+    CREATE TABLE IF NOT EXISTS command_cooldowns (
+      user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      ready_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, action)
+    );
   `);
   migrateToGlobal(db);
   return db;
@@ -301,10 +309,33 @@ function getActiveTeam(userId) {
   return getTeamById(row.team_id);
 }
 
+// Sisa waktu tunggu sebuah aksi untuk user ini. 0 berarti sudah boleh dipakai.
+function cooldownRemaining(userId, action, now = Date.now()) {
+  const row = getDb().prepare(
+    'SELECT ready_at FROM command_cooldowns WHERE user_id = ? AND action = ?'
+  ).get(String(userId), String(action));
+  return Math.max(0, Number(row?.ready_at || 0) - now);
+}
+
+function setCooldown(userId, action, readyAt) {
+  getDb().prepare(`
+    INSERT INTO command_cooldowns (user_id, action, ready_at) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, action) DO UPDATE SET ready_at = excluded.ready_at`)
+    .run(String(userId), String(action), Number(readyAt) || 0);
+}
+
+function clearCooldown(userId, action) {
+  getDb().prepare('DELETE FROM command_cooldowns WHERE user_id = ? AND action = ?')
+    .run(String(userId), String(action));
+}
+
 module.exports = {
   MAX_SLOTS,
   MAX_TEAMS,
   getDb,
+  cooldownRemaining,
+  setCooldown,
+  clearCooldown,
   normalizeName,
   listTeams,
   getTeam,

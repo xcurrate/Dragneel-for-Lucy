@@ -377,6 +377,27 @@ simulasi, `lvl` menimpa level tanpa mengubah data tim:
 lebih spesifik. Bentuk `lvl` yang salah (`lvl`, `lvl0`, `lvlabc`, `lvl9999`)
 dilaporkan sebagai error, bukan dianggap nama lawan.
 
+### Cooldown simulasi
+
+`d sim` punya cooldown **5 detik per user**. Simulasi bisa berjalan detik-an dan
+memakai CPU bot, jadi satu user tidak bisa menumpuknya:
+
+```
+d sim -m 500 -s 42
+d sim -m 500 -s 42     # ⏳ Tunggu 5.0 detik lagi sebelum simulasi berikutnya.
+```
+
+Aturannya:
+
+- **Dihitung dari akhir simulasi.** Run 1 juta yang butuh ~12 detik baru
+  membuka cooldown setelah selesai, bukan saat mulai.
+- **Hanya simulasi yang berhasil memasang cooldown.** Perintah yang salah ketik
+  tetap mendapat pesan validasinya, dan `d sim help` tidak pernah terhalang.
+- **Berlaku per user, lintas server**, dan disimpan di database sehingga tetap
+  berlaku setelah bot restart.
+- Balasan penolakan memakai embed peringatan (kuning), bukan error merah, karena
+  perintahnya benar — hanya terlalu cepat.
+
 ### Tampilan `d team show`
 
 Tiap slot jadi satu blok, mengikuti format OwO: nomor slot, level, emoji hewan,

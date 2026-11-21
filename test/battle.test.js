@@ -743,6 +743,85 @@ describe('balasan command memakai embed', () => {
   });
 });
 
+describe('cooldown simulasi', () => {
+  const { handleSimCommand } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+  let replies;
+
+  const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); };
+  const message = { guildId: 'g', author: { id: 'u' } };
+
+  async function run(args) {
+    replies = [];
+    await handleSimCommand(message, args, 'd', { sendEmbed });
+    return replies[0];
+  }
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-sim-cooldown-'));
+    process.chdir(tempDir);
+    store.createTeam('u', 'Solo');
+    store.setSlot('u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.setActiveTeam('u', 'Solo');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('simulasi yang berhasil memasang cooldown 5 detik', async () => {
+    await run(['-m', '5', '-s', '1']);
+    const sisa = store.cooldownRemaining('u', 'sim');
+    assert.ok(sisa > 4000 && sisa <= 5000, `sisa ${sisa} ms harus mendekati 5 detik`);
+  });
+
+  it('simulasi kedua dalam jendela tunggu ditolak dengan sisa waktu', async () => {
+    await run(['-m', '5', '-s', '1']);
+    const embed = await run(['-m', '5', '-s', '1']);
+    assert.ok(embed.description.includes('Tunggu'), embed.description);
+    assert.ok(embed.description.includes('detik'), embed.description);
+    assert.ok(!embed.fields, 'bukan hasil simulasi');
+  });
+
+  it('penolakan cooldown memakai warna peringatan, bukan error', async () => {
+    store.setCooldown('u', 'sim', Date.now() + 3000);
+    const embed = await run(['-m', '5', '-s', '1']);
+    assert.strictEqual(embed.color, 0xFEE75C);
+  });
+
+  it('perintah help tidak terhalang cooldown', async () => {
+    store.setCooldown('u', 'sim', Date.now() + 3000);
+    const embed = await run(['help']);
+    assert.ok(embed.title.includes('Simulasi Battle'), embed.title);
+  });
+
+  it('perintah yang salah tetap dapat pesan validasinya sendiri', async () => {
+    store.setCooldown('u', 'sim', Date.now() + 3000);
+    const embed = await run(['-m', '0']);
+    assert.ok(embed.description.includes('bilangan bulat'), embed.description);
+  });
+
+  it('input salah tidak menghabiskan jatah cooldown', async () => {
+    await run(['-m', '0']);
+    assert.strictEqual(store.cooldownRemaining('u', 'sim'), 0, 'belum ada cooldown');
+    const embed = await run(['-m', '5', '-s', '1']);
+    assert.ok(embed.title.includes('Simulasi Battle'), 'simulasi tetap boleh jalan');
+  });
+
+  it('cooldown berlaku per user, bukan per server', async () => {
+    store.setCooldown('u', 'sim', Date.now() + 3000);
+    assert.ok(store.cooldownRemaining('u', 'sim') > 0);
+    assert.strictEqual(store.cooldownRemaining('user-lain', 'sim'), 0);
+  });
+
+  it('cooldown bertahan setelah storage dibuka ulang', () => {
+    store.setCooldown('u', 'sim', Date.now() + 3000);
+    assert.ok(store.cooldownRemaining('u', 'sim') > 0, 'dibaca dari database, bukan memori');
+  });
+});
+
 describe('emoji battle', () => {
   const be = require(path.join(ROOT, 'src/services/battleEmoji'));
 

@@ -10,11 +10,16 @@ const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
 const data = require('../data/owoBattle');
-const { simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed } = require('../ui/battlePanel');
+const { simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed, warnEmbed } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
 
 // Jeda minimum antar-edit pesan progres; Discord membatasi edit pesan.
 const PROGRESS_EDIT_MS = 1000;
+
+// Cooldown perintah simulasi per user. Simulasi bisa berjalan detik-an dan
+// memakai CPU bot, jadi satu user tidak boleh menumpuknya.
+const SIM_COOLDOWN_MS = 5000;
+const SIM_COOLDOWN_ACTION = 'sim';
 
 function usage(prefix = 'd') {
   return [
@@ -88,6 +93,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const userId = message.author.id;
 
+  // `help` tidak kena cooldown: perintah bantuan tidak menjalankan simulasi.
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
     return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix)));
   }
@@ -169,6 +175,19 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     }
   };
 
+  // Gerbang cooldown dipasang setelah validasi: perintah yang salah ketik tetap
+  // dapat pesan errornya sendiri, dan tidak menghabiskan jatah user. Yang mahal
+  // hanya simulasi, jadi itu yang dibatasi.
+  const waiting = store.cooldownRemaining(userId, SIM_COOLDOWN_ACTION);
+  if (waiting > 0) {
+    return send(message, warnEmbed(
+      `⏳ Tunggu **${(waiting / 1000).toFixed(1)} detik** lagi sebelum simulasi berikutnya.`
+    ));
+  }
+  // Ditandai dua kali: sebelum jalan supaya simulasi yang panjang tidak bisa
+  // ditumpuk, dan sesudah selesai supaya cooldown dihitung dari akhir simulasi.
+  store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+
   const result = await sim.simulate(playerSpecs, enemySpecs, {
     runs: runCount,
     seed: seed != null ? Number(seed) : undefined,
@@ -176,6 +195,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     enemyQuality,
     onProgress: publishProgress,
   });
+  store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
 
   // Ringkasan matchup memuat emoji hewan; siapkan dulu seperti `d dex`.
   await animalDex.ensureAnimalEmojis([

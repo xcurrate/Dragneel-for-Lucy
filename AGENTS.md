@@ -482,3 +482,9 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   2-3, Rune of the Forgotten 0-2 (boleh tanpa pasif). Bila pemanggil tidak memilih pasif,
   `rollPassives` tetap mengundi sebanyak `passiveCount` bawaan — jangan diganti ke batas atas,
   karena itu mengubah hasil simulasi lama tanpa diminta.
+- **`d sim` punya cooldown 5 detik per user** (`SIM_COOLDOWN_MS` di `src/commands/battleSim.js`,
+  tabel `command_cooldowns` di `battleTeamStorage`). Gerbangnya dipasang SETELAH validasi dan
+  ditandai dua kali (sebelum `simulate` supaya run panjang tak bisa ditumpuk, sesudahnya supaya
+  hitungannya dari akhir). Jangan pindahkan gerbang ke awal handler: perintah salah ketik akan
+  dibalas pesan cooldown, bukan pesan validasinya. `d sim help` sengaja bebas cooldown.
+  Tes memakai `store.setCooldown`/`clearCooldown` agar tidak menunggu 5 detik nyata.
