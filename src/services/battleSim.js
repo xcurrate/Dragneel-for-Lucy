@@ -122,6 +122,7 @@ function snapshot(done, total, tally, turnSum, timeouts) {
 async function simulate(playerSpecs, enemySpecs, {
   runs = 1, seed = randomSeed(), playerQuality, enemyQuality, yieldEvery = YIELD_EVERY, onProgress,
 } = {}) {
+  const startedAt = Date.now();
   const total = Math.max(1, Math.floor(Number(runs) || 1));
   const tally = { player: 0, enemy: 0, tie: 0 };
   const histogram = new Uint32Array(MAX_TURNS + 2);
@@ -162,11 +163,20 @@ async function simulate(playerSpecs, enemySpecs, {
     if (seen * 2 >= total) { median = t; break; }
   }
 
+  // Distribusi turn dipakai tampilan hasil (mis. "16 (×4), 17 (×10)").
+  // Turn yang tidak pernah muncul dilewati supaya daftarnya tetap pendek.
+  const turnHistogram = [];
+  for (let t = 0; t < histogram.length; t++) {
+    if (histogram[t]) turnHistogram.push({ turns: t, count: histogram[t] });
+  }
+
   return {
     runs: total,
     seed,
     tally,
     timeouts,
+    turnHistogram,
+    elapsedMs: Date.now() - startedAt,
     turns: {
       min,
       max,

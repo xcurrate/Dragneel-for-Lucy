@@ -1,7 +1,7 @@
 // Perintah simulasi battle.
 //
-//   dsim [lawan] [opsi]      simulasi tim aktif vs tim lain / stat manual
-//   dsim -m 500              jumlah pertarungan (default 100, tanpa batas atas)
+//   dsim [lawan] [opsi]      satu pertarungan: sisa HP/WP tiap hewan
+//   dsim -m 500              statistik dari 500 pertarungan (tanpa batas atas)
 //   dsim -s 1234             seed (default acak)
 //   dsim -qp 80 -qe 50       quality senjata pemain / lawan
 //   dsim -lawan hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60
@@ -10,10 +10,11 @@ const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
+const engine = require('../services/battleEngine');
 const globalSim = require('../services/globalSim');
 const data = require('../data/owoBattle');
 const {
-  simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed, warnEmbed,
+  simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
@@ -34,7 +35,11 @@ function usage(prefix = 'd') {
     `\`${prefix} sim hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60\` — lawan stat manual`,
     `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
     '',
-    'Opsi: `-m <jumlah>` (default 100, tanpa batas atas), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+    '',
+    'Tanpa `-m` hasilnya **satu** pertarungan (sisa HP/WP tiap hewan).',
+    'Dengan `-m <jumlah>` hasilnya statistik dari banyak pertarungan.',
+    '',
+    'Opsi: `-m <jumlah>` (tanpa batas atas), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
     '',
     'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
@@ -458,7 +463,10 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (levels.invalid || flags.lvl?.malformed) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
   }
-  const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 100;
+  // Tanpa `-m`, perintah menampilkan satu pertarungan lengkap dengan sisa
+  // HP/WP tiap hewan; dengan `-m`, hasilnya statistik dari banyak run.
+  const singleBattle = flags['-m'] == null && flags['-n'] == null && flags['-runs'] == null;
+  const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 1;
   const runCount = Number(runs);
   if (!Number.isSafeInteger(runCount) || runCount < 1) {
     return send(message, errorEmbed('Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim -m 500`.'));
@@ -502,6 +510,26 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // Ditandai dua kali: sebelum jalan supaya simulasi yang panjang tidak bisa
   // ditumpuk, dan sesudah selesai supaya cooldown dihitung dari akhir simulasi.
   store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+
+  if (singleBattle) {
+    const startedAt = Date.now();
+    const battle = engine.runBattle(playerSpecs, enemySpecs, {
+      seed: seed != null ? Number(seed) : undefined,
+      playerQuality,
+      enemyQuality,
+    });
+    store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+    await animalDex.ensureAnimalEmojis([
+      ...playerSpecs.map(spec => spec.animal),
+      ...enemySpecs.map(spec => spec.animal),
+    ]);
+    const embed = duelEmbed(battle, {
+      ...labels,
+      elapsedMs: Date.now() - startedAt,
+      seed: seed != null ? Number(seed) : null,
+    });
+    return send(message, embed);
+  }
 
   const result = await sim.simulate(playerSpecs, enemySpecs, {
     runs: runCount,

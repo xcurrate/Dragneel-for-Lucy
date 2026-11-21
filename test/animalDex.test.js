@@ -697,8 +697,9 @@ describe('emoji hewan untuk tampilan battle', () => {
     await handleSimCommand({ guildId: 'g', author: { id: 'u' } }, ['-m', '5', '-s', '1'], 'd', {
       sendEmbed: (m, e) => { out = e.toJSON(); },
     });
-    const komposisi = (out.fields || []).find(f => /komposisi/i.test(f.name)).value;
-    assert.ok(komposisi.includes('lawliet:'), 'emoji pet terpasang');
+    // Komposisi kini ada di description, bukan field terpisah.
+    const komposisi = out.description;
+    assert.ok(komposisi.includes('lawliet'), 'nama hewan muncul');
     assert.ok(!komposisi.includes('🐾'), 'tidak jatuh ke ikon netral');
   });
 

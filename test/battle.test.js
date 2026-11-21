@@ -589,7 +589,7 @@ describe('embed UI', () => {
     assert.ok(json.description.includes('d team new'));
   });
 
-  it('simEmbed memuat tally, durasi, dan seed', async () => {
+  it('simEmbed memuat tally, distribusi turn, dan seed', async () => {
     const result = await sim.simulate(
       [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
       [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
@@ -597,55 +597,81 @@ describe('embed UI', () => {
     );
     const json = panel.simEmbed(result, { playerLabel: 'Tank', enemyLabel: 'Lawan' }).toJSON();
     const names = json.fields.map(f => f.name).join(' ');
-    assert.ok(names.includes('Total'));
-    assert.ok(names.includes('Durasi'));
-    assert.ok(names.includes('Seed'));
-    assert.ok(json.description.includes('Tank'));
+    assert.ok(names.includes('menang'), 'field hasil menang');
+    assert.ok(json.fields[0].value.includes('Turns:'), 'distribusi turn');
+    assert.strictEqual(json.title, 'Tank vs. Lawan');
+    assert.ok(json.footer.text.includes('20 simulasi'), 'jumlah run di footer');
+    assert.ok(json.footer.text.includes('seed 7'), 'seed di footer');
   });
 
-  it('tabel hasil rata kolom untuk run besar maupun kecil', async () => {
-    const small = await sim.simulate(
-      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
-      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
-      { runs: 7, seed: 3 }
-    );
-    const big = await sim.simulate(
-      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
-      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
-      { runs: 5000, seed: 3 }
-    );
-    for (const result of [small, big]) {
-      const body = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' }).toJSON().description;
-      const rows = body.split('```')[1].trim().split('\n');
-      assert.strictEqual(rows.length, 3, 'tiga baris hasil');
-      // Kolom persen mulai di posisi yang sama di semua baris.
-      const pctCol = rows.map(r => r.indexOf('%'));
-      assert.ok(pctCol.every(p => p > 0), `kolom persen hilang: ${rows.join(' | ')}`);
-      assert.strictEqual(new Set(pctCol).size, 1, `persen tidak rata: ${rows.join(' | ')}`);
-    }
-  });
-
-  it('simEmbed menampilkan kesimpulan pemenang', async () => {
-    const win = await sim.simulate(
-      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
-      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
-      { runs: 100, seed: 4 }
-    );
-    const body = panel.simEmbed(win, { playerLabel: 'Kuat', enemyLabel: 'Lemah' }).toJSON().description;
-    assert.ok(body.includes('Kuat'), 'nama pemenang muncul');
-    assert.ok(/unggul|Seimbang/.test(body), 'ada kesimpulan');
-  });
-
-  it('simEmbed memberi catatan giliran pertama', async () => {
+  it('distribusi turn memuat jumlah per jumlah turn', async () => {
     const result = await sim.simulate(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
+      { runs: 40, seed: 3 }
+    );
+    assert.ok(Array.isArray(result.turnHistogram) && result.turnHistogram.length > 0);
+    const total = result.turnHistogram.reduce((sum, row) => sum + row.count, 0);
+    assert.strictEqual(total, result.runs, 'histogram mencakup semua run');
+    const field = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' }).toJSON().fields[0];
+    assert.ok(/\d+ \(×\d+\)/.test(field.value), field.value);
+  });
+
+  it('distribusi turn panjang diringkas agar tidak melebihi batas', () => {
+    const histogram = Array.from({ length: 20 }, (_, i) => ({ turns: i + 1, count: 2 }));
+    const text = panel.turnDistribution(histogram, 5);
+    assert.ok(text.endsWith('+15 lain'), text);
+  });
+
+  it('duelEmbed menampilkan sisa HP/WP tiap unit', async () => {
+    const battle = engine.runBattle(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60, label: 'kuat' }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60, label: 'lemah' }],
+      { seed: 11 }
+    );
+    assert.strictEqual(battle.winner, 'player');
+    const json = panel.duelEmbed(battle, { playerLabel: 'A', enemyLabel: 'B', seed: 11 }).toJSON();
+    assert.strictEqual(json.color, panel.COLOR.ok, 'menang hijau');
+    assert.strictEqual(json.fields.length, 2, 'satu field per unit');
+    assert.ok(json.fields[0].value.includes('/'), 'format hp/max');
+    assert.ok(json.fields[0].name.includes('kuat'));
+    assert.ok(json.fields[1].value.includes('`0/'), 'yang kalah HP 0');
+    assert.ok(json.description.includes('Menang'));
+  });
+
+  it('duelEmbed memakai warna kalah dan seri', () => {
+    const base = { turns: 5, timeout: false, units: { player: [], enemy: [] } };
+    const lose = panel.duelEmbed({ ...base, winner: 'enemy' }, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
+    assert.strictEqual(lose.color, panel.COLOR.error);
+    assert.ok(lose.description.includes('Kalah'));
+    const tie = panel.duelEmbed({ ...base, winner: 'tie' }, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
+    assert.strictEqual(tie.color, panel.COLOR.tie);
+    assert.ok(tie.description.includes('Seri'));
+  });
+
+  it('warna embed mengikuti dominasi hasil', () => {
+    assert.strictEqual(panel.simColor(60, 40, 0), panel.COLOR.ok);
+    assert.strictEqual(panel.simColor(40, 60, 0), panel.COLOR.error);
+    assert.strictEqual(panel.simColor(20, 20, 60), panel.COLOR.tie);
+    assert.strictEqual(panel.simColor(50, 50, 0), panel.COLOR.tie, 'imbang dianggap seri');
+  });
+
+  it('field kalah dan seri hanya muncul bila ada', async () => {
+    const sweep = await sim.simulate(
       [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
       [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
       { runs: 20, seed: 5 }
     );
-    const json = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
-    const note = json.fields.find(f => f.name.includes('Catatan'));
-    assert.ok(note, 'field catatan ada');
-    assert.ok(note.value.includes('Giliran pertama'));
+    const clean = panel.simEmbed(sweep, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
+    assert.strictEqual(clean.fields.length, 1, 'kalah/seri nol tidak ditampilkan');
+
+    const mixed = panel.simEmbed(
+      { ...sweep, tally: { player: 10, enemy: 6, tie: 4 }, winRate: 50, lossRate: 30, tieRate: 20 },
+      { playerLabel: 'A', enemyLabel: 'B' }
+    ).toJSON();
+    assert.strictEqual(mixed.fields.length, 3, 'menang, kalah, dan seri tampil');
+    assert.ok(mixed.fields[1].name.includes('kalah'));
+    assert.ok(mixed.fields[2].name.includes('seri'));
   });
 
   it('renderMatchup memecah tim banyak slot per nomor', () => {
@@ -653,10 +679,11 @@ describe('embed UI', () => {
       [{ label: 'Satu', level: 60 }, { label: 'Dua', level: 55 }],
       [{ label: 'Foe', level: 50 }]
     );
+    assert.ok(body.includes('Player:'), 'sisi pemain');
+    assert.ok(/Enemy: \*\*`L\.50`\*\* Foe/.test(body), 'satu slot tetap sebaris');
     assert.ok(body.includes('`1`') && body.includes('`2`'), 'slot bernomor');
+    assert.ok(body.includes('`L.60`') && body.includes('`L.55`'), 'level berformat L.n');
     assert.ok(body.includes('Satu') && body.includes('Dua'));
-    assert.ok(body.includes('**Lawan:**'), 'satu slot tetap satu baris');
-    assert.ok(body.includes('_tanpa senjata_'));
   });
 
   it('warna simEmbed mengikuti hasil', () => {
@@ -753,8 +780,8 @@ describe('balasan command memakai embed', () => {
     store.setActiveTeam('u', 'Solo');
     await handleSimCommand(message('d sim -m 10 -s 3'), ['-m', '10', '-s', '3'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);
-    assert.ok(replies[0].title.includes('Simulasi Battle'));
-    assert.ok(replies[0].fields.some(f => f.name.includes('Total')));
+    assert.ok(replies[0].title.includes('vs.'), replies[0].title);
+    assert.ok(replies[0].fields.some(f => f.name.includes('menang')));
   });
 
   it('d sim panjang mengirim progres lalu menimpa dengan hasil akhir', async () => {
@@ -775,12 +802,12 @@ describe('balasan command memakai embed', () => {
     await handleSimCommand(message('d sim -m 3000 -s 3'), ['-m', '3000', '-s', '3'], 'd', { sendEmbed: sendProgress });
 
     assert.strictEqual(sent.length, 1, 'hanya satu pesan dibuat, sisanya edit');
-    assert.ok(sent[0].title.includes('berjalan'), 'pesan pertama menandai simulasi berjalan');
-    assert.ok(sent[0].fields.some(f => f.name.includes('Progres')));
+    assert.ok(sent[0].description.includes('Berjalan'), 'pesan pertama menandai simulasi berjalan');
+    assert.ok(sent[0].fields.some(f => f.name.includes('Selesai')));
     assert.ok(edits.length >= 1, 'ada pembaruan progres');
     const last = edits[edits.length - 1];
-    assert.ok(!last.title.includes('berjalan'), 'edit terakhir bukan lagi status berjalan');
-    assert.ok(last.fields.some(f => f.name.includes('Total')), 'hasil akhir memuat total');
+    assert.ok(!(last.description || '').includes('Berjalan'), 'edit terakhir bukan lagi status berjalan');
+    assert.ok(last.fields.some(f => f.name.includes('menang')), 'hasil akhir memuat hasil');
   });
 
   it('error d sim tetap berupa embed', async () => {
@@ -871,7 +898,7 @@ describe('cooldown simulasi', () => {
     await run(['-m', '0']);
     assert.strictEqual(store.cooldownRemaining('u', 'sim'), 0, 'belum ada cooldown');
     const embed = await run(['-m', '5', '-s', '1']);
-    assert.ok(embed.title.includes('Simulasi Battle'), 'simulasi tetap boleh jalan');
+    assert.ok(embed.title.includes('vs.'), 'simulasi tetap boleh jalan');
   });
 
   it('cooldown berlaku per user, bukan per server', async () => {
@@ -1720,8 +1747,9 @@ describe('level default dan flag lvl', () => {
     return replies[0];
   }
 
+  // Komposisi kini ada di description embed: "Player: ...\nEnemy: ...".
   function composition(embed) {
-    return (embed.fields || []).find(f => f.name.toLowerCase().includes('komposisi')).value;
+    return embed.description;
   }
 
   beforeEach(() => {
@@ -1748,29 +1776,29 @@ describe('level default dan flag lvl', () => {
   });
 
   it('lvl<angka> menyamakan level kedua sisi', async () => {
-    const body = composition(await run(['B', 'lvl100']));
-    const [mine, theirs] = body.split('**Lawan**');
-    assert.ok(mine.includes('slot1') && mine.includes('lv100'), mine);
-    assert.ok(!mine.includes('lv50'), 'level pemain ditimpa');
-    assert.ok(theirs.includes('slot1') && theirs.includes('lv100'), theirs);
-    assert.ok(!body.includes('lv70') && !body.includes('lv20'), 'level lawan ikut ditimpa');
+    const body = composition(await run(['B', 'lvl100', '-m', '1']));
+    const [mine, theirs] = body.split('Enemy:');
+    assert.ok(mine.includes('slot1') && mine.includes('L.100'), mine);
+    assert.ok(!mine.includes('L.50'), 'level pemain ditimpa');
+    assert.ok(theirs.includes('slot1') && theirs.includes('L.100'), theirs);
+    assert.ok(!body.includes('L.70') && !body.includes('L.20'), 'level lawan ikut ditimpa');
   });
 
   it('lvl<n>/<m> memakai level berbeda per sisi', async () => {
-    const body = composition(await run(['B', 'lvl100/60']));
-    const [mine, theirs] = body.split('**Lawan**');
-    assert.ok(mine.includes('lv100'), mine);
-    assert.ok(!mine.includes('lv60'), 'sisi pemain tetap 100');
-    assert.ok(theirs.includes('slot1') && theirs.includes('lv60'), theirs);
-    assert.ok(theirs.includes('slot2') && theirs.includes('lv60'), theirs);
+    const body = composition(await run(['B', 'lvl100/60', '-m', '1']));
+    const [mine, theirs] = body.split('Enemy:');
+    assert.ok(mine.includes('L.100'), mine);
+    assert.ok(!mine.includes('L.60'), 'sisi pemain tetap 100');
+    assert.ok(theirs.includes('slot1') && theirs.includes('L.60'), theirs);
+    assert.ok(theirs.includes('slot2') && theirs.includes('L.60'), theirs);
   });
 
   it('lvl/<m> hanya menimpa level lawan', async () => {
-    const body = composition(await run(['B', 'lvl/40']));
-    const [mine, theirs] = body.split('**Lawan**');
-    assert.ok(mine.includes('slot1') && mine.includes('lv50'), mine);
-    assert.ok(theirs.includes('slot1') && theirs.includes('lv40'), theirs);
-    assert.ok(theirs.includes('slot2') && theirs.includes('lv40'), theirs);
+    const body = composition(await run(['B', 'lvl/40', '-m', '1']));
+    const [mine, theirs] = body.split('Enemy:');
+    assert.ok(mine.includes('slot1') && mine.includes('L.50'), mine);
+    assert.ok(theirs.includes('slot1') && theirs.includes('L.40'), theirs);
+    assert.ok(theirs.includes('slot2') && theirs.includes('L.40'), theirs);
   });
 
   it('flag lvl tidak mengubah level tersimpan di tim', () => {
