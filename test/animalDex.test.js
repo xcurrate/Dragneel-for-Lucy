@@ -602,6 +602,63 @@ describe('emoji hewan untuk tampilan battle', () => {
     assert.ok(animal.imageUrl, 'fixture punya gambar emoji');
   });
 
+  it('render PERTAMA `d team show` sudah memakai emoji pet walau cache kosong', async () => {
+    const { dex } = fakeClient();
+    const dexStore = require('../src/utils/animalDexStorage');
+    const store = require('../src/utils/battleTeamStorage');
+    // Command harus memakai instance animalDex yang sama dengan klien tiruan;
+    // modul ini sudah dihapus dari cache oleh resetModules().
+    delete require.cache[require.resolve('../src/commands/battleTeam')];
+    const { handleTeamCommand } = require('../src/commands/battleTeam');
+
+    // Data lama: hewan sudah ada di dex, `emoji_map` belum pernah terisi.
+    dexStore.upsertAnimal({
+      nameKey: 'lawliet', name: 'lawliet', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 2, attack: 0, protection: 1, wisdom: 3, magic: 14, mr: 2 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1557672128059539466.gif', emojiName: 'lawliet'
+    });
+    assert.strictEqual(dexStore.getEmojiToken('1557672128059539466'), null, 'cache kosong di awal');
+
+    store.createTeam('u', 'T');
+    store.setSlot('u', 'T', 1, { animalKey: 'lawliet', level: 50 });
+    store.setActiveTeam('u', 'T');
+
+    let out = null;
+    await handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['show'], 'd', {
+      sendEmbed: (m, e) => { out = e.toJSON(); },
+    });
+    assert.ok(out.fields[0].name.includes('lawliet:'), 'emoji pet sudah terpasang di render pertama');
+    assert.ok(!out.fields[0].name.includes('🐾'), 'tidak jatuh ke ikon netral');
+    assert.ok(dex, 'client tiruan dipakai');
+  });
+
+  it('render PERTAMA `d sim` memakai emoji pet di ringkasan komposisi', async () => {
+    fakeClient();
+    const dexStore = require('../src/utils/animalDexStorage');
+    const store = require('../src/utils/battleTeamStorage');
+    delete require.cache[require.resolve('../src/commands/battleSim')];
+    const { handleSimCommand } = require('../src/commands/battleSim');
+
+    dexStore.upsertAnimal({
+      nameKey: 'lawliet', name: 'lawliet', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 2, attack: 0, protection: 1, wisdom: 3, magic: 14, mr: 2 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1557672128059539466.gif', emojiName: 'lawliet'
+    });
+    store.createTeam('u', 'T');
+    store.setSlot('u', 'T', 1, { animalKey: 'lawliet', level: 50 });
+    store.setActiveTeam('u', 'T');
+
+    let out = null;
+    await handleSimCommand({ guildId: 'g', author: { id: 'u' } }, ['-m', '5', '-s', '1'], 'd', {
+      sendEmbed: (m, e) => { out = e.toJSON(); },
+    });
+    const komposisi = (out.fields || []).find(f => /komposisi/i.test(f.name)).value;
+    assert.ok(komposisi.includes('lawliet:'), 'emoji pet terpasang');
+    assert.ok(!komposisi.includes('🐾'), 'tidak jatuh ke ikon netral');
+  });
+
   it('tetap memakai 🐾 bila pet tidak punya emoji sama sekali', () => {
     const be = require('../src/services/battleEmoji');
     assert.strictEqual(be.animalEmoji({ name: 'x', imageUrl: 'https://cdn.discordapp.com/attachments/1/2/i.png' }), '🐾');

@@ -651,18 +651,18 @@ describe('balasan command memakai embed', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('d team new membalas dengan embed, bukan teks polos', () => {
-    handleTeamCommand(message('d team new Tank'), ['new', 'Tank'], 'd', { sendEmbed });
+  it('d team new membalas dengan embed, bukan teks polos', async () => {
+    await handleTeamCommand(message('d team new Tank'), ['new', 'Tank'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);
     assert.ok(replies[0].color, 'embed punya warna');
     assert.ok(replies[0].description.includes('Tank'));
   });
 
-  it('d team list mengirim embed beserta tombol', () => {
+  it('d team list mengirim embed beserta tombol', async () => {
     store.createTeam('u', 'Alpha');
     store.createTeam('u', 'Beta');
     let payload = null;
-    handleTeamCommand(message('d team list'), ['list'], 'd', {
+    await handleTeamCommand(message('d team list'), ['list'], 'd', {
       sendEmbed,
       sendPayload: (m, p) => { payload = p; },
     });
@@ -671,34 +671,34 @@ describe('balasan command memakai embed', () => {
     assert.strictEqual(payload.components[0].components.length, 2);
   });
 
-  it('d sim membalas dengan embed berisi statistik', () => {
+  it('d sim membalas dengan embed berisi statistik', async () => {
     store.createTeam('u', 'Solo');
     store.setSlot('u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
     store.setActiveTeam('u', 'Solo');
-    handleSimCommand(message('d sim -m 10 -s 3'), ['-m', '10', '-s', '3'], 'd', { sendEmbed });
+    await handleSimCommand(message('d sim -m 10 -s 3'), ['-m', '10', '-s', '3'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);
     assert.ok(replies[0].title.includes('Simulasi Battle'));
     assert.ok(replies[0].fields.some(f => f.name.includes('Total')));
   });
 
-  it('error d sim tetap berupa embed', () => {
-    handleSimCommand(message('d sim -m 5000'), ['-m', '5000'], 'd', { sendEmbed });
+  it('error d sim tetap berupa embed', async () => {
+    await handleSimCommand(message('d sim -m 5000'), ['-m', '5000'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);
     assert.strictEqual(replies[0].color, 0xED4245);
   });
 
   // Regresi: `...usage(prefix)` menyebar string menjadi per karakter, jadi
   // panduan tampil satu huruf satu baris.
-  it('panduan d team tidak dipecah per huruf', () => {
-    handleTeamCommand(message('d team zzz'), ['zzz'], 'd', { sendEmbed });
+  it('panduan d team tidak dipecah per huruf', async () => {
+    await handleTeamCommand(message('d team zzz'), ['zzz'], 'd', { sendEmbed });
     const body = replies[0].description;
     assert.ok(body.includes('Perintah tidak dikenal.'));
     assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
     assert.ok(body.includes('`d team list` — daftar tim kamu'), 'baris utuh');
   });
 
-  it('panduan d sim tidak dipecah per huruf', () => {
-    handleSimCommand(message('d sim help'), ['help'], 'd', { sendEmbed });
+  it('panduan d sim tidak dipecah per huruf', async () => {
+    await handleSimCommand(message('d sim help'), ['help'], 'd', { sendEmbed });
     const body = replies[0].description;
     assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
     assert.ok(body.includes('`d sim <nama-tim>`'), 'baris utuh');
@@ -973,9 +973,9 @@ describe('level default dan flag lvl', () => {
   const sendEmbed = (m, e) => { replies.push(e.toJSON()); };
   const message = { guildId: 'g', author: { id: 'u' } };
 
-  function run(args) {
+  async function run(args) {
     replies = [];
-    handleSimCommand(message, args, 'd', { sendEmbed });
+    await handleSimCommand(message, args, 'd', { sendEmbed });
     return replies[0];
   }
 
@@ -998,29 +998,29 @@ describe('level default dan flag lvl', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('level default hewan saat ditambah ke tim adalah 50', () => {
+  it('level default hewan saat ditambah ke tim adalah 50', async () => {
     assert.strictEqual(battleData.DEFAULT_LEVEL, 50);
     replies = [];
-    handleTeamCommand(message, ['add', '2', 'hp=14,att=6,pr=2,wp=3,mag=0,mr=1'], 'd', { sendEmbed });
+    await handleTeamCommand(message, ['add', '2', 'hp=14,att=6,pr=2,wp=3,mag=0,mr=1'], 'd', { sendEmbed });
     assert.ok(replies[0].description.includes('level 50'));
     assert.strictEqual(store.getTeam('u', 'A').slots.find(s => s.slot === 2).level, 50);
   });
 
-  it('lvl<angka> menyamakan level kedua sisi', () => {
-    const body = composition(run(['B', 'lvl100']));
+  it('lvl<angka> menyamakan level kedua sisi', async () => {
+    const body = composition(await run(['B', 'lvl100']));
     assert.ok(body.includes('Kamu:** 🐾 slot1 lv100'));
     assert.ok(body.includes('slot1 lv100'));
     assert.ok(!body.includes('lv70') && !body.includes('lv20'), 'level lawan ikut ditimpa');
   });
 
-  it('lvl<n>/<m> memakai level berbeda per sisi', () => {
-    const body = composition(run(['B', 'lvl100/60']));
+  it('lvl<n>/<m> memakai level berbeda per sisi', async () => {
+    const body = composition(await run(['B', 'lvl100/60']));
     assert.ok(body.includes('Kamu:** 🐾 slot1 lv100'));
     assert.ok(body.includes('slot1 lv60') && body.includes('slot2 lv60'));
   });
 
-  it('lvl/<m> hanya menimpa level lawan', () => {
-    const body = composition(run(['B', 'lvl/40']));
+  it('lvl/<m> hanya menimpa level lawan', async () => {
+    const body = composition(await run(['B', 'lvl/40']));
     assert.ok(body.includes('Kamu:** 🐾 slot1 lv50'));
     assert.ok(body.includes('slot1 lv40') && body.includes('slot2 lv40'));
   });
@@ -1031,9 +1031,9 @@ describe('level default dan flag lvl', () => {
     assert.deepStrictEqual(store.getTeam('u', 'B').slots.map(s => s.level), [70, 20]);
   });
 
-  it('bentuk lvl yang salah dilaporkan, bukan dianggap nama lawan', () => {
+  it('bentuk lvl yang salah dilaporkan, bukan dianggap nama lawan', async () => {
     for (const bad of [['lvl'], ['lvl0'], ['lvlabc'], ['lvl9999'], ['lvl100/abc']]) {
-      const embed = run(bad);
+      const embed = await run(bad);
       assert.ok(embed.description.includes('Format level salah'), bad.join(' '));
       assert.strictEqual(embed.color, 0xED4245);
     }

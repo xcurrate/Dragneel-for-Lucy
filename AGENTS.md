@@ -432,12 +432,15 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
 - **Tim pemain selalu menyerang lebih dulu**, sama seperti OwO yang memanggil `executeTurn` dengan
   tim pemain sebagai `team`. Jangan mengacak sisi pembuka "supaya mirror 50%": keuntungan
   giliran pertama adalah bagian dari hasil yang diukur simulasi.
-- **Emoji hewan di-mirror saat kartunya ditangkap**, bukan hanya saat bot menyala. `emoji_map`
-  adalah cache global, jadi pet yang ditangkap setelah startup tidak akan punya emoji sampai
-  proses berikutnya — dan `d team`/`d sim` hanya menampilkan 🐾. `captureMessage` memanggil
-  `syncAnimalEmoji()` di latar belakang; `battleEmoji.animalEmoji()` mencoba sekali lagi saat
-  render bila mirror sebelumnya gagal. Token hewan juga memakai `emojiName || name` dan dipotong
-  ke 32 karakter, karena nama emoji Discord tidak wajib terbaca dari judul kartu.
+- **Emoji hewan harus sudah ter-mirror SEBELUM render, jangan mengandalkan cache.** `emoji_map`
+  hanya terisi saat startup dan saat kartu ditangkap, jadi data lama bisa kosong. `d dex` selalu
+  benar karena memanggil `mirrorEmojiTokens()` lalu `await` tepat sebelum render — panel wajib
+  sama: `handleTeamCommand`, `handleTeamButton`, dan `handleSimCommand` memanggil
+  `animalDex.ensureAnimalEmojis()` dan menunggu hasilnya. Retry di latar belakang saja tidak
+  cukup: render pertama tetap jatuh ke 🐾 walau render kedua sudah benar.
+  Token hewan memakai `emojiName || name` yang dipotong ke 32 karakter, karena nama emoji
+  Discord tidak wajib terbaca dari judul kartu. Konsekuensinya handler tersebut `async`, jadi
+  pemanggil dan tesnya harus `await` (tanpa itu asersi jalan sebelum balasan terkirim).
 - **Tim kustom bersifat global per user** (`src/utils/battleTeamStorage.js`), bukan per server.
   Kolom `guild_id` dipertahankan hanya demi skema lama (selalu string kosong) dan
   `migrateToGlobal()` menggabungkan baris lama per user+nama saat database pertama dibuka.

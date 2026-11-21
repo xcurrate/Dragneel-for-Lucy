@@ -1,7 +1,7 @@
 // Perintah tim kustom untuk simulasi battle.
 //
 // Semua perintah memakai prefix server (`d` bawaan) dan hanya menyentuh data
-// milik user di guild yang sama:
+// milik user yang menjalankannya; tim berlaku global, sama di server mana pun:
 //   dteam list                  daftar tim
 //   dteam new <nama>            buat tim
 //   dteam pick <nama>           jadikan tim aktif
@@ -14,6 +14,7 @@
 const { MessageFlags } = require('discord.js');
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
+const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
 const data = require('../data/owoBattle');
 const passiveData = require('../data/owoPassives');
@@ -159,7 +160,15 @@ function say(send, message, text) {
   return send(message, embed);
 }
 
-function handleTeamCommand(message, args, prefix, deps = {}) {
+// Panel memuat emoji hewan, dan emoji itu baru bisa dirender setelah di-mirror
+// ke aplikasi bot. `d dex` menunggu mirror sebelum render; panel harus sama,
+// kalau tidak render pertama selalu menampilkan ikon netral 🐾.
+function animalsOf(team) {
+  if (!team) return [];
+  return (team.slots || []).map(slot => (slot.animalKey ? dexStore.getAnimal(slot.animalKey) : null));
+}
+
+async function handleTeamCommand(message, args, prefix, deps = {}) {
   // Semua balasan memakai embed, konsisten dengan panel dan game lain.
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
 
@@ -174,6 +183,7 @@ function handleTeamCommand(message, args, prefix, deps = {}) {
   if (sub === 'list') {
     const teams = store.listTeams(userId);
     const active = store.getActiveTeam(userId);
+    await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
     const payload = {
       embeds: [teamListEmbed(teams, active, prefix)],
       components: teamButtons(teams, active, userId),
@@ -203,6 +213,7 @@ function handleTeamCommand(message, args, prefix, deps = {}) {
   if (sub === 'show' || sub === 'lihat') {
     const name = rest.join(' ');
     const team = name ? store.getTeam(userId, name) : store.getActiveTeam(userId);
+    if (team) await animalDex.ensureAnimalEmojis(animalsOf(team));
     if (!team) return say(send, message, name ? `❌ Tim **${name}** tidak ditemukan.` : `Belum ada tim aktif. Buat dengan \`${prefix} team new <nama>\`.`);
     const active = store.getActiveTeam(userId);
     return send(message, teamEmbed(team, { prefix, active: !!active && active.id === team.id }));
@@ -358,7 +369,7 @@ function handleWeaponCommand(message, rest, prefix, send, userId) {
 }
 
 // Klik tombol pemilih tim. Hanya pemilik panel yang boleh memakainya.
-function handleTeamButton(i) {
+async function handleTeamButton(i) {
   const parsed = parseTeamButton(i.customId);
   if (!parsed.ok) return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `dteam list` lagi.', flags: 64 });
   const ephemeral = { embeds: [errorEmbed('Tombol ini milik orang lain. Jalankan `d team list` untuk daftar tim kamu.')], flags: MessageFlags.Ephemeral };
@@ -372,6 +383,8 @@ function handleTeamButton(i) {
 
   store.setActiveTeam(i.user.id, team.name);
   const active = store.getActiveTeam(i.user.id);
+  // Panel yang diperbarui juga memuat emoji hewan; siapkan sebelum render.
+  await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
   const confirmed = { embeds: [okEmbed(`✅ Tim aktif: **${team.name}**`)], flags: MessageFlags.Ephemeral };
 
   return i.update({

@@ -380,6 +380,29 @@ async function syncAnimalEmoji(animal) {
   return map.get(token) || null;
 }
 
+// Sama seperti `d dex` yang memirror token tepat sebelum render: pemanggil yang
+// menampilkan emoji hewan harus menunggu mirror selesai, bukan mengandalkan
+// cache. Tanpa ini render pertama selalu jatuh ke ikon netral.
+async function ensureAnimalEmoji(animal) {
+  const token = animalEmoji(animal);
+  if (!token) return null;
+  const id = animalEmojiId(animal).id;
+  const cached = store.getEmojiToken(id);
+  if (cached) return cached;
+  return syncAnimalEmoji(animal);
+}
+
+// Siapkan emoji untuk sekumpulan hewan sekaligus (satu panggilan API).
+async function ensureAnimalEmojis(animals) {
+  const pending = (animals || []).filter(Boolean).filter(a => {
+    const found = animalEmojiId(a);
+    return found && !store.getEmojiToken(found.id);
+  });
+  if (!pending.length) return;
+  const tokens = pending.map(animalEmoji).filter(Boolean);
+  if (tokens.length) await mirrorEmojiTokens(tokens);
+}
+
 // Penanda kolom pertama tabel (identitas hewan). Tiap baris memakai emoji
 // hewanya sendiri, jadi header cukup satu emoji, bukan kata "Animal".
 const TABLE_LABEL_ICON = '🧬';
@@ -541,5 +564,5 @@ module.exports = {
   parseAnimalCard, isAnimalCard, captureMessage, buildDexResponse,
   formatAnimalEmbed, formatCompactTable, formatListEmbed, extractFlags, toQueries,
   normalizeName, parseStats, STAT_LABELS, STAT_ICONS, setClient, mirrorEmojiTokens, collectEmojiTokens,
-  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, syncAnimalEmoji
+  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, syncAnimalEmoji, ensureAnimalEmoji, ensureAnimalEmojis
 };

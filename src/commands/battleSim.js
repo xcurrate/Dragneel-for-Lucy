@@ -7,6 +7,7 @@
 //   dsim -lawan hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
+const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
 const data = require('../data/owoBattle');
 const { simEmbed, renderMatchup, usageEmbed, errorEmbed } = require('../ui/battlePanel');
@@ -80,7 +81,7 @@ function parseFlags(args) {
   return { flags, rest };
 }
 
-function handleSimCommand(message, args, prefix, deps = {}) {
+async function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const userId = message.author.id;
 
@@ -132,6 +133,12 @@ function handleSimCommand(message, args, prefix, deps = {}) {
     playerQuality,
     enemyQuality,
   });
+
+  // Ringkasan matchup memuat emoji hewan; siapkan dulu seperti `d dex`.
+  await animalDex.ensureAnimalEmojis([
+    ...playerSpecs.map(spec => spec.animal),
+    ...enemySpecs.map(spec => spec.animal),
+  ]);
 
   return send(message, simEmbed(result, {
     playerLabel: team.name,
