@@ -21,8 +21,8 @@ const COEFFS_WEAK = { hp: 4, att: 2, pr: 3, wp: 1, mag: 1, mr: 2 };
 describe('data battle OwO', () => {
   it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
     assert.strictEqual(data.animals().length, 20);
-    assert.strictEqual(data.weapons().length, 28);
-    assert.strictEqual(data.buffs().length, 16);
+    assert.strictEqual(data.weapons().length, 29);
+    assert.strictEqual(data.buffs().length, 19);
   });
 
   it('mencari hewan lewat alias', () => {
@@ -2429,5 +2429,230 @@ describe("Defender's Aegis", () => {
     engine.runTurn({ ...ctx, playerFirst: true }, unit.team, foe.team);
     assert.ok(unit.buffs.some(b => b.id === 1), 'Taunt terpasang');
     assert.strictEqual(foe.stats.hp[0], hpBefore, 'tidak menyerang di turn pemasangan');
+  });
+});
+
+describe('update OwO: Wounding Crossbow, Frostbite, Pest, Exposed, Resonance, Living Hive, Frost Armor', () => {
+  const link = (me, them) => {
+    for (const u of me) { u.team = me; u.foes = them; }
+    for (const u of them) { u.team = them; u.foes = me; }
+  };
+  const fresh = (label, extra = {}) => {
+    const u = engine.buildUnit(
+      Object.assign({ label, level: 40, coeffs: COEFFS_STRONG }, extra),
+      rngModule.createRng(7),
+    );
+    return u;
+  };
+  const ctxOf = () => ({ rng: rngModule.createRng(5), tags: new Set(), damageDealt: 0, turn: 1 });
+
+  it('mengenali alias senjata dan pasif baru', () => {
+    for (const alias of ['woundingcrossbow', 'wcb', 'wcbow', 'crossbow']) {
+      assert.strictEqual(data.findWeapon(alias)?.id, 129, `alias ${alias}`);
+    }
+    assert.strictEqual(data.findWeapon('energystaff')?.id, 11, 'Energy Staff tanpa spasi');
+    for (const [alias, id] of [['resonance', 28], ['res', 28], ['swarm', 25], ['hive', 25], ['frarm', 24], ['armor', 24]]) {
+      const def = require(path.join(ROOT, 'src/data/owoPassives')).get(alias);
+      assert.strictEqual(def?.id, id, `alias pasif ${alias}`);
+    }
+  });
+
+  it('Wounding Crossbow memuat panah gratis dulu, lalu menembak dan membayar WP', () => {
+    const { buildWeapon, weaponAbility } = weaponModule;
+    const me = [fresh('me')];
+    const them = [fresh('e1')];
+    link(me, them);
+    const weapon = buildWeapon({ id: 129, quality: 100 }, rngModule.createRng(1), 100);
+    me[0].weapon = weapon;
+    me[0].stats.wp[0] = 0; // WP habis: memuat tetap boleh
+
+    const ctx = ctxOf();
+    assert.strictEqual(weaponAbility(ctx, weapon, me[0]), true, 'turn pertama memuat');
+    assert.strictEqual(weapon.arrowLoaded, true);
+    assert.strictEqual(them[0].stats.hp[0], them[0].stats.hp[1], 'memuat tidak memberi damage');
+    assert.strictEqual(me[0].stats.wp[0], 0, 'memuat tidak memakai WP');
+
+    me[0].stats.wp[0] = weapon.manaCost;
+    const hpBefore = them[0].stats.hp[0];
+    assert.strictEqual(weaponAbility(ctx, weapon, me[0]), true, 'turn kedua menembak');
+    assert.strictEqual(weapon.arrowLoaded, false, 'panah dilepas');
+    assert.ok(them[0].stats.hp[0] < hpBefore, 'menembak memberi damage');
+    assert.strictEqual(me[0].stats.wp[0], 0, 'biaya WP dibayar saat menembak');
+  });
+
+  it('Wounding Crossbow menempelkan 10-25 stack Exposed sesuai quality', () => {
+    const { buildWeapon, weaponAbility } = weaponModule;
+    for (const [quality, expected] of [[0, 10], [100, 25]]) {
+      const me = [fresh('me')];
+      const them = [fresh('e1')];
+      link(me, them);
+      const weapon = buildWeapon({ id: 129, quality }, rngModule.createRng(1), quality);
+      me[0].weapon = weapon;
+      me[0].stats.wp[0] = weapon.manaCost;
+      weapon.arrowLoaded = true;
+      weaponAbility(ctxOf(), weapon, me[0]);
+      assert.strictEqual(them[0].buffs.filter(b => b.id === 19).length, expected, `quality ${quality}`);
+    }
+  });
+
+  it('Exposed menambah damage sekali lalu seluruh stack hilang', () => {
+    const victim = fresh('korban');
+    const attacker = fresh('penyerang');
+    link([victim], [attacker]);
+    // Baseline diukur pada unit yang sama SEBELUM stack dipasang, supaya
+    // resistensi PR ikut terhitung tanpa ikut terkena bonus Exposed.
+    const base = engine.inflictDamage(ctxOf(), attacker, victim, 1000, engine.PHYSICAL);
+    for (let i = 0; i < 20; i++) {
+      victim.buffs.push(createBuff(19, { quality: [], from: attacker, rng: rngModule.createRng(1) }));
+    }
+    const withStacks = engine.inflictDamage(ctxOf(), attacker, victim, 1000, engine.PHYSICAL);
+    assert.strictEqual(withStacks, Math.round(base * 1.2), `20 stack = +20% damage, dapat ${withStacks} vs ${base}`);
+    assert.strictEqual(victim.buffs.filter(b => b.id === 19).length, 0, 'stack dihapus setelah satu hit');
+    // Hit berikutnya kembali normal.
+    assert.strictEqual(engine.inflictDamage(ctxOf(), attacker, victim, 1000, engine.PHYSICAL), base);
+  });
+
+  it('Pest meledak per stack di akhir turn lalu hilang', () => {
+    const caster = fresh('caster');
+    const victim = fresh('korban');
+    link([victim], [caster]);
+    const mag = caster.stats.mag[0] + caster.stats.mag[1];
+    for (let i = 0; i < 3; i++) {
+      victim.buffs.push(createBuff(18, { quality: [100], from: caster, rng: rngModule.createRng(1) }));
+    }
+    const hpBefore = victim.stats.hp[0];
+    engine.runTurn(ctxOf(), [caster], [victim]);
+    const dealt = hpBefore - victim.stats.hp[0];
+    assert.strictEqual(victim.buffs.filter(b => b.id === 18).length, 0, 'semua stack hilang');
+    assert.ok(dealt >= Math.floor(mag * 0.08 * 3) - 3, `damage 3 x 8% MAG, dapat ${dealt}`);
+  });
+
+  it('Frost Armor menempelkan 10-20 stack Frostbite ke penyerang', () => {
+    for (const [quality, expected] of [[0, 10], [100, 20]]) {
+      const defender = fresh('defender', { weapon: { id: 4, quality, passives: [24] } });
+      const attacker = fresh('attacker');
+      link([defender], [attacker]);
+      engine.inflictDamage(ctxOf(), attacker, defender, 100, engine.PHYSICAL);
+      assert.strictEqual(attacker.buffs.filter(b => b.id === 17).length, expected, `quality ${quality}`);
+    }
+  });
+
+  it('Frostbite berubah menjadi Freeze pada 100 stack lalu stack dihapus', () => {
+    const holder = fresh('holder');
+    const source = fresh('source');
+    link([holder], [source]);
+    for (let i = 0; i < 100; i++) {
+      holder.buffs.push(createBuff(17, { quality: [], from: source, rng: rngModule.createRng(1) }));
+    }
+    engine.runTurn(ctxOf(), [source], [holder]);
+    assert.strictEqual(holder.buffs.filter(b => b.id === 17).length, 0, 'stack Frostbite dihapus');
+    assert.strictEqual(holder.buffs.filter(b => b.id === 5).length, 1, '1 stack Freeze terpasang');
+  });
+
+  it('Freeze hasil Frostbite memblokir tepat satu giliran serang', () => {
+    const holder = fresh('holder');
+    const source = fresh('source');
+    link([holder], [source]);
+    for (let i = 0; i < 100; i++) {
+      holder.buffs.push(createBuff(17, { quality: [], from: source, rng: rngModule.createRng(1) }));
+    }
+    engine.runTurn(ctxOf(), [source], [holder]);
+    const freeze = holder.buffs.find(b => b.id === 5);
+    assert.ok(freeze, 'Freeze terpasang');
+    // Sumber: "Next turn, prevent the target from attacking. Remove a stack
+    // after triggering." Turn pembuatan tidak terblokir (justCreated), lalu
+    // giliran berikutnya terblokir tepat satu kali.
+    assert.strictEqual(freeze.canAttack(), true, 'turn pembuatan tidak terblokir');
+    freeze.postTurn(); // akhir turn pembuatan: justCreated dilepas
+    assert.strictEqual(freeze.canAttack(), false, 'giliran berikutnya terblokir');
+    assert.strictEqual(freeze.duration, 0, 'durasi habis setelah satu blokir');
+    assert.ok(freeze.expired, 'Freeze lepas setelah satu giliran');
+  });
+
+  it('Conduit Claw memakai -20-50% efektivitas dan 120-170% MAG sesuai quality', () => {
+    const { buildWeapon, weaponAbility } = weaponModule;
+    for (const [quality, keep, dmgPct] of [[0, 0.8, 120], [100, 0.5, 170]]) {
+      const me = [fresh('me')];
+      const them = [fresh('e1'), fresh('e2')];
+      link(me, them);
+      them[0].buffs.push(createBuff(15, { quality: [100], from: them[0], rng: rngModule.createRng(1) }));
+      them[1].buffs.push(createBuff(6, { quality: [100], from: them[1], rng: rngModule.createRng(1) }));
+      me[0].weapon = buildWeapon({ id: 124, quality }, rngModule.createRng(1), quality);
+      const mag = me[0].stats.mag[0] + me[0].stats.mag[1];
+      const hpBefore = them[0].stats.hp[0];
+      assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0]), true, `quality ${quality}`);
+      const moved = them[1].buffs.find(b => b.id === 15);
+      assert.ok(Math.abs(moved.effectiveness - keep) < 1e-9, `efektivitas ${keep}, dapat ${moved.effectiveness}`);
+      const dealt = hpBefore - them[0].stats.hp[0];
+      // Damage MAG melewati resistensi MR sasaran, jadi bandingkan batas bawah.
+      assert.ok(dealt > 0 && dealt <= Math.ceil(mag * (dmgPct / 100)), `damage ${dealt} <= ${dmgPct}% MAG`);
+    }
+  });
+
+  it('Frostbite di bawah 100 stack tidak berubah menjadi Freeze', () => {
+    const holder = fresh('holder');
+    const source = fresh('source');
+    link([holder], [source]);
+    for (let i = 0; i < 99; i++) {
+      holder.buffs.push(createBuff(17, { quality: [], from: source, rng: rngModule.createRng(1) }));
+    }
+    engine.runTurn(ctxOf(), [source], [holder]);
+    assert.strictEqual(holder.buffs.filter(b => b.id === 17).length, 99, 'stack tetap');
+    assert.strictEqual(holder.buffs.filter(b => b.id === 5).length, 0, 'belum Freeze');
+  });
+
+  it('Resonance menambah damage keluar per buff dan mengurangi damage masuk per debuff', () => {
+    const { buildWeapon } = weaponModule;
+    const me = fresh('me', { weapon: { id: 4, quality: 100, passives: [28] } });
+    const foe = fresh('foe');
+    link([me], [foe]);
+
+    // Rune of the Forgotten menaikkan semua stat, jadi baseline harus diukur
+    // pada unit yang sama, bukan pada unit polos.
+    const baseOut = engine.inflictDamage(ctxOf(), me, foe, 1000, engine.PHYSICAL);
+    me.buffs.push(createBuff(4, { quality: [100], from: me, rng: rngModule.createRng(1) }));
+    me.buffs.push(createBuff(4, { quality: [100], from: me, rng: rngModule.createRng(1) }));
+    const boosted = engine.inflictDamage(ctxOf(), me, foe, 1000, engine.PHYSICAL);
+    assert.strictEqual(boosted, Math.round(baseOut * 1.2), `damage keluar +20%, dapat ${boosted} vs ${baseOut}`);
+
+    // 1 debuff pada quality 100 = -10% damage masuk.
+    me.buffs = [];
+    const baseIn = engine.inflictDamage(ctxOf(), foe, me, 1000, engine.PHYSICAL);
+    me.buffs = [createBuff(2, { quality: [100], from: foe, rng: rngModule.createRng(1) })];
+    const reduced = engine.inflictDamage(ctxOf(), foe, me, 1000, engine.PHYSICAL);
+    assert.strictEqual(reduced, Math.round(baseIn * 0.9), `damage masuk -10%, dapat ${reduced} vs ${baseIn}`);
+  });
+
+  it('Living Hive memakai WP per serangan lalu menempelkan Pest; berhenti bila WP kurang', () => {
+    const me = fresh('me', { weapon: { id: 4, quality: 100, passives: [25] } });
+    const foe = fresh('foe');
+    link([me], [foe]);
+    const cost = require(path.join(ROOT, 'src/services/battlePassives')).statsFor(
+      require(path.join(ROOT, 'src/data/owoPassives')).get('Living Hive'), 100,
+    )[0];
+    assert.strictEqual(cost, 2, 'quality 100 = 2 WP');
+
+    me.stats.wp[0] = 10;
+    engine.inflictDamage(ctxOf(), me, foe, 100, engine.PHYSICAL);
+    assert.strictEqual(foe.buffs.filter(b => b.id === 18).length, 1, 'Pest menempel');
+    assert.strictEqual(me.stats.wp[0], 8, 'WP berkurang 2');
+
+    me.stats.wp[0] = 1;
+    engine.inflictDamage(ctxOf(), me, foe, 100, engine.PHYSICAL);
+    assert.strictEqual(foe.buffs.filter(b => b.id === 18).length, 1, 'tidak menempel saat WP kurang');
+    assert.strictEqual(me.stats.wp[0], 1, 'WP tidak berubah');
+  });
+
+  it('buff dan pasif baru tidak merusak battle penuh', () => {
+    const rng = rngModule.createRng(11);
+    const player = [fresh('p1', { weapon: { id: 129, quality: 100, passives: [28, 25] } })];
+    const enemy = [fresh('e1', { weapon: { id: 4, quality: 100, passives: [24] } })];
+    const result = engine.runBattle(
+      player.map(u => ({ label: u.nickname, level: u.level, coeffs: COEFFS_STRONG, weapon: { id: 129, quality: 100, passives: [28, 25] } })),
+      enemy.map(u => ({ label: u.nickname, level: u.level, coeffs: COEFFS_STRONG, weapon: { id: 4, quality: 100, passives: [24] } })),
+      { rng, seed: 3 },
+    );
+    assert.ok(['player', 'enemy', 'tie'].includes(result.winner));
+    assert.ok(result.turns >= 1 && result.turns <= data.limits.maxTurns);
   });
 });

@@ -4,6 +4,11 @@
 // yang mengelola durasinya sendiri lewat canAttack.
 const data = require('../data/owoBattle');
 
+// Frostbite berubah menjadi Freeze setiap 100 stack; Exposed menambah 1% damage
+// per stack. Keduanya angka tetap dari deskripsi sumber, bukan quality.
+const FROSTBITE_PER_FREEZE = 100;
+const EXPOSED_PER_STACK = 0.01;
+
 // battleEngine mengimpor modul ini, jadi import top-level akan melingkar.
 // Aksesor malas ini membuat siklusnya aman dan tetap satu pintu.
 let engineRef = null;
@@ -47,6 +52,9 @@ const STACK = {
   14: 'merge', // Wither: durasi digabung, persennya tidak dijumlah
   15: 'merge', // Midnight Curse: idem, satu kutukan per unit
   16: 'merge', // Anniversary Blessing: pasang ulang memperpanjang durasi
+  17: 'independent', // Frostbite: tiap stack instance terpisah, dihitung 100 stack
+  18: 'independent', // Pest: tiap stack menyerang sendiri lalu hilang
+  19: 'independent', // Exposed: tiap stack menambah 1% damage berikutnya
 };
 
 // `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
@@ -253,6 +261,54 @@ const FACTORIES = {
     preBind(ctx, unit) {
       buffDamage(ctx, from, unit, 'mag', stats[0] / 100, 'm');
       return { dontBind: true };
+    },
+  }),
+
+  // Frostbite: tidak punya efek sendiri, hanya penghitung. Setiap 100 stack
+  // berubah menjadi 1 stack Freeze lalu semua stack Frostbite dihapus. Stack
+  // dihitung dari panjang array karena setiap instance berdiri sendiri.
+  // Durasi `null` = tidak pernah kedaluwarsa; Freeze yang mengakhiri.
+  17: (def, stats, from) => ({
+    id: 17, name: def.name, debuff: true, stats, duration: null, from,
+    postTurn(ctx, unit) {
+      if (unit.stats.hp[0] <= 0) return;
+      const stacks = unit.buffs.filter(b => b.id === 17).length;
+      if (stacks < FROSTBITE_PER_FREEZE) return;
+      const e = engine();
+      unit.buffs = unit.buffs.filter(b => b.id !== 17);
+      // Sumber: "Next turn, prevent the target from attacking. Remove a stack
+      // after triggering." Satu turn terblokir = durasi 1; Freeze sendiri
+      // menurunkan durasinya di canAttack, bukan di tick mesin.
+      const freeze = createBuff(5, { quality: [], from, duration: 1, rng: ctx.rng });
+      if (freeze) e.bindBuff(ctx, unit, freeze);
+    },
+  }),
+
+  // Pest: tiap stack meledak sendiri di akhir turn memakai MAG pemberinya,
+  // lalu hilang. Karena damage dihitung per instance, buff di-splice dulu
+  // supaya tidak ikut terhitung lagi saat damage memicu hook lain.
+  18: (def, stats, from) => ({
+    id: 18, name: def.name, debuff: true, stats, duration: null, from,
+    postTurn(ctx, unit) {
+      if (unit.stats.hp[0] <= 0) return;
+      const idx = unit.buffs.indexOf(this);
+      if (idx === -1) return;
+      unit.buffs.splice(idx, 1);
+      buffDamage(ctx, from, unit, 'mag', stats[0] / 100, 'm');
+    },
+  }),
+
+  // Exposed: menambah damage SATU hit berikutnya sebesar 1% per stack, lalu
+  // semua stack dihapus. Stack dibaca dan dibuang di hook yang sama supaya
+  // hit berikutnya tidak ikut terkena.
+  19: (def, stats, from) => ({
+    id: 19, name: def.name, debuff: true, stats, duration: null, from,
+    attacked(ctx, unit, attacker, bucket) {
+      if (unit.stats.hp[0] <= 0) return;
+      const stacks = unit.buffs.filter(b => b.id === 19).length;
+      if (!stacks) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * (stacks * EXPOSED_PER_STACK);
+      unit.buffs = unit.buffs.filter(b => b.id !== 19);
     },
   }),
 };

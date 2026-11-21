@@ -654,6 +654,57 @@
       ]
     },
     {
+      "id": 24,
+      "name": "Frost Armor",
+      "emojis": [
+        "<:frarm:1478938639286272012>"
+      ],
+      "emojiNote": "Sumber hanya menyebut satu token (frarm); varian rank lain belum tersedia, jadi token ini dipakai untuk semua tier.",
+      "category": "reflect",
+      "summary": "Saat menerima damage, tempelkan 10-20 stack Frostbite ke penyerang.",
+      "sourceText": "When you receive damage, apply **10-20** stacks of **Frostbite** to the attacker.",
+      "qualityList": [
+        [
+          10,
+          20
+        ]
+      ],
+      "hooks": [
+        "postAttacked"
+      ],
+      "aliases": [
+        "frarm",
+        "armor",
+        "fr"
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Living Hive",
+      "emojis": [
+        "<:swarm:1462495891893256365>"
+      ],
+      "emojiNote": "Sumber hanya menyebut satu token (swarm); varian rank lain belum tersedia, jadi token ini dipakai untuk semua tier.",
+      "category": "damage",
+      "summary": "Saat memberi damage, habiskan 8-2 WP untuk menempelkan Pest ke sasaran.",
+      "sourceText": "When dealing damage, spend **8-2** WP to apply **Pest** to the target.",
+      "qualityList": [
+        [
+          8,
+          2
+        ]
+      ],
+      "qualityNote": "Slot tunggal ini biaya WP, dan nilainya TURUN saat quality naik (8 -> 2). Persen damage Pest diambil dari quality buff Pest itu sendiri.",
+      "hooks": [
+        "postAttack"
+      ],
+      "aliases": [
+        "swarm",
+        "hive",
+        "lhive"
+      ]
+    },
+    {
       "id": 27,
       "name": "Adaptation",
       "emojis": [
@@ -684,6 +735,32 @@
       ],
       "stackLimit": 5,
       "stackRule": "Satu pool stack (bukan dua). Diamage tipe lain menghapus SEMUA stack; damage TRUE juga menghapus karena bukan Physical/Magical."
+    },
+    {
+      "id": 28,
+      "name": "Resonance",
+      "emojis": [
+        "<:resonance:1462495812297691368>"
+      ],
+      "emojiNote": "Sumber hanya menyebut satu token (resonance); varian rank lain belum tersedia, jadi token ini dipakai untuk semua tier.",
+      "category": "damage",
+      "summary": "Tiap buff yang menempel menambah damage keluar; tiap debuff yang menempel mengurangi damage masuk.",
+      "sourceText": "For every buff you have, deal +**5-10%** more damage. For every debuff you have, take -**5-10%** less damage.",
+      "qualityList": [
+        [
+          5,
+          10
+        ]
+      ],
+      "hooks": [
+        "attack",
+        "attacked"
+      ],
+      "aliases": [
+        "resonance",
+        "res",
+        "reso"
+      ]
     }
   ]
 }

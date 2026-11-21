@@ -357,7 +357,11 @@ function act(ctx, actor, allies, foes) {
   // bukan truthiness biayanya — kalau tidak, senjata berbiaya WP 0 tidak pernah
   // memakai ability-nya.
   const hasAbility = weapon && weapon.ability && weapon.ability.kind !== 'none';
-  if (hasAbility && actor.stats.wp[0] >= (weapon.manaCost || 0)) {
+  // Memuat Heavy Arrow tidak memakai WP; hanya menembak yang membayar. Tanpa
+  // pengecualian ini unit ber-WP rendah tidak pernah memuat panah dan jatuh ke
+  // serangan biasa selamanya.
+  const freeNow = weapon?.ability?.kind === 'heavy_arrow' && !weapon.arrowLoaded;
+  if (hasAbility && (freeNow || actor.stats.wp[0] >= (weapon.manaCost || 0))) {
     if (weaponAbility(ctx, weapon, actor, allies, foes)) return;
   }
   basicAttack(ctx, actor, allies, foes);

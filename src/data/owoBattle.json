@@ -697,7 +697,8 @@
       ],
       "aliases": [
         "estaff",
-        "energy"
+        "energy",
+        "energystaff"
       ],
       "type": "MAGICAL",
       "qualityList": [
@@ -717,7 +718,9 @@
         "stat": "mag",
         "target": "all_enemies"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "owoId": 111,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes."
     },
     {
       "id": 12,
@@ -1306,8 +1309,9 @@
       ],
       "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: cclaw.",
       "aliases": [
-        "conduitclaw",
-        "cclaw"
+        "cclaw",
+        "claw",
+        "conduitclaw"
       ],
       "type": "MAGICAL",
       "qualityList": [
@@ -1330,7 +1334,8 @@
         "kind": "conduit",
         "stat": "mag"
       },
-      "abilityNote": "Pindahkan satu debuff dari musuh ke sekutu dengan buff terbanyak, efektivitasnya -20-50%, lalu beri 120-170% MAG ke musuh itu."
+      "abilityNote": "Pindahkan satu debuff dari musuh ke sekutu dengan buff terbanyak, efektivitasnya -20-50%, lalu beri 120-170% MAG ke musuh itu.",
+      "sourceText": "Move a **debuff** from an enemy to the ally with the most **buffs**. Reduce the debuff's effectiveness by **-20-50%** and deal **120-170%** of your MAG to the enemy. Moved buffs are calculated based on the original caster's stats."
     },
     {
       "id": 125,
@@ -1408,6 +1413,46 @@
         "interval": 4
       },
       "abilityNote": "preTurn: tiap 4 giliran (turn 1, 5, 9, ...) memasang Anniversary Blessing 2 turn ke seluruh tim. Biaya 200-100 WP dibayar saat memasang."
+    },
+    {
+      "id": 129,
+      "name": "Wounding Crossbow",
+      "owoId": 129,
+      "emojis": [],
+      "defaultEmoji": "<:harrow:1478943742798073907>",
+      "emojiNote": "Belum ada token per rank; semua tier memakai emoji Heavy Arrow dari deskripsi sumber.",
+      "aliases": [
+        "woundingcrossbow",
+        "crossbow",
+        "wcb",
+        "wcbow",
+        "xbow"
+      ],
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          220,
+          300
+        ],
+        [
+          10,
+          25
+        ]
+      ],
+      "manaRange": [
+        480,
+        280
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "heavy_arrow",
+        "stat": "att",
+        "type": "PHYSICAL"
+      },
+      "abilityNote": "Dua fase: memuat panah gratis (tanpa WP, tanpa damage), lalu menembak dengan 220-300% STR + 10-25 stack Exposed. Biaya 480-280 WP hanya dibayar saat menembak.",
+      "manaCostNote": "manaRange 480-280: biaya TURUN saat quality naik, dan hanya dipakai saat panah dilepas.",
+      "sourceText": "If **Heavy Arrow** is not loaded, load one. Otherwise, consume it. Loading an arrow does not cost WP. Heavy Arrow: deal **220-300%** of your STR and apply **10-25** stacks of **Exposed** to an enemy. Exposed: the next instance of damage taken is increased by 1% per stack; consume all stacks after triggering."
     }
   ],
   "buffs": [
@@ -1635,6 +1680,35 @@
         ]
       ],
       "note": "ATT & MAG +15-50%, PR & MR +10-30%, dan heal 5-10% Max HP tiap akhir turn selama 2 turn."
+    },
+    {
+      "id": 17,
+      "name": "Frostbite",
+      "debuff": true,
+      "qualityList": [],
+      "note": "Stack menumpuk tanpa batas. Pada 100 stack, pasang 1 stack Freeze lalu hapus semua stack Frostbite.",
+      "stackingNote": "Independent: tiap stack instance terpisah, jadi jumlah stack dihitung dari panjang array buff."
+    },
+    {
+      "id": 18,
+      "name": "Pest",
+      "debuff": true,
+      "qualityList": [
+        [
+          2,
+          8
+        ]
+      ],
+      "note": "Di akhir turn, tiap stack Pest memberi damage MAG 2-8% dari MAG pemberi, lalu Pest hilang.",
+      "stackingNote": "Independent: tiap stack instance terpisah dan hilang setelah menyerang."
+    },
+    {
+      "id": 19,
+      "name": "Exposed",
+      "debuff": true,
+      "qualityList": [],
+      "note": "Damage berikutnya yang diterima naik 1% per stack, lalu semua stack dihapus.",
+      "stackingNote": "Independent: tiap stack instance terpisah, jumlahnya dijumlahkan saat menghitung bonus."
     }
   ],
   "limits": {

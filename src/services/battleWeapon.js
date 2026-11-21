@@ -425,6 +425,33 @@ const ABILITIES = {
     return true;
   },
 
+  // Wounding Crossbow: dua fase dalam satu ability. Selama panah belum termuat,
+  // giliran dipakai untuk memuat (tanpa biaya WP, tanpa damage). Saat panah
+  // sudah termuat, giliran dipakai untuk menembak: 220-300% STR plus stack
+  // Exposed, dan biaya WP baru dibayar di sini.
+  // `weapon.arrowLoaded` disimpan di objek senjata karena state ini milik unit,
+  // bukan milik turn, dan harus bertahan sampai panah dilepas.
+  heavy_arrow(ctx, weapon, actor) {
+    const e = engine();
+    const ab = weapon.ability;
+    if (!weapon.arrowLoaded) {
+      weapon.arrowLoaded = true;
+      return true;
+    }
+    const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
+    if (!target) return false;
+    e.useMana(actor, weapon.manaCost);
+    weapon.arrowLoaded = false;
+    const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
+    e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
+    // Stack Exposed dipasang per instance karena buff ini menghitung jumlah
+    // stack dari panjang array, bukan dari satu nilai.
+    const stacks = Math.max(0, Math.round(weapon.stats[1]));
+    for (let i = 0; i < stacks; i++) {
+      applyBuff(ctx, 19, actor, target, null, null);
+    }
+    return true;
+  },
 };
 
 function applyBuff(ctx, buffId, from, target, duration, quality) {

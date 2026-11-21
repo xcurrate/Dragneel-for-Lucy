@@ -47,20 +47,6 @@
       ]
     },
     {
-      "id": 27,
-      "name": "Wound Bringer",
-      "emojis": [
-        "<:woundb:1478937799175573596>"
-      ],
-      "aliases": [
-        "woundb",
-        "crossbow",
-        "wbow",
-        "wcbow",
-        "xbow"
-      ]
-    },
-    {
       "id": 28,
       "name": "Burning Gaze",
       "emojis": [
@@ -80,64 +66,14 @@
       "emojis": [
         "<:cclaw:1480316577478869043>"
       ],
-      "aliases": [
-        "claw"
-      ],
+      "aliases": [],
       "aliasNotes": [
-        "Alias `cclaw` dipindah ke Conduit Claw (id 124) sesuai deskripsi live."
+        "Alias `cclaw` dipindah ke Conduit Claw (id 124) sesuai deskripsi live.",
+        "Alias `claw` dipindah ke Conduit Claw (124) sesuai deskripsi live."
       ]
     }
   ],
   "passives": [
-    {
-      "id": 28,
-      "name": "Giant Slayer",
-      "emojis": [
-        "<:fgslayer:1552764472253358132>",
-        "<:gslay:1462495687940767950>"
-      ],
-      "aliases": [
-        "gslay",
-        "slay",
-        "slayer",
-        "gslayer",
-        "giantslayer"
-      ],
-      "category": "offense",
-      "summary": "Damage ke boss +10-25%.",
-      "sourceText": "Deal +**10-25%** more damage to bosses. Aliases: gslay, slay, slayer, gslayer",
-      "qualityList": [
-        [
-          10,
-          25
-        ]
-      ],
-      "note": "Hanya berlaku bila sasaran bertanda boss (ctx.isBoss). Battle PvP/mirror tidak terpengaruh karena lawan bukan boss."
-    },
-    {
-      "id": 24,
-      "name": "Resonance",
-      "emojis": [
-        "<:resonance:1462495812297691368>"
-      ],
-      "aliases": [
-        "resonance",
-        "res",
-        "reso"
-      ]
-    },
-    {
-      "id": 25,
-      "name": "Swarm",
-      "emojis": [
-        "<:swarm:1462495891893256365>"
-      ],
-      "aliases": [
-        "swarm",
-        "hive",
-        "lhive"
-      ]
-    },
     {
       "id": 26,
       "name": "Lone Wolf",
@@ -159,18 +95,6 @@
         "dstrike",
         "strike",
         "ds"
-      ]
-    },
-    {
-      "id": 28,
-      "name": "Frozen Armor",
-      "emojis": [
-        "<:frarm:1478938639286272012>"
-      ],
-      "aliases": [
-        "frarm",
-        "armor",
-        "fr"
       ]
     }
   ]

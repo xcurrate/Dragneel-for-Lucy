@@ -13,6 +13,13 @@ function engine() {
   return engineRef;
 }
 
+// battleBuffs mengimpor modul ini, jadi aksesornya juga malas.
+let buffsRef = null;
+function buffs() {
+  if (!buffsRef) buffsRef = require('./battleBuffs');
+  return buffsRef;
+}
+
 function statAt(range, quality) {
   const q = Math.min(100, Math.max(0, Number(quality) || 0));
   const [min, max] = range;
@@ -237,6 +244,58 @@ const PASSIVES = {
   }),
 
   21: () => ({ id: 21, name: 'Knowledge', stats: [], }), // tidak berpengaruh di battle
+
+  // Resonance: buff yang menempel menambah damage keluar, debuff yang menempel
+  // mengurangi damage masuk. Keduanya dihitung dari jumlah instance buff, bukan
+  // dari jenisnya, jadi buff dan debuff yang bertumpuk ikut menambah.
+  28: (stats) => ({
+    id: 28, name: 'Resonance', stats,
+    attack(ctx, unit, target, bucket) {
+      const buffs = unit.buffs.filter(b => !b.debuff).length;
+      if (!buffs) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * ((stats[0] * buffs) / 100);
+    },
+    attacked(ctx, unit, attacker, bucket) {
+      const debuffs = unit.buffs.filter(b => b.debuff).length;
+      if (!debuffs) return;
+      bucket.bonus -= (bucket.amount + bucket.bonus) * ((stats[0] * debuffs) / 100);
+    },
+  }),
+
+  // Swarm: biaya WP per serangan, nilainya TURUN saat quality naik (8 -> 2).
+  // WP diambil dari jumlah yang benar-benar terpakai, jadi unit kehabisan WP
+  // tidak menempelkan Pest setengah harga.
+  25: (stats) => ({
+    id: 25, name: 'Living Hive', stats,
+    postAttack(ctx, unit, target, _total, _type) {
+      const { useMana, tagged, withTag, isAlive } = engine();
+      if (tagged(ctx, 'livingHive', unit) || !isAlive(target)) return;
+      if (unit.stats.wp[0] < stats[0]) return;
+      withTag(ctx, 'livingHive', unit, () => {
+        useMana(unit, stats[0]);
+        const pest = buffs().createBuff(18, { quality: null, from: unit, rng: ctx.rng });
+        if (pest) engine().bindBuff(ctx, target, pest);
+      });
+    },
+  }),
+
+  // Frozen Armor: menempelkan Frostbite ke penyerang. Stack Frostbite sendiri
+  // yang menghitung 100; pasif ini hanya menambah.
+  24: (stats) => ({
+    id: 24, name: 'Frost Armor', stats,
+    postAttacked(ctx, unit, attacker, _total, _type) {
+      const { tagged, withTag, isAlive } = engine();
+      if (tagged(ctx, 'frostArmor', unit) || !isAlive(attacker)) return;
+      const stacks = Math.max(0, Math.round(stats[0]));
+      if (!stacks) return;
+      withTag(ctx, 'frostArmor', unit, () => {
+        for (let i = 0; i < stacks; i++) {
+          const frost = buffs().createBuff(17, { quality: null, from: unit, rng: ctx.rng });
+          if (frost) engine().bindBuff(ctx, attacker, frost);
+        }
+      });
+    },
+  }),
 };
 
 // Membangun instance pasif. `quality` 0-100; tanpa itu di-roll dari RNG.

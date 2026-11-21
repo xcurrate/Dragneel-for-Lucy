@@ -3,15 +3,19 @@ const assert = require('node:assert');
 
 const passives = require('../src/data/owoPassives');
 
-test('memuat 23 pasif dengan id unik', () => {
+test('memuat 26 pasif dengan id unik', () => {
   const all = passives.all();
-  assert.equal(all.length, 23);
+  assert.equal(all.length, 26);
   const ids = all.map(p => p.id).sort((a, b) => a - b);
-  assert.equal(new Set(ids).size, 23, 'id tidak boleh duplikat');
-  // Giant Slayer (22) mengisi celah kosong, Adaptation (27) di ujung; id lama
-  // tidak boleh bergeser karena dipakai penyimpanan tim.
-  assert.deepEqual(ids, [...Array.from({ length: 22 }, (_, i) => i + 1), 27]);
-  assert.equal(new Set(all.map(p => p.name)).size, 23, 'nama tidak boleh duplikat');
+  assert.equal(new Set(ids).size, 26, 'id tidak boleh duplikat');
+  // Giant Slayer (22) mengisi celah kosong; Frost Armor (24), Living Hive (25),
+  // Adaptation (27), dan Resonance (28) menyusul. Id 23 dan 26 belum dipakai
+  // sumber, dan id lama tidak boleh bergeser karena dipakai penyimpanan tim.
+  assert.deepEqual(ids, [
+    ...Array.from({ length: 22 }, (_, i) => i + 1),
+    24, 25, 27, 28,
+  ]);
+  assert.equal(new Set(all.map(p => p.name)).size, 26, 'nama tidak boleh duplikat');
 });
 
 test('setiap pasif punya kategori yang dikenal dan qualityList tidak kosong', () => {
@@ -20,7 +24,10 @@ test('setiap pasif punya kategori yang dikenal dan qualityList tidak kosong', ()
     assert.ok(p.qualityList.length > 0, `${p.name}: qualityList kosong`);
     for (const [min, max] of p.qualityList) {
       assert.ok(Number.isFinite(min) && Number.isFinite(max), `${p.name}: range tidak valid`);
-      assert.ok(min <= max, `${p.name}: min > max`);
+      // Rentang menurun sah bila sumber memang menyebut nilai yang TURUN pada
+      // quality tinggi (Swarm: biaya WP 8 -> 2). Wajib ada catatan agar tidak
+      // lolos sebagai salah ketik.
+      if (min > max) assert.ok(p.qualityNote, `${p.name}: range menurun tanpa qualityNote`);
     }
   }
 });
