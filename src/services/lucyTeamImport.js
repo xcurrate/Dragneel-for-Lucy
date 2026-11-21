@@ -43,7 +43,11 @@ function parseSlot(text) {
   const slotMatch = header.match(/\*\*\[(\d+)\]/);
   if (!slotMatch) return null;
   const slot = Number(slotMatch[1]);
-  const labelMatch = header.match(/\*\*\[(?:\d+)\][^\n]*?\*\*\s*([^*\n]+?)\s*\*\*/);
+  // Label bisa didahului token emoji hewan (`**[1] <a:beastmeow:123> **`), jadi
+  // token dibuang dulu sebelum mencari teks bold. Tanpa ini labelnya ikut
+  // menyimpan `<a:...>` mentah dan tampil sebagai teks di panel.
+  const labelSource = header.replace(/<a?:\w+:\d+>/g, ' ');
+  const labelMatch = labelSource.match(/\*\*\[(?:\d+)\][^\n]*?\*\*\s*([^*\n]+?)\s*\*\*/);
   const label = labelMatch ? labelMatch[1].trim() : `slot${slot}`;
   // Hewan pemilik slot dikenali dari emoji pertama di header kartu
   // (`**[2] <a:ulquiorracifer:...> **for** **`), bukan dari label: label bisa
@@ -111,10 +115,8 @@ function importLucyTeam(userId, parsed) {
   if (parsed.sourceMessageId && store.hasTeamImport(userId, parsed.sourceMessageId)) {
     return { error: 'Pesan tim Lucy ini sudah kamu impor sebelumnya.' };
   }
-  const base = store.normalizeName(`Lucy Import - ${parsed.name}`) || 'Lucy Import';
-  let name = base;
-  let suffix = 2;
-  while (store.getTeam(userId, name)) name = store.normalizeName(`${base} ${suffix++}`);
+  const name = store.uniqueName(userId, `Lucy Import - ${parsed.name}`);
+  if (!name) return { error: 'Nama tim Lucy tidak bisa dipakai. Ganti judul kartunya atau hapus tim lama.' };
   const created = store.createTeam(userId, name);
   if (created.error) return created;
   for (const slot of parsed.slots) {

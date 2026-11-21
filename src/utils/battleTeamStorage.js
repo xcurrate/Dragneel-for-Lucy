@@ -7,6 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
+const dexStore = require('./animalDexStorage');
 
 const MAX_SLOTS = 3;
 // ID tim 1-21 sekaligus menjadi batas jumlah tim per user.
@@ -99,7 +100,35 @@ function getDb() {
   }
   migrateToGlobal(db);
   backfillSlotIds();
+  backfillAnimalKeys();
   return db;
+}
+
+// Slot lama (dibuat sebelum `animalKey` disimpan, termasuk import tim Lucy versi
+// awal) hanya punya label. Kalau labelnya kebetulan nama hewan di dex, kuncinya
+// diisi supaya panel menampilkan emoji pet, bukan 🐾. Label yang berupa nama
+// panggilan tidak cocok dan dibiarkan apa adanya.
+function backfillAnimalKeys() {
+  const rows = getDb().prepare(`
+    SELECT s.team_id, s.slot, s.label FROM team_slots s
+    WHERE s.animal_key IS NULL AND s.label IS NOT NULL
+  `).all();
+  if (!rows.length) return 0;
+  const update = getDb().prepare('UPDATE team_slots SET animal_key = ?, label = ? WHERE team_id = ? AND slot = ?');
+  let filled = 0;
+  for (const row of rows) {
+    // Import versi lama menyimpan token emoji mentah sebagai label. Nama di
+    // dalam token dipakai sebagai petunjuk hewan sekaligus label yang terbaca.
+    const tokenName = (/<a?:(\w+):\d+>/.exec(row.label) || [])[1] || null;
+    const cleaned = row.label.replace(/<a?:\w+:\d+>/g, '').trim() || tokenName;
+    if (!cleaned) continue;
+    const animal = dexStore.resolveAnimal(cleaned) || (tokenName ? dexStore.resolveAnimal(tokenName) : null);
+    const animalKey = animal ? animal.nameKey : null;
+    const label = cleaned === row.label ? row.label : cleaned;
+    if (animalKey) filled++;
+    if (label !== row.label || animalKey) update.run(animalKey, label, row.team_id, row.slot);
+  }
+  return filled;
 }
 
 // Tim dulu dipisah per guild. Saat pertama kali dibuka, satukan baris lama:
@@ -230,6 +259,21 @@ function nextFreeSlotId(userId) {
   return null;
 }
 
+// `normalizeName` memotong ke 32 karakter, jadi menambah sufiks di belakang nama
+// yang sudah penuh menghasilkan nama yang identik lagi dan pencarian berikutnya
+// tidak pernah selesai. Sufiks dipotong dari nama dasar dulu agar hasilnya beda.
+function uniqueName(userId, desired, limit = 50) {
+  const base = normalizeName(desired);
+  if (!base) return null;
+  if (!getTeam(userId, base)) return base;
+  for (let suffix = 2; suffix <= limit; suffix++) {
+    const tag = ` ${suffix}`;
+    const candidate = normalizeName(base.slice(0, 32 - tag.length) + tag);
+    if (candidate !== base && !getTeam(userId, candidate)) return candidate;
+  }
+  return null;
+}
+
 function createTeam(userId, name) {
   const clean = normalizeName(name);
   if (!clean) return { error: 'Nama tim tidak boleh kosong.' };
@@ -305,6 +349,9 @@ function deleteTeam(userId, name) {
   d.prepare('DELETE FROM team_slots WHERE team_id = ?').run(team.id);
   d.prepare('DELETE FROM teams WHERE id = ?').run(team.id);
   d.prepare('DELETE FROM active_team WHERE team_id = ?').run(team.id);
+  // Catatan import ikut dihapus, kalau tidak kartu sumbernya dianggap sudah
+  // pernah diimpor dan tidak bisa dipakai lagi setelah timnya dibuang.
+  d.prepare('DELETE FROM team_imports WHERE user_id = ? AND team_name = ?').run(String(userId), team.name);
   return { team };
 }
 
@@ -458,6 +505,7 @@ module.exports = {
   setCooldown,
   clearCooldown,
   normalizeName,
+  uniqueName,
   listTeams,
   getTeam,
   findTeam,

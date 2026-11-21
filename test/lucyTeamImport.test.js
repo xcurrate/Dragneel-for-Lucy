@@ -164,4 +164,126 @@ describe('Lucy team import', () => {
     assert.equal(await importer.handleReaction(reaction, { id: 'bot', bot: true }), null);
     assert.equal(await importer.handleReaction({ emoji: { name: '👍' }, message }, { id: 'user-3' }), null);
   });
+
+  // Judul yang panjang terpotong 32 karakter oleh `normalizeName`. Kalau sufiks
+  // ditambahkan setelah pemotongan, hasilnya identik dengan nama lama dan
+  // pencarian nama bebas tidak pernah selesai (bot hang di event loop).
+  it('memberi nama unik saat judul kartu sudah mentok 32 karakter', () => {
+    const title = '## ⭐ **Sekian, Terimakasih**';
+    const names = [];
+    for (let i = 0; i < 4; i++) {
+      const message = cardMessage({
+        id: `lucy-long-${i}`,
+        components: [{ type: 17, components: [
+          { type: 10, content: title },
+          { type: 10, content: '**[1] <:animal:1> **for** **\nLvl 83\n<:hp:1> `2990` <:wp:2> `666`\n<:att:3> `100` <:mg:4> `100`\n<:pr:5> `67%` <:mr:6> `67%`' },
+        ] }],
+      });
+      const result = importer.importLucyTeam(`user-${i}`, importer.parseLucyTeamMessage(message));
+      names.push(result.team.name);
+    }
+    // Semua di user yang sama supaya bentrok namanya benar-benar terjadi.
+    const parsed = importer.parseLucyTeamMessage(cardMessage({
+      id: 'lucy-same-user',
+      components: [{ type: 17, components: [
+        { type: 10, content: title },
+        { type: 10, content: '**[1] <:animal:1> **for** **\nLvl 83\n<:hp:1> `2990` <:wp:2> `666`\n<:att:3> `100` <:mg:4> `100`\n<:pr:5> `67%` <:mr:6> `67%`' },
+      ] }],
+    }));
+    const first = importer.importLucyTeam('same-user', parsed);
+    const second = importer.importLucyTeam('same-user', { ...parsed, sourceMessageId: 'other-id' });
+    const third = importer.importLucyTeam('same-user', { ...parsed, sourceMessageId: 'third-id' });
+
+    assert.equal(first.imported, 1);
+    assert.equal(second.imported, 1);
+    assert.equal(third.imported, 1);
+    const uniq = new Set([first.team.name, second.team.name, third.team.name]);
+    assert.equal(uniq.size, 3, `nama harus unik, dapat: ${[...uniq].join(' | ')}`);
+    for (const name of uniq) assert.ok(name.length <= 32, `nama "${name}" melebihi 32 karakter`);
+  });
+
+  // Label di kartu bisa didahului token emoji hewan. Token itu tidak boleh ikut
+  // tersimpan sebagai label karena akan tampil sebagai teks `<a:...>` di panel.
+  // Bentuk aslinya: `**[1]** <a:beastmeow:...> **`.
+  it('tidak menyimpan token emoji mentah sebagai label slot', () => {
+    const message = cardMessage({
+      id: 'lucy-emoji-label',
+      components: [{ type: 17, components: [
+        { type: 10, content: '## ⭐ **emoji label**' },
+        { type: 10, content: '**[1]** <a:beastmeow:1568773919501189281> **\nLvl 82 `[1/2]`\n<:hp:1> `1320` <:wp:2> `666`\n<:att:3> `100` <:mg:4> `100`\n<:pr:5> `67%` <:mr:6> `67%`' },
+      ] }],
+    });
+    const parsed = importer.parseLucyTeamMessage(message);
+    assert.equal(parsed.slots[0].headerEmoji, 'beastmeow');
+    assert.ok(!/<a?:\w+:\d+>/.test(parsed.slots[0].label), `label masih berisi token: ${parsed.slots[0].label}`);
+  });
+
+  // Kartu yang timnya sudah dihapus harus bisa diimpor lagi.
+  it('boleh mengimpor ulang kartu setelah timnya dihapus', () => {
+    const parsed = importer.parseLucyTeamMessage(cardMessage());
+    const first = importer.importLucyTeam('user-1', parsed);
+    assert.equal(first.imported, 1);
+
+    store.deleteTeam('user-1', first.team.name);
+
+    const again = importer.importLucyTeam('user-1', parsed);
+    assert.equal(again.imported, 1, `gagal impor ulang: ${again.error}`);
+  });
+
+  it('mengisi animalKey slot lama dari label yang berupa nama hewan', () => {
+    const dexStore = require('../src/utils/animalDexStorage');
+    dexStore.upsertAnimal({
+      nameKey: 'igris', name: 'igris', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 1, attack: 1, protection: 1, wisdom: 1, magic: 1, mr: 1 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1557672128059539466.gif', emojiName: 'igris',
+    });
+
+    store.createTeam('u', 'lama');
+    // Slot gaya lama: hanya label, tanpa animalKey.
+    store.getDb().prepare('INSERT INTO team_slots (team_id, slot, label, level) VALUES (?, ?, ?, ?)')
+      .run(store.getTeam('u', 'lama').id, 1, 'igris', 50);
+    store.getDb().prepare('INSERT INTO team_slots (team_id, slot, label, level) VALUES (?, ?, ?, ?)')
+      .run(store.getTeam('u', 'lama').id, 2, 'nama panggilan', 50);
+
+    assert.equal(store.getTeam('u', 'lama').slots[0].animalKey, null);
+
+    // Backfill berjalan saat koneksi dibuka ulang.
+    store.getDb().close();
+    delete require.cache[require.resolve('../src/utils/battleTeamStorage')];
+    const reopened = require('../src/utils/battleTeamStorage');
+    const slots = reopened.getTeam('u', 'lama').slots;
+    assert.equal(slots[0].animalKey, 'igris');
+    assert.equal(slots[1].animalKey, null, 'label non-hewan tidak boleh diisi');
+  });
+
+  // Import versi lama menyimpan token emoji mentah sebagai label. Backfill harus
+  // membersihkannya supaya panel tidak menampilkan `<a:...>` sebagai teks.
+  it('membersihkan label token emoji mentah pada slot lama', () => {
+    const dexStore = require('../src/utils/animalDexStorage');
+    dexStore.upsertAnimal({
+      nameKey: 'beastmeow', name: 'beastmeow', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 1, attack: 1, protection: 1, wisdom: 1, magic: 1, mr: 1 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1557672128059539466.gif', emojiName: 'beastmeow',
+    });
+
+    store.createTeam('u', 'token');
+    const teamId = store.getTeam('u', 'token').id;
+    store.getDb().prepare('INSERT INTO team_slots (team_id, slot, label, level) VALUES (?, ?, ?, ?)')
+      .run(teamId, 1, '<a:beastmeow:1568773919501189281>', 82);
+    store.getDb().prepare('INSERT INTO team_slots (team_id, slot, label, level) VALUES (?, ?, ?, ?)')
+      .run(teamId, 2, '<a:lowcortisol:1568228969038348418>', 80);
+
+    store.getDb().close();
+    delete require.cache[require.resolve('../src/utils/battleTeamStorage')];
+    const reopened = require('../src/utils/battleTeamStorage');
+    const slots = reopened.getTeam('u', 'token').slots;
+
+    assert.equal(slots[0].label, 'beastmeow');
+    assert.equal(slots[0].animalKey, 'beastmeow');
+    // Hewan yang tidak ada di dex tetap dibersihkan labelnya, tanpa animalKey.
+    assert.equal(slots[1].label, 'lowcortisol');
+    assert.equal(slots[1].animalKey, null);
+  });
 });
