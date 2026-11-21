@@ -1334,6 +1334,41 @@ describe('emoji battle', () => {
     assert.ok(!/<a?:\w+:\d+>/.test(text), 'tidak ada token mentah saat cache kosong');
   });
 
+  it('memakai token yang ada untuk semua rank saat array belum lengkap', () => {
+    // Regresi: `pick()` dulu mengembalikan null untuk rank > panjang array,
+    // sehingga data 1-token hanya tampil di Common dan jatuh ke ikon netral di
+    // Fabled — tier yang dipakai saat quality tidak diisi.
+    const dexStore = require(path.join(ROOT, 'src/utils/animalDexStorage'));
+    const only = '<:fgslayer:1552764472253358132>';
+    dexStore.setEmojiToken('1552764472253358132', only);
+    assert.strictEqual(be.emojiFor([only], 0, '✨'), only);
+    assert.strictEqual(be.emojiFor([only], 50, '✨'), only);
+    assert.strictEqual(be.emojiFor([only], 100, '✨'), only);
+    const two = ['<:cgslayer:1552764277339717642>', '<:fgslayer:1552764472253358132>'];
+    dexStore.setEmojiToken('1552764277339717642', two[0]);
+    assert.strictEqual(be.emojiFor(two, 0, '✨'), two[0]);
+    assert.strictEqual(be.emojiFor(two, 100, '✨'), two[1]);
+    assert.strictEqual(be.emojiFor([], 100, '✨'), '✨');
+  });
+
+  it('tidak memakai pemetaan emoji basi yang sudah tidak bisa dirender', () => {
+    // Regresi: `resolve()` dulu memakai baris `emoji_map` apa adanya. Kalau emoji
+    // hasil mirror sudah dihapus, Discord menolak SELURUH pesan (10014), bukan
+    // cuma kehilangan satu ikon. Sekarang pemetaan basi harus diabaikan.
+    const dexStore = require(path.join(ROOT, 'src/utils/animalDexStorage'));
+    const animalDex = require(path.join(ROOT, 'src/services/animalDex'));
+    const stale = '<:fpdagger:572285296184393738>';
+    dexStore.setEmojiToken('572285296184393738', stale);
+    // Client tiruan: cache kosong meniru emoji yang sudah tidak ada di Discord.
+    animalDex.setClient({ emojis: { cache: new Map() }, application: { emojis: { cache: new Map() } } });
+    try {
+      assert.strictEqual(animalDex.tokenIsLive(stale), false);
+      assert.strictEqual(be.weaponEmoji(8, 100), '⚔️', 'pemetaan basi tidak dipakai');
+    } finally {
+      animalDex.setClient(null);
+    }
+  });
+
   it('menyertakan emoji senjata dan pasif saat cache terisi', () => {
     const dexStore = require(path.join(ROOT, 'src/utils/animalDexStorage'));
     const panel = require(path.join(ROOT, 'src/ui/battlePanel'));

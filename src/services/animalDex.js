@@ -36,10 +36,25 @@ function tokenParts(token) {
   return m ? { animated: Boolean(m[1]), name: m[2], id: m[3] } : null;
 }
 
-// Token dengan ID ini bisa dirender bot apa adanya (emoji guild yang bot ikuti),
-// jadi tidak wajib punya padanan hasil mirror.
+// Token dengan ID ini bisa dirender bot apa adanya: emoji guild yang bot ikuti,
+// atau emoji milik aplikasi bot sendiri (cache-nya terpisah dari guild).
 function isRenderableToken(id) {
-  return Boolean(id && emojiClient?.emojis?.cache?.has?.(id));
+  if (!id) return false;
+  return Boolean(
+    emojiClient?.emojis?.cache?.has?.(id) ||
+    emojiClient?.application?.emojis?.cache?.has?.(id),
+  );
+}
+
+// Token hasil mirror hanya layak dipakai kalau emojinya masih ada. Baris
+// `emoji_map` bisa basi (emoji dihapus atau ID sumber berganti), dan satu token
+// basi membuat Discord menolak SELURUH pesan dengan error 10014 — bukan cuma
+// ikonnya yang hilang. Tanpa client (tes) tidak ada yang bisa diverifikasi,
+// jadi pemetaan dipercaya apa adanya.
+function tokenIsLive(token) {
+  if (!emojiClient) return true;
+  const p = tokenParts(token);
+  return Boolean(p && isRenderableToken(p.id));
 }
 
 function tokenFromEmoji(emoji) {
@@ -122,7 +137,9 @@ async function mirrorEmojiTokens(tokens) {
       continue;
     }
     const cached = store.getEmojiToken(id);
-    if (cached) out.set(p.token, cached);
+    // Pemetaan basi (emoji sudah dihapus) diperlakukan seperti belum ada:
+    // tokennya tidak akan dirender dan justru membuat kiriman pesan ditolak.
+    if (cached && tokenIsLive(cached)) out.set(p.token, cached);
     else pending.set(id, p);
   }
   if (!pending.size) return out;
@@ -575,5 +592,5 @@ module.exports = {
   parseAnimalCard, isAnimalCard, captureMessage, buildDexResponse,
   formatAnimalEmbed, formatCompactTable, formatListEmbed, extractFlags, toQueries,
   normalizeName, parseStats, STAT_LABELS, STAT_ICONS, setClient, mirrorEmojiTokens, collectEmojiTokens,
-  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, isRenderableToken, syncAnimalEmoji, ensureAnimalEmoji, ensureAnimalEmojis
+  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, isRenderableToken, tokenIsLive, syncAnimalEmoji, ensureAnimalEmoji, ensureAnimalEmojis
 };

@@ -623,6 +623,12 @@
       "id": 22,
       "name": "Giant Slayer",
       "emojis": [
+        "<:cgslayer:1552764277339717642>",
+        "<:ugslayer:1552764314266632263>",
+        "<:rgslayer:1552764345308549263>",
+        "<:egslayer:1552764381601726575>",
+        "<:mgslayer:1552764408227303436>",
+        "<:lgslayer:1552764447796494337>",
         "<:fgslayer:1552764472253358132>"
       ],
       "aliases": [
@@ -642,7 +648,7 @@
         ]
       ],
       "note": "Hanya berlaku bila sasaran bertanda boss (ctx.isBoss). Battle PvP/mirror tidak terpengaruh karena lawan bukan boss.",
-      "emojiNote": "Pola OwO: awalan rank c/u/r/e/m/l/f (common..Fabled), jadi 7 token = cgslayer, ugslayer, rgslayer, egslayer, mgslayer, lgslayer, fgslayer. Baru fgslayer (Fabled, quality 100) yang punya ID; 6 lainnya belum diberikan sumber. Selama hanya satu token, token itu dipakai untuk semua rank.",
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: gslayer.",
       "hooks": [
         "attack"
       ]
@@ -650,8 +656,16 @@
     {
       "id": 27,
       "name": "Adaptation",
-      "emojis": [],
-      "emojiNote": "ID emoji `:fadapt:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ✨.",
+      "emojis": [
+        "<:cadapt:1552783018379190432>",
+        "<:uadapt:1552783051044561037>",
+        "<:radapt:1552783088549888021>",
+        "<:eadapt:1552783112541442178>",
+        "<:madapt:1552783142773989457>",
+        "<:ladapt:1552783165964423218>",
+        "<:fadapt:1552783186038227086>"
+      ],
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: adapt.",
       "category": "defense",
       "summary": "Resistensi terhadap tipe damage terakhir: Physical memberi Stoneskin, Magical memberi Spellskin, 5-10% per stack, maksimal 5 stack. Menerima tipe lain menghapus semua stack.",
       "sourceText": "Gains resistance against the last damage type received. Physical hits grant **Stoneskin**, while Magical hits grant **Spellskin**. Reduces incoming damage of that type by **5-10%** per stack. Remove all stacks upon taking damage of other types. Stack Limit: cannot exceed 5 stacks.",

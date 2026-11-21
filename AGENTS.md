@@ -505,7 +505,17 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
 - **Emoji senjata satu-varian.** `defaultEmoji` dipakai untuk semua tier bila `emojis`
   kosong; tes menerima `defaultEmoji` ATAU `emojiNote`. `resolve()` di `battleEmoji`
   tetap jatuh ke ikon netral kalau client Discord belum punya emoji itu di cache —
-  itu wajar di tes, bukan bug.
+  itu wajar di tes, bukan bug. Saat ini **semua** senjata dan pasif sudah punya 7
+  token rank; `defaultEmoji` tinggal jalur cadangan, bukan keadaan data.
+- **Array emoji yang belum lengkap.** `pick()` memakai token terakhir untuk rank di
+  atasnya (`Math.min(rankIndex(q), list.length - 1)`). Dulu ia mengembalikan `null`
+  untuk rank > panjang array, jadi data 1-token hanya tampil di Common dan jatuh ke
+  ikon netral di Fabled — persis tier yang dipakai saat `quality` tidak diisi.
+- **`emoji_map` bisa basi.** Baris `emoji_map` hanya dipakai kalau `tokenIsLive()`
+  memastikan emoji hasil mirror masih ada di cache. Satu token basi membuat Discord
+  menolak **seluruh pesan** dengan error `10014` (Unknown Emoji), bukan sekadar
+  kehilangan satu ikon. `isRenderableToken()` memeriksa cache guild **dan** cache
+  `client.application.emojis`; emoji aplikasi bot tidak ada di `client.emojis`.
 - **`id` internal ≠ `owoId`.** Senjata lama memakai id 1-22 (urutan internal), sedangkan
   OwO punya id resmi sendiri (Flame Staff 10 vs 110, Glacial Axe 15 vs 115). JANGAN
   renumber `id`: dipakai tes, penyimpanan tim, dan alias. Id resmi disimpan di `owoId`.

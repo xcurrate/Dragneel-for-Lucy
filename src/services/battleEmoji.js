@@ -55,7 +55,7 @@ function resolve(token, fallback) {
   const id = /:(\d+)>$/.exec(token)?.[1];
   if (!id) return fallback;
   const mapped = dexStore.getEmojiToken(id);
-  if (mapped) return mapped;
+  if (mapped && dex.tokenIsLive(mapped)) return mapped;
   return dex.isRenderableToken(id) ? token : fallback;
 }
 
@@ -63,7 +63,10 @@ function resolve(token, fallback) {
 function pick(list, quality) {
   if (!Array.isArray(list) || !list.length) return null;
   const q = quality == null ? data.DEFAULT_QUALITY : quality;
-  return list[rankIndex(q)] || null;
+  // Array yang belum lengkap 7 token tetap dipakai: token terakhir berlaku untuk
+  // rank di atasnya. Tanpa ini, data 1-token jatuh ke ikon netral di semua rank
+  // kecuali Common — rank Fabled (quality default) justru yang paling sering.
+  return list[Math.min(rankIndex(q), list.length - 1)] || null;
 }
 
 function emojiFor(list, quality, fallback) {
@@ -137,5 +140,5 @@ async function syncEmojis() {
 module.exports = {
   RANK_NAMES, RANK_TOKENS, rankIndex, rankName, rankEmoji,
   weaponEmoji, passiveEmoji, animalEmoji, statIcon, allTokens, syncEmojis,
-  weaponToken, passiveToken,
+  weaponToken, passiveToken, emojiFor,
 };

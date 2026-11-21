@@ -433,9 +433,9 @@ Dua hal yang tidak ada di deskripsi sumber dan karenanya dicatat eksplisit di
 
 - `spreadWeakening: 0.5` — angka "semakin melemah" tidak disebutkan. Ubah di data
   bila sumber menyebut nilai lain; kode membacanya dari sana.
-- `emojiNote` — ID emoji `:wstaff:` belum diberikan, jadi `emojis` kosong dan
-  tampilan memakai ikon netral ⚔️. Isi 7 token (common → fabled) saat ID tersedia;
-  tes mengizinkan kosong hanya bila `emojiNote` ada.
+- `emojiNote` — catatan asal token emoji. `emojis` boleh kosong hanya bila
+  `emojiNote` ada; tampilan lalu memakai ikon netral ⚔️. Isi 7 token
+  (common → fabled) begitu ID tersedia.
 
 ### Witching Hour
 
@@ -502,9 +502,8 @@ tidak terpengaruh karena lawannya bukan boss.
 
 Emoji mengikuti pola OwO: awalan huruf menandai rank — `c`ommon, `u`ncommon,
 `r`are, `e`pic, `m`ythical, `l`egendary, `f`abled. Jadi `fgslayer` adalah
-varian Fabled (quality 100), setara `fthorns` untuk Thorns. Sumber baru memberi
-ID untuk varian `fgslayer`; enam varian lain belum ada ID-nya, sehingga token
-itu sementara dipakai untuk semua rank (`emojiNote` di data mencatatnya).
+varian Fabled (quality 100), setara `fthorns` untuk Thorns. Ketujuh token
+(`cgslayer`…`fgslayer`) sudah terisi di data.
 
 ### Tier senjata
 

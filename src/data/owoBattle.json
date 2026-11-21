@@ -1170,8 +1170,16 @@
     {
       "id": 132,
       "name": "Withering Staff",
-      "emojis": [],
-      "emojiNote": "Belum ada ID emoji `:wstaff:` dari sumber. Render memakai ikon netral ⚔️ sampai ID diisi di sini (7 token, urut common→fabled).",
+      "emojis": [
+        "<:cwstaff:1571815624139739188>",
+        "<:uwstaff:1571815643253317712>",
+        "<:rwstaff:1571815661930422273>",
+        "<:ewstaff:1571815684613210162>",
+        "<:mwstaff:1571815701776175104>",
+        "<:lwstaff:1571815720105410730>",
+        "<:fwstaff:1571815741965996083>"
+      ],
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: wstaff.",
       "aliases": [
         "witheringstaff",
         "wstaff"
@@ -1201,8 +1209,15 @@
     {
       "id": 133,
       "name": "Witching Hour",
-      "emojis": [],
-      "defaultEmoji": "<:witching:1559090602732159046>",
+      "emojis": [
+        "<:cwhour:1559090385949696081>",
+        "<:uwhour:1559090416224178236>",
+        "<:rwhour:1559090450277736499>",
+        "<:ewhour:1559090478388088912>",
+        "<:mwhour:1559090505747271711>",
+        "<:lwhour:1559090531546697728>",
+        "<:fwhour:1559090556540424264>"
+      ],
       "aliases": [
         "witchinghour",
         "witching",
@@ -1228,16 +1243,23 @@
       "assumptionNotes": [
         "Sumber tidak menyebut slot pasif; dipakai 1 mengikuti mayoritas senjata dan aturan rentang pasif global (1-2).",
         "Sumber tidak menyebut senjata ini menyerang; karena itu tidak ada damage langsung dan unit tetap melakukan serangan fisik biasa setelah kutukan terpasang."
-      ]
+      ],
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: whour."
     },
     {
       "id": 123,
       "name": "Bleeding Gaze",
       "owoId": 123,
       "emojis": [
+        "<:cbgaze:1550293795525107762>",
+        "<:ubgaze:1550294757874606131>",
+        "<:rbgaze:1550294788530503691>",
+        "<:ebgaze:1550294815315460148>",
+        "<:mbgaze:1550294841160896552>",
+        "<:lbgaze:1550294866020405310>",
         "<:fbgaze:1550294886463438896>"
       ],
-      "emojiNote": "Hanya emoji Fabled yang ada di repo. Varian common-lucky belum diberikan; render memakai token ini untuk semua tier sampai 7 token diisi.",
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: bgaze.",
       "aliases": [
         "bleedinggaze",
         "bgaze"
@@ -1273,8 +1295,16 @@
       "id": 124,
       "name": "Conduit Claw",
       "owoId": 124,
-      "emojis": [],
-      "emojiNote": "ID emoji `:fcclaw:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ⚔️.",
+      "emojis": [
+        "<:ccclaw:1550496878523711599>",
+        "<:ucclaw:1550496898786529311>",
+        "<:rcclaw:1550496924497354762>",
+        "<:ecclaw:1550496947981394042>",
+        "<:mcclaw:1550496970412662834>",
+        "<:lcclaw:1550496995444133908>",
+        "<:fcclaw:1550497014855237723>"
+      ],
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: cclaw.",
       "aliases": [
         "conduitclaw",
         "cclaw"
@@ -1306,8 +1336,16 @@
       "id": 125,
       "name": "Staff of Corruption",
       "owoId": 125,
-      "emojis": [],
-      "emojiNote": "ID emoji `:fcorstaff:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ⚔️.",
+      "emojis": [
+        "<:ccorstaff:1550629532824764446>",
+        "<:ucorstaff:1550629551120580719>",
+        "<:rcorstaff:1550629571676872724>",
+        "<:ecorstaff:1550629598381875290>",
+        "<:mcorstaff:1550629618229321819>",
+        "<:lcorstaff:1550629639532314705>",
+        "<:fcorstaff:1550629660080087071>"
+      ],
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: corstaff.",
       "aliases": [
         "corruptionstaff",
         "cstaff"
@@ -1339,8 +1377,16 @@
       "id": 131,
       "name": "Scepter of Celebrations",
       "owoId": 131,
-      "emojis": [],
-      "emojiNote": "ID emoji `:fcscept:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ⚔️.",
+      "emojis": [
+        "<:ccscept:1570878664332284045>",
+        "<:ucscept:1570878686696181833>",
+        "<:rcscept:1570878717306343495>",
+        "<:ecscept:1570878744267071638>",
+        "<:mcscept:1570878775741259868>",
+        "<:lcscept:1570878802177949879>",
+        "<:fcscept:1570878826488143934>"
+      ],
+      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: cscept.",
       "aliases": [
         "cscept",
         "cscepter",
