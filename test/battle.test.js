@@ -603,6 +603,62 @@ describe('embed UI', () => {
     assert.ok(json.description.includes('Tank'));
   });
 
+  it('tabel hasil rata kolom untuk run besar maupun kecil', async () => {
+    const small = await sim.simulate(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
+      { runs: 7, seed: 3 }
+    );
+    const big = await sim.simulate(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
+      { runs: 5000, seed: 3 }
+    );
+    for (const result of [small, big]) {
+      const body = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' }).toJSON().description;
+      const rows = body.split('```')[1].trim().split('\n');
+      assert.strictEqual(rows.length, 3, 'tiga baris hasil');
+      // Kolom persen mulai di posisi yang sama di semua baris.
+      const pctCol = rows.map(r => r.indexOf('%'));
+      assert.ok(pctCol.every(p => p > 0), `kolom persen hilang: ${rows.join(' | ')}`);
+      assert.strictEqual(new Set(pctCol).size, 1, `persen tidak rata: ${rows.join(' | ')}`);
+    }
+  });
+
+  it('simEmbed menampilkan kesimpulan pemenang', async () => {
+    const win = await sim.simulate(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
+      { runs: 100, seed: 4 }
+    );
+    const body = panel.simEmbed(win, { playerLabel: 'Kuat', enemyLabel: 'Lemah' }).toJSON().description;
+    assert.ok(body.includes('Kuat'), 'nama pemenang muncul');
+    assert.ok(/unggul|Seimbang/.test(body), 'ada kesimpulan');
+  });
+
+  it('simEmbed memberi catatan giliran pertama', async () => {
+    const result = await sim.simulate(
+      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
+      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
+      { runs: 20, seed: 5 }
+    );
+    const json = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
+    const note = json.fields.find(f => f.name.includes('Catatan'));
+    assert.ok(note, 'field catatan ada');
+    assert.ok(note.value.includes('Giliran pertama'));
+  });
+
+  it('renderMatchup memecah tim banyak slot per nomor', () => {
+    const body = panel.renderMatchup(
+      [{ label: 'Satu', level: 60 }, { label: 'Dua', level: 55 }],
+      [{ label: 'Foe', level: 50 }]
+    );
+    assert.ok(body.includes('`1`') && body.includes('`2`'), 'slot bernomor');
+    assert.ok(body.includes('Satu') && body.includes('Dua'));
+    assert.ok(body.includes('**Lawan:**'), 'satu slot tetap satu baris');
+    assert.ok(body.includes('_tanpa senjata_'));
+  });
+
   it('warna simEmbed mengikuti hasil', () => {
     assert.strictEqual(panel.simColor(90), panel.COLOR.ok);
     assert.strictEqual(panel.simColor(50), panel.COLOR.warn);
@@ -1693,21 +1749,28 @@ describe('level default dan flag lvl', () => {
 
   it('lvl<angka> menyamakan level kedua sisi', async () => {
     const body = composition(await run(['B', 'lvl100']));
-    assert.ok(body.includes('Kamu:** 🐾 slot1 lv100'));
-    assert.ok(body.includes('slot1 lv100'));
+    const [mine, theirs] = body.split('**Lawan**');
+    assert.ok(mine.includes('slot1') && mine.includes('lv100'), mine);
+    assert.ok(!mine.includes('lv50'), 'level pemain ditimpa');
+    assert.ok(theirs.includes('slot1') && theirs.includes('lv100'), theirs);
     assert.ok(!body.includes('lv70') && !body.includes('lv20'), 'level lawan ikut ditimpa');
   });
 
   it('lvl<n>/<m> memakai level berbeda per sisi', async () => {
     const body = composition(await run(['B', 'lvl100/60']));
-    assert.ok(body.includes('Kamu:** 🐾 slot1 lv100'));
-    assert.ok(body.includes('slot1 lv60') && body.includes('slot2 lv60'));
+    const [mine, theirs] = body.split('**Lawan**');
+    assert.ok(mine.includes('lv100'), mine);
+    assert.ok(!mine.includes('lv60'), 'sisi pemain tetap 100');
+    assert.ok(theirs.includes('slot1') && theirs.includes('lv60'), theirs);
+    assert.ok(theirs.includes('slot2') && theirs.includes('lv60'), theirs);
   });
 
   it('lvl/<m> hanya menimpa level lawan', async () => {
     const body = composition(await run(['B', 'lvl/40']));
-    assert.ok(body.includes('Kamu:** 🐾 slot1 lv50'));
-    assert.ok(body.includes('slot1 lv40') && body.includes('slot2 lv40'));
+    const [mine, theirs] = body.split('**Lawan**');
+    assert.ok(mine.includes('slot1') && mine.includes('lv50'), mine);
+    assert.ok(theirs.includes('slot1') && theirs.includes('lv40'), theirs);
+    assert.ok(theirs.includes('slot2') && theirs.includes('lv40'), theirs);
   });
 
   it('flag lvl tidak mengubah level tersimpan di tim', () => {

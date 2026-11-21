@@ -178,19 +178,43 @@ function formatDuration(ms) {
   return `${minutes} menit ${seconds % 60} detik`;
 }
 
+// Tabel tally dengan kolom rata: label, jumlah, persen, bar. Angka dijajar
+// kanan supaya tidak bergeser saat jumlah run berubah (100 vs 10.000).
+function tallyTable(tally, total, rates) {
+  const rows = [
+    ['Menang', tally.player, rates.winRate],
+    ['Kalah', tally.enemy, rates.lossRate],
+    ['Seri', tally.tie, rates.tieRate],
+  ];
+  const countWidth = Math.max(...rows.map(r => String(r[1]).length));
+  const pctWidth = Math.max(...rows.map(r => `${r[2]}%`.length));
+  return rows
+    .map(([label, count, rate]) => [
+      label.padEnd(6),
+      String(count).padStart(countWidth),
+      `${rate}%`.padStart(pctWidth),
+      bar(count, total),
+    ].join(' '))
+    .join('\n');
+}
+
+// Satu baris kesimpulan: siapa yang unggul dan seberapa jauh.
+function simVerdict(result, playerLabel, enemyLabel) {
+  const diff = Math.round((result.winRate - result.lossRate) * 10) / 10;
+  if (Math.abs(diff) < 5) return `⚖️ **Seimbang** (selisih ${Math.abs(diff).toFixed(1)} poin)`;
+  const winner = diff > 0 ? playerLabel : enemyLabel;
+  return `${diff > 0 ? '🏆' : '💀'} **${winner}** unggul ${Math.abs(diff).toFixed(1)} poin`;
+}
+
 function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', title = null, mode = null } = {}) {
   const { done, total, tally } = progress;
   const percent = Math.min(100, Math.round((done / total) * 1000) / 10);
-  const stats = [
-    `Menang ${bar(tally.player, done)} ${tally.player} (${progress.winRate}%)`,
-    `Kalah  ${bar(tally.enemy, done)} ${tally.enemy} (${progress.lossRate}%)`,
-    `Seri   ${bar(tally.tie, done)} ${tally.tie} (${progress.tieRate}%)`,
-  ].join('\n');
+  const table = tallyTable(tally, done, progress);
 
   return new EmbedBuilder()
     .setColor(mode === 'global' ? COLOR.blue : COLOR.warn)
     .setTitle(title || '⚔️ Simulasi Battle — berjalan')
-    .setDescription(`**${playerLabel}** vs **${enemyLabel}**\n\`\`\`\n${stats}\n\`\`\``)
+    .setDescription(`**${playerLabel}** 🆚 **${enemyLabel}**\n\`\`\`\n${table}\n\`\`\``)
     .addFields(
       { name: '⏳ Progres', value: `${bar(done, total)} ${percent}%`, inline: true },
       { name: '📊 Selesai', value: `**${done.toLocaleString('id-ID')}** / ${total.toLocaleString('id-ID')}`, inline: true },
@@ -210,24 +234,35 @@ function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'La
 }
 
 function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null } = {}) {
-  const stats = [
-    `Menang ${bar(result.tally.player, result.runs)} ${result.tally.player} (${result.winRate}%)`,
-    `Kalah  ${bar(result.tally.enemy, result.runs)} ${result.tally.enemy} (${result.lossRate}%)`,
-    `Seri   ${bar(result.tally.tie, result.runs)} ${result.tally.tie} (${result.tieRate}%)`,
-  ].join('\n');
+  const table = tallyTable(result.tally, result.runs, result);
+  const verdict = simVerdict(result, playerLabel, enemyLabel);
 
   const embed = new EmbedBuilder()
     .setColor(simColor(result.winRate))
     .setTitle('⚔️ Simulasi Battle')
-    .setDescription(`**${playerLabel}** vs **${enemyLabel}**\n\`\`\`\n${stats}\n\`\`\``)
+    .setDescription(
+      `**${playerLabel}** 🆚 **${enemyLabel}**\n${verdict}\n\`\`\`\n${table}\n\`\`\``
+    )
     .addFields(
-      { name: '📊 Total', value: `**${result.runs}** pertarungan`, inline: true },
-      { name: '⏱️ Durasi', value: `Rata-rata **${result.turns.avg}** turn\nTercepat ${result.turns.min} · Terlama ${result.turns.max}`, inline: true },
+      { name: '📊 Total', value: `**${result.runs.toLocaleString('id-ID')}** pertarungan`, inline: true },
+      {
+        name: '⏱️ Durasi',
+        value: `Rata-rata **${result.turns.avg}** turn\nMedian ${result.turns.median} · ${result.turns.min}-${result.turns.max} turn`,
+        inline: true,
+      },
       { name: '🎲 Seed', value: `\`${result.seed}\``, inline: true }
     )
-    .setFooter({ text: `Pakai -s ${result.seed} untuk mengulang hasil ini` });
+    .setFooter({ text: `Ulangi hasil yang sama dengan -s ${result.seed}` });
 
   if (matchup) embed.addFields({ name: '🪖 Komposisi', value: matchup, inline: false });
+  // OwO selalu memberi giliran pertama ke tim pemain, jadi duel antar tim
+  // identik pun tidak berakhir 50:50. Dinyatakan terang-terangan supaya angka
+  // tidak disalahartikan sebagai keunggulan komposisi.
+  embed.addFields({
+    name: 'ℹ️ Catatan',
+    value: 'Giliran pertama selalu milik tim kamu (aturan OwO), jadi mirror bisa di atas 50%.',
+    inline: false,
+  });
   if (result.timeouts) {
     embed.addFields({
       name: '⚠️ Batas turn',
@@ -244,14 +279,17 @@ function renderMatchup(playerSpecs, enemySpecs) {
     const label = spec.label || 'slot';
     const icon = emoji.animalEmoji(spec.animal);
     const weapon = spec.weapon
-      ? ` + ${emoji.weaponEmoji(spec.weapon.id, spec.weapon.quality)} ${weaponName(spec.weapon.id) || 'senjata'}`
-      : '';
-    return `${icon} ${label} lv${spec.level}${weapon}`;
+      ? `${emoji.rankEmoji(spec.weapon.quality ?? data.DEFAULT_QUALITY)} ${emoji.weaponEmoji(spec.weapon.id, spec.weapon.quality)} ${weaponName(spec.weapon.id) || 'senjata'}`
+      : '_tanpa senjata_';
+    return `${icon} **${label}** lv${spec.level} · ${weapon}`;
   };
-  return [
-    `**Kamu:** ${playerSpecs.map(describe).join(', ')}`,
-    `**Lawan:** ${enemySpecs.map(describe).join(', ')}`,
-  ].join('\n');
+  // Tim satu slot cukup satu baris; tim banyak slot dipecah per nomor agar
+  // pasangan hewan-senjata mudah dibaca.
+  const block = (title, specs) => {
+    if (specs.length === 1) return `**${title}:** ${describe(specs[0])}`;
+    return `**${title}**\n${specs.map((spec, i) => `\`${i + 1}\` ${describe(spec)}`).join('\n')}`;
+  };
+  return [block('Kamu', playerSpecs), block('Lawan', enemySpecs)].join('\n');
 }
 
 // Menerima string maupun array baris.
