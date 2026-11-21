@@ -43,6 +43,12 @@ function runSeed(seed, opponentIndex, runIndex) {
   return mixSeed(mixSeed(seed, opponentIndex), runIndex);
 }
 
+// Berapa pertarungan sekali antara laporan kemajuan. Dipilih supaya worker
+// besar tetap melapor beberapa kali per detik, dan worker kecil tidak dibanjiri
+// pesan: satu potong berisi ratusan ribu pertarungan, jadi laporan per potong
+// saja membuat progres tidak bergerak sampai potongan itu selesai.
+const PROGRESS_STEP = 2000;
+
 // Satu potong = daftar unit `{ opponentIndex, from, to }` (rentang run, `to`
 // eksklusif) yang harus dijalankan berurutan.
 //
@@ -56,7 +62,7 @@ function runSeed(seed, opponentIndex, runIndex) {
 //
 // Streak yang melewati batas potong tidak dihitung di sini; penggabung yang
 // menghitungnya dari `tail` potong sebelumnya + `head` potong berikutnya.
-function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null } = {}) {
+function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep = null } = {}) {
   const work = units || opponents.map((_, i) => ({
     opponentIndex: i, from: 0, to: opponents[i].runs ?? 0,
   }));
@@ -98,6 +104,12 @@ function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null } = {})
       bucket.battles += 1;
       battles += 1;
 
+      // Laporan kemajuan hanya membawa hitungan, bukan hasil pertarungan:
+      // pemanggil menjumlahkannya sendiri dan tidak perlu data per pertarungan.
+      if (onStep && battles % PROGRESS_STEP === 0) {
+        onStep({ battles, tally: { ...tally } });
+      }
+
       if (result.winner === 'player') {
         streak += 1;
         if (!headFixed) head += 1;
@@ -130,6 +142,6 @@ function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null } = {})
 }
 
 module.exports = {
-  LEVEL_THRESHOLD, maxLevelOf, emptyTally, emptyBucket, rate,
+  LEVEL_THRESHOLD, PROGRESS_STEP, maxLevelOf, emptyTally, emptyBucket, rate,
   mixSeed, runSeed, aggregateChunk,
 };

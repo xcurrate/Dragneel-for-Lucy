@@ -494,3 +494,80 @@ describe('tampilan hasil simulasi global', () => {
     assert.ok(!embed.fields.some(f => f.name.includes('dilewati')));
   });
 });
+
+describe('progres simulasi global', () => {
+  const C = { hp: 6, att: 5, pr: 4, wp: 4, mag: 5, mr: 4 };
+  const player = [{ slot: 1, label: 'p', level: 100, coeffs: C, customStats: true, animal: null, finalStats: null }];
+  const opps = [40, 70, 100].map((lv, i) => ({
+    label: 't' + i,
+    teamId: i,
+    specs: [{ slot: 1, label: 'e' + i, level: lv, coeffs: C, customStats: true, animal: null, finalStats: null }],
+  }));
+
+  it('melaporkan progres bertahap, bukan hanya di akhir', async () => {
+    const seen = [];
+    const result = await globalSim.runGlobalSim(player, opps, {
+      runs: 60000,
+      seed: 3,
+      onProgress: p => seen.push(p),
+    });
+
+    assert.ok(seen.length > 2, `harus ada beberapa laporan, dapat ${seen.length}`);
+    // Laporan pertama dikirim sebelum satu pertarungan pun selesai.
+    assert.strictEqual(seen[0].done, 0);
+    // Harus ada laporan di tengah jalan, bukan hanya 0 lalu total.
+    assert.ok(seen.some(p => p.done > 0 && p.done < p.total), 'ada laporan di tengah');
+    assert.strictEqual(seen.at(-1).done, result.battles);
+  });
+
+  it('progres tidak pernah mundur dan tally akhir sama dengan hasil', async () => {
+    const seen = [];
+    const result = await globalSim.runGlobalSim(player, opps, {
+      runs: 60000,
+      seed: 4,
+      onProgress: p => seen.push(p),
+    });
+
+    for (let i = 1; i < seen.length; i++) {
+      assert.ok(seen[i].done >= seen[i - 1].done, 'progres mundur');
+    }
+    const last = seen.at(-1);
+    assert.deepStrictEqual(last.tally, result.tally);
+    assert.strictEqual(last.total, result.battles);
+  });
+
+  it('laporan awal berisi total yang benar walau belum ada hasil', async () => {
+    const seen = [];
+    await globalSim.runGlobalSim(player, opps, {
+      runs: 60000,
+      seed: 5,
+      onProgress: p => seen.push(p),
+    });
+    assert.strictEqual(seen[0].total, 60000 * opps.length);
+    assert.deepStrictEqual(seen[0].tally, { player: 0, enemy: 0, tie: 0 });
+  });
+});
+
+describe('pemaksaan jumlah worker', () => {
+  const C = { hp: 6, att: 5, pr: 4, wp: 4, mag: 5, mr: 4 };
+  const P = [{ slot: 1, label: 'p', level: 80, coeffs: C, customStats: true, animal: null, finalStats: null }];
+  const opps = [{ label: 't', teamId: 0, specs: [{ slot: 1, label: 'e', level: 60, coeffs: C, customStats: true, animal: null, finalStats: null }] }];
+
+  it('menghormati workers eksplisit walau pertarungannya sedikit', async () => {
+    for (const workers of [2, 3, 4]) {
+      const r = await globalSim.runGlobalSim(P, opps, { runs: 20, seed: 7, workers });
+      assert.strictEqual(r.workers, workers, `minta ${workers} worker`);
+      assert.strictEqual(r.battles, 20);
+    }
+  });
+
+  it('tetap satu proses untuk simulasi kecil tanpa opsi workers', async () => {
+    const r = await globalSim.runGlobalSim(P, opps, { runs: 20, seed: 7 });
+    assert.strictEqual(r.workers, 1);
+  });
+
+  it('simulasi besar memakai worker walau workers tidak diminta', async () => {
+    const r = await globalSim.runGlobalSim(P, opps, { runs: 30000, seed: 7 });
+    assert.strictEqual(r.workers, globalSim.MAX_WORKERS);
+  });
+});

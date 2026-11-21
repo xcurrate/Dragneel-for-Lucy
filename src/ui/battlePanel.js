@@ -196,8 +196,13 @@ function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'La
       { name: '📊 Selesai', value: `**${done.toLocaleString('id-ID')}** / ${total.toLocaleString('id-ID')}`, inline: true },
       {
         name: '⏱️ Perkiraan',
-        // `etaMs` hanya ada pada simulasi global; simulasi duel memakai rata-rata turn.
-        value: progress.etaMs != null ? `Sisa ~**${formatDuration(progress.etaMs)}**` : `Rata-rata **${progress.avgTurns}** turn`,
+        // `etaMs` hanya ada pada simulasi global; simulasi duel memakai rata-rata
+        // turn. Saat global belum punya satu pun sampel, ETA belum bisa dihitung.
+        value: progress.queued
+          ? 'Menunggu antrean…'
+          : progress.etaMs != null
+            ? `Sisa ~**${formatDuration(progress.etaMs)}**`
+            : mode === 'global' ? 'Menghitung…' : `Rata-rata **${progress.avgTurns}** turn`,
         inline: true,
       }
     )

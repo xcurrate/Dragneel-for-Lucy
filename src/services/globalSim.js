@@ -20,6 +20,11 @@ const MAX_WORKERS = Math.max(1, Math.min(4, os.availableParallelism()));
 // Di bawah ambang ini, biaya membuat worker lebih besar dari manfaatnya.
 const MIN_BATTLES_FOR_WORKERS = 20000;
 
+// Jeda minimum antar laporan progres ke pemanggil. Worker melapor jauh lebih
+// sering; menyaring di sini menjaga event loop tetap lapang tanpa mengubah
+// ketelitian angka (laporan terakhir selalu dikirim).
+const PROGRESS_EMIT_MS = 200;
+
 // Hanya satu simulasi berat boleh berjalan pada satu waktu: dua simulasi
 // jutaan pertarungan bersamaan akan berebut core yang sama, saling
 // memperlambat, dan memakai memori dua kali. Permintaan lain mengantre.
@@ -85,13 +90,19 @@ function splitWork(opponentCount, runs, parts) {
   return chunks;
 }
 
-function runChunkInWorker(playerSpecs, opponents, chunk, { seed }) {
+function runChunkInWorker(playerSpecs, opponents, chunk, { seed, onProgress }) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_FILE, {
       workerData: { playerSpecs, opponents, units: chunk.units, seed },
     });
     let settled = false;
-    worker.once('message', message => {
+    worker.on('message', message => {
+      // Pesan `progress` datang berkali-kali; hasil akhir tidak bertipe dan
+      // hanya dikirim sekali di akhir.
+      if (message && message.type === 'progress') {
+        if (onProgress) onProgress(message);
+        return;
+      }
       settled = true;
       worker.terminate().catch(() => {});
       resolve(message);
@@ -212,8 +223,14 @@ async function runSimulation(playerSpecs, opponents, { runs, seed, workers, onPr
   const total = runCount * opponents.length;
   const parts = workers || planWorkers(opponents.length, runCount);
 
+  // Simulasi besar selalu lewat worker, termasuk saat hanya ada satu worker
+  // (mesin satu core): dengan begitu loop tidak memblokir bot dan progres tetap
+  // bisa dilaporkan bertahap. `workers` yang diminta eksplisit selalu dihormati
+  // supaya pemanggil dan tes bisa memaksa pembagian tertentu.
+  const useWorkers = workers != null ? parts > 1 : total >= MIN_BATTLES_FOR_WORKERS;
+
   let chunks;
-  if (parts <= 1) {
+  if (!useWorkers) {
     // Satu potong: jalankan di proses ini. Simulasi kecil selesai lebih cepat
     // tanpa biaya membuat worker.
     chunks = [aggregateChunk(playerSpecs, opponents, {
@@ -234,34 +251,57 @@ async function runSimulation(playerSpecs, opponents, { runs, seed, workers, onPr
     }
   } else {
     const plan = splitWork(opponents.length, runCount, parts);
-    let done = 0;
-    const tally = emptyTally();
     const startedAt = Date.now();
     const results = new Array(plan.length);
-    // Hasil dilaporkan per potong, bukan per pertarungan: progres tetap terlihat
-    // walau tiap potong berisi ratusan ribu pertarungan.
-    await Promise.all(plan.map((chunk, i) => runChunkInWorker(playerSpecs, opponents, chunk, { seed })
-      .then(result => {
-        results[i] = result;
-        done += result.battles;
-        for (const k of ['player', 'enemy', 'tie']) tally[k] += result.tally[k];
-        if (onProgress) {
-          // Perkiraan sisa waktu dari laju sejauh ini, supaya user tahu harus
-          // menunggu berapa lama pada simulasi jutaan pertarungan.
-          const elapsed = Date.now() - startedAt;
-          const etaMs = done > 0 ? Math.round((elapsed / done) * (total - done)) : null;
-          onProgress({
-            done,
-            total,
-            etaMs,
-            tally: { ...tally },
-            winRate: rate(tally.player, done),
-            lossRate: rate(tally.enemy, done),
-            tieRate: rate(tally.tie, done),
-            avgTurns: 0,
-          });
-        }
-      })));
+    // Hitungan disimpan per potong, bukan sebagai akumulator: laporan dari
+    // worker datang bertahap, jadi total yang benar adalah menjumlahkan nilai
+    // TERAKHIR tiap potong. Menambahkan delta akan menghitung ganda.
+    const chunkBattles = new Array(plan.length).fill(0);
+    const chunkTally = plan.map(() => emptyTally());
+
+    const emit = () => {
+      if (!onProgress) return;
+      let done = 0;
+      const tally = emptyTally();
+      for (let i = 0; i < plan.length; i++) {
+        done += chunkBattles[i];
+        for (const k of ['player', 'enemy', 'tie']) tally[k] += chunkTally[i][k];
+      }
+      const elapsed = Date.now() - startedAt;
+      onProgress({
+        done,
+        total,
+        etaMs: done > 0 ? Math.round((elapsed / done) * (total - done)) : null,
+        tally,
+        winRate: rate(tally.player, done),
+        lossRate: rate(tally.enemy, done),
+        tieRate: rate(tally.tie, done),
+        avgTurns: 0,
+      });
+    };
+
+    // Laporan pertama dikirim sebelum worker dijalankan supaya embed progres
+    // muncul sejak awal, bukan menunggu potongan pertama selesai.
+    emit();
+
+    let lastEmit = Date.now();
+    const handleStep = (i, step) => {
+      chunkBattles[i] = step.battles;
+      chunkTally[i] = step.tally;
+      if (Date.now() - lastEmit < PROGRESS_EMIT_MS) return;
+      lastEmit = Date.now();
+      emit();
+    };
+
+    await Promise.all(plan.map((chunk, i) => runChunkInWorker(playerSpecs, opponents, chunk, {
+      seed,
+      onProgress: step => handleStep(i, step),
+    }).then(result => {
+      results[i] = result;
+      chunkBattles[i] = result.battles;
+      chunkTally[i] = result.tally;
+      emit();
+    })));
     chunks = results;
   }
 

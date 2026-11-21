@@ -594,6 +594,15 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   bagaimana pekerjaan dibagi (diuji 1/3/4 worker), dan satu rentang run bisa
   dihitung tanpa memajukan RNG lebih dulu. Pembagian kerja memakai rentang run,
   bukan per tim, supaya satu tim lawan pun tetap bisa diparalelkan.
+- **Progres dikirim dari dalam worker, bukan per potong.** Satu potong berisi
+  ratusan ribu pertarungan, jadi melapor hanya saat potong selesai membuat embed
+  diam di 0% sampai hampir akhir. `aggregateChunk` menerima `onStep` dan worker
+  mengirim pesan `{ type: 'progress' }` tiap `PROGRESS_STEP` pertarungan;
+  `runChunkInWorker` membedakan pesan progres dari hasil akhir lewat `type`.
+  Orkestrator menyaringnya ke `PROGRESS_EMIT_MS` (200 ms) dan menjumlahkan
+  **nilai terakhir tiap potong** — menambahkan delta akan menghitung ganda.
+  `handleGlobalSim` juga mengirim satu laporan `done: 0` sebelum worker mulai
+  supaya balasan muncul seketika (dan bisa menyebut "menunggu antrean").
 - **Streak gabungan butuh head/tail/sum/count per potong.** Tiap potong melaporkan
   kemenangan beruntun di awal (`head`), di akhir (`tail`), dan streak yang sudah
   selesai (`sum`/`count`). Penggabung menyambung `tail` potong sebelumnya dengan

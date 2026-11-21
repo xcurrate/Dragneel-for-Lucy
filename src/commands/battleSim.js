@@ -338,6 +338,21 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   const labels = { playerLabel: teamLabel(team) };
   const publishProgress = makeProgressPublisher(message, send, sendPayload, labels, 'global');
 
+  // Embed progres dikirim sebelum simulasi dimulai supaya user langsung melihat
+  // balasan, bukan menunggu potongan pertama selesai. Kalau antrean sedang
+  // dipakai, statusnya jujur menyebut "menunggu antrean".
+  await publishProgress({
+    done: 0,
+    total: runCount.total,
+    tally: { player: 0, enemy: 0, tie: 0 },
+    winRate: 0,
+    lossRate: 0,
+    tieRate: 0,
+    etaMs: null,
+    avgTurns: 0,
+    queued: globalSim.queueInfo().active > 0,
+  });
+
   let result;
   try {
     result = await globalSim.runGlobalSim(player.specs, opponents, {
