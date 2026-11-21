@@ -528,3 +528,16 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   5 stack (`MAX_ADAPT_STACKS` di engine), dan menerima tipe lain menghapus SEMUA
   stack. Jangan simpan `stacks: {p, m}` terpisah — itu salah baca sumber.
   Damage TRUE menghapus stack tanpa menambah (bukan Physical/Magical).
+- **Reward OCR: jangan pilih hasil dari confidence tertinggi.** PSM 6 bisa salah baca
+  digit tunggal dengan keyakinan ~87% (angka "8" dibaca "3"), jadi satu mode atau
+  confidence saja tidak cukup. `recognizeDigits` membaca tiap region dengan PSM
+  6/7/8/13 lalu memilih lewat SUARA MAYORITAS. Kalau menambah parameter PSM, tambahkan
+  ke daftar itu, bukan menggantinya.
+- **Preprocessing crop dipakai untuk dua hal sekaligus.** Blur radius 3 (`BLUR_RADIUS`)
+  menghaluskan tepi pixel font yang bergerigi, dan `darkBackground` menentukan
+  polaritas: kartu gelap memakai angka putih. Membuang salah satunya membuat angka
+  putih di kartu gelap ikut terhapus sebelum masuk Tesseract (pernah terjadi).
+- **Fixture tes reward memakai font blok 5x7.** Glyph yang pikselnya asimetris
+  (mis. '0' berbentuk `10011/10101/11001`) tidak dikenali sebagai digit dan bikin
+  tes gagal; pakai bentuk kanonik. Angka yang digambar lebih lebar dari region akan
+  terpotong secara fisik — itu batas fixture, bukan bug OCR.
