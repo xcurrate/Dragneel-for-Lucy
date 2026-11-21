@@ -27,7 +27,7 @@ test('statsAt mengikuti interpolasi min + (max-min)*q/100', () => {
   assert.deepEqual(passives.statsAt(passives.get('Strength'), 100), [20]);
   // Dua stat (peluang, bonus) pada Critical.
   assert.deepEqual(passives.statsAt(passives.get('Critical'), 50), [20, 37.5]);
-  assert.deepEqual(passives.statsAt(passives.get('Sacrifice'), 100), [75, 75]);
+  assert.deepEqual(passives.statsAt(passives.get('Sacrifice'), 100), [50, 35]);
 });
 
 test('statsAt menjepit quality di luar 0-100', () => {

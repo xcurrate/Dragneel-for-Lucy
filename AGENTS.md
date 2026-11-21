@@ -416,3 +416,9 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   `buffQuality()`/`manaQuality()` di `battleWeapon.js`; jangan ambil `quality[quality.length-1]`.
 - **Tes regresi harus lewat `runTurn`/`runBattle`**, bukan memanggil hook langsung — bug wiring
   (hook tidak dipanggil mesin) hanya terlihat dari jalur itu. Lihat `test/battle.test.js`.
+- **Aegis (Shield) memasang Taunt di `preTurn`, bukan ability aktif.** `Shield.preTurn` di OwO
+  memeriksa WP sendiri (di luar `act()`), lalu `attackWeapon` melewati serangan pada turn itu
+  karena buff baru berstatus `justCreated`. Di sini ditandai lewat `unit.skippedAttack`.
+- **`heal()` menolak target ber-HP 0 kecuali `{ revive: true }`.** Resurrection Staff menyetel
+  `hp[0] = 0` lalu memanggil `heal`; tanpa flag itu rekan tidak pernah benar-benar hidup dan
+  hanya WP yang terbuang. Target revive mengikuti `WeaponInterface.getDead()` (slot pertama).

@@ -549,12 +549,12 @@
       "sourceText": "When this animal dies, heal your teammates for **?%** of its Max HP and replenish for **?%** of its Max WP",
       "qualityList": [
         [
-          50,
-          75
+          25,
+          50
         ],
         [
-          50,
-          75
+          15,
+          35
         ]
       ],
       "hooks": [

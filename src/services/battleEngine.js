@@ -129,8 +129,11 @@ function inflictDamage(ctx, attacker, target, rawDamage, type, { bypassRes = fal
   return Math.round(total);
 }
 
-function heal(ctx, target, amount, from, { overheal = false } = {}) {
-  if (!target || !isAlive(target)) return 0;
+// `revive` membolehkan target ber-HP 0 ikut disembuhkan. OwO memanggil heal
+// setelah menyetel `hp[0] = 0`, jadi jalur revive memang lewat sini.
+function heal(ctx, target, amount, from, { overheal = false, revive = false } = {}) {
+  if (!target) return 0;
+  if (!revive && !isAlive(target)) return 0;
   const cap = maxHp(target) * (overheal ? 1.5 : 1);
   if (target.stats.hp[0] >= cap) return 0;
   const bucket = { amount, bonus: 0 };
@@ -253,6 +256,7 @@ function runTurn(ctx, player, enemy) {
   for (const [team, foe] of [[player, enemy], [enemy, player]]) {
     for (const unit of team) {
       if (!isAlive(unit)) continue;
+      unit.skippedAttack = false;
       for (const buff of unit.buffs) buff.preTurn?.(ctx, unit, team, foe);
       if (unit.weapon) {
         unit.weapon.preTurn?.(ctx, unit, team, foe);
@@ -279,6 +283,9 @@ function runTurn(ctx, player, enemy) {
       allies = second; foes = first;
     }
     if (!actor || !isAlive(actor)) continue;
+    // OwO Shield.attackWeapon: setelah Taunt baru dipasang di preTurn, unit
+    // melewati serangan pada turn itu.
+    if (actor.skippedAttack) continue;
     // OwO memanggil canAttack semua buff (tidak berhenti di yang pertama),
     // karena Freeze menurunkan durasinya sendiri di sini.
     let blocked = false;

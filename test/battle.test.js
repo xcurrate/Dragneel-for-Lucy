@@ -1429,3 +1429,116 @@ describe('wiring mesin battle', () => {
     assert.strictEqual(manaQuality(dagger, 100), 100);
   });
 });
+
+describe('Resurrection Staff', () => {
+  function setup(quality) {
+    const rng = rngModule.createRng(3);
+    const healer = engine.buildUnit({ label: 'healer', level: 50, coeffs: COEFFS_STRONG, weapon: { id: 14, quality } }, rng);
+    const dead = engine.buildUnit({ label: 'mati', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const foe = engine.buildUnit({ label: 'foe', level: 50, coeffs: COEFFS_STRONG }, rng);
+    dead.stats.hp[0] = 0;
+    healer.team = [healer, dead]; healer.foes = [foe];
+    dead.team = healer.team; dead.foes = healer.foes;
+    foe.team = [foe]; foe.foes = healer.team;
+    return { rng, healer, dead, foe, ctx: { rng, tags: new Set(), damageDealt: 0 } };
+  }
+
+  it('menghidupkan rekan mati pertama sesuai urutan slot (OwO getDead)', () => {
+    const { healer, dead, ctx } = setup(100);
+    const second = engine.buildUnit({ label: 'mati2', level: 50, coeffs: COEFFS_STRONG }, ctx.rng);
+    second.stats.hp[0] = 0;
+    healer.team.push(second);
+    weaponModule.weaponAbility(ctx, healer.weapon, healer);
+    assert.ok(dead.stats.hp[0] > 0, 'slot pertama dihidupkan');
+    assert.strictEqual(second.stats.hp[0], 0, 'slot kedua tidak tersentuh');
+  });
+
+  it('menghidupkan rekan yang mati, bukan membuang WP saja', () => {
+    const { healer, dead, ctx } = setup(100);
+    assert.strictEqual(healer.weapon.manaCost, 300, 'q100 = biaya 300');
+    const ok = weaponModule.weaponAbility(ctx, healer.weapon, healer);
+    assert.strictEqual(ok, true);
+    assert.ok(dead.stats.hp[0] > 0, `HP rekan harus > 0, dapat ${dead.stats.hp[0]}`);
+    assert.ok(healer.stats.wp[0] < engine.maxWp(healer), 'WP terpakai');
+  });
+
+  it('menyembuhkan 50-80% MAG sesuai quality', () => {
+    for (const [q, pct] of [[0, 0.5], [100, 0.8]]) {
+      const { healer, dead, ctx } = setup(q);
+      const mag = healer.stats.mag[0] + healer.stats.mag[1];
+      weaponModule.weaponAbility(ctx, healer.weapon, healer);
+      const expected = mag * pct;
+      assert.ok(Math.abs(dead.stats.hp[0] - expected) <= 50, `q${q}: HP ${dead.stats.hp[0]} vs harapan ${expected.toFixed(0)} (±50 roll)`);
+    }
+  });
+
+  it('tidak memakai WP kalau tidak ada rekan yang mati', () => {
+    const { healer, dead, ctx } = setup(100);
+    dead.stats.hp[0] = engine.maxHp(dead);
+    const before = healer.stats.wp[0];
+    assert.strictEqual(weaponModule.weaponAbility(ctx, healer.weapon, healer), false);
+    assert.strictEqual(healer.stats.wp[0], before, 'WP tidak boleh terbuang');
+  });
+});
+
+describe('Sacrifice', () => {
+  it('memakai 25-50% Max HP dan 15-35% Max WP sesuai deskripsi', () => {
+    const rng = rngModule.createRng(5);
+    const dead = engine.buildUnit({ label: 'mati', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const ally = engine.buildUnit({ label: 'ally', level: 50, coeffs: COEFFS_STRONG }, rng);
+    dead.team = [dead, ally]; ally.team = dead.team;
+    dead.weapon = { passives: [createPassive(19, 100, rng)], stats: [], def: {}, manaCost: 0 };
+    dead.stats.hp[0] = 0;
+    ally.stats.hp[0] = 1;
+    ally.stats.wp[0] = 0;
+
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    dead.weapon.passives[0].postAttacked(ctx, dead, null, 0, 't');
+
+    const maxHp = engine.maxHp(dead);
+    const maxWp = engine.maxWp(dead);
+    const healed = ally.stats.hp[0] - 1;
+    const refilled = ally.stats.wp[0];
+    assert.ok(healed >= maxHp * 0.25 - 50 && healed <= maxHp * 0.5 + 50, `heal ${healed} di luar 25-50% dari ${maxHp}`);
+    assert.ok(refilled >= maxWp * 0.15 - 50 && refilled <= maxWp * 0.35 + 50, `WP ${refilled} di luar 15-35% dari ${maxWp}`);
+  });
+});
+
+describe("Defender's Aegis", () => {
+  function setup(quality) {
+    const rng = rngModule.createRng(7);
+    const unit = engine.buildUnit({ label: 'aegis', level: 50, coeffs: COEFFS_STRONG, weapon: { id: 5, quality } }, rng);
+    const ally = engine.buildUnit({ label: 'ally', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const foe = engine.buildUnit({ label: 'foe', level: 50, coeffs: COEFFS_STRONG }, rng);
+    unit.team = [unit, ally]; unit.foes = [foe];
+    ally.team = unit.team; ally.foes = unit.foes;
+    foe.team = [foe]; foe.foes = unit.team;
+    return { rng, unit, ally, foe, ctx: { rng, tags: new Set(), damageDealt: 0 } };
+  }
+
+  it('memasang Taunt di awal turn lewat preTurn, bukan ability aktif', () => {
+    const { unit, ctx } = setup(100);
+    assert.strictEqual(weaponModule.weaponAbility(ctx, unit.weapon, unit), false, 'bukan ability aktif');
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    assert.ok(unit.buffs.some(b => b.id === 1), 'Taunt terpasang');
+    assert.ok(unit.stats.wp[0] < engine.maxWp(unit), 'WP terpakai');
+  });
+
+  it('tidak memasang Taunt bila WP tidak cukup', () => {
+    const { unit, ctx } = setup(0);
+    unit.stats.wp[0] = unit.weapon.manaCost - 1;
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    assert.ok(!unit.buffs.some(b => b.id === 1));
+    assert.strictEqual(unit.stats.wp[0], unit.weapon.manaCost - 1, 'WP tidak terpakai');
+  });
+
+  it('melewati serangan pada turn saat Taunt baru dipasang', () => {
+    const { unit, foe, ctx } = setup(100);
+    unit.team = [unit];
+    foe.foes = unit.team;
+    const hpBefore = foe.stats.hp[0];
+    engine.runTurn({ ...ctx, playerFirst: true }, unit.team, foe.team);
+    assert.ok(unit.buffs.some(b => b.id === 1), 'Taunt terpasang');
+    assert.strictEqual(foe.stats.hp[0], hpBefore, 'tidak menyerang di turn pemasangan');
+  });
+});

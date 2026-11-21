@@ -89,6 +89,10 @@ function buildWeapon(spec, rng, globalQuality) {
       statsObj.mr[1] += statsObj.mr[0] * pct;
     }
   };
+  // Aegis memasang Taunt di awal turn, bukan sebagai ability aktif (OwO: Shield.preTurn).
+  if (def.ability?.kind === 'taunt') {
+    weapon.preTurn = (ctx, unit) => ABILITIES.taunt(ctx, weapon, unit);
+  }
   return weapon;
 }
 
@@ -199,20 +203,27 @@ const ABILITIES = {
   revive(ctx, weapon, actor) {
     const e = require('./battleEngine');
     const ab = weapon.ability;
+    // OwO WeaponInterface.getDead(): ambil rekan mati pertama (urutan slot).
     const dead = actor.team.find(u => u.stats.hp[0] <= 0);
     if (!dead) return false;
     e.useMana(actor, weapon.manaCost);
     dead.stats.hp[0] = 0;
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
-    e.heal(ctx, dead, raw, actor);
+    // Tanpa `revive`, heal() menolak target ber-HP 0 sehingga rekan tidak
+    // pernah benar-benar hidup kembali.
+    e.heal(ctx, dead, raw, actor, { revive: true });
     return true;
   },
 
   taunt(ctx, weapon, actor) {
-    if (actor.buffs.some(b => b.id === 1)) return false;
     const e = require('./battleEngine');
+    // OwO Shield.preTurn: hanya menolak bila Taunt sudah menempel.
+    if (actor.buffs.some(b => b.id === 1)) return false;
+    // preTurn dipanggil di luar `act()`, jadi cek WP dilakukan di sini.
+    if (actor.stats.wp[0] < weapon.manaCost) return false;
     e.useMana(actor, weapon.manaCost);
     applyBuff(ctx, 1, actor, actor, weapon.ability.duration, buffQuality(weapon.def, weapon.quality));
+    actor.skippedAttack = true;
     return true;
   },
 
@@ -286,6 +297,8 @@ function applyBuff(ctx, buffId, from, target, duration, quality) {
 function weaponAbility(ctx, weapon, actor) {
   const ab = weapon.ability;
   if (!ab || ab.kind === 'none') return false;
+  // Taunt dipasang di awal turn (preTurn), bukan sebagai ability aktif.
+  if (ab.kind === 'taunt') return false;
   const handler = ABILITIES[ab.kind];
   if (!handler) return false;
   return handler(ctx, weapon, actor) === true;
