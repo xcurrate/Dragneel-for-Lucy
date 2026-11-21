@@ -5,12 +5,17 @@
 //   dsim -s 1234             seed (default acak)
 //   dsim -qp 80 -qe 50       quality senjata pemain / lawan
 //   dsim -lawan hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60
+const { MessageFlags } = require('discord.js');
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
+const globalSim = require('../services/globalSim');
 const data = require('../data/owoBattle');
-const { simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed, warnEmbed } = require('../ui/battlePanel');
+const {
+  simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed, warnEmbed,
+  globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
+} = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
 
 // Jeda minimum antar-edit pesan progres; Discord membatasi edit pesan.
@@ -90,6 +95,236 @@ function parseFlags(args) {
   return { flags, rest };
 }
 
+// Cooldown simulasi global. Lebih panjang dari `dsim` karena sekali jalan
+// mengadu tim melawan SEMUA tim tersimpan, jadi jauh lebih mahal.
+const GLOBAL_COOLDOWN_MS = 10000;
+const GLOBAL_COOLDOWN_ACTION = 'sim-global';
+
+// Hasil simulasi global disimpan sebentar di memori supaya tombol "lihat
+// kekalahan" bisa membacanya. Kunci = userId + token; token acak per simulasi
+// agar tombol dari hasil lama tidak menampilkan data yang sudah basi.
+const GLOBAL_RESULT_TTL_MS = 15 * 60 * 1000;
+const globalResults = new Map();
+
+function rememberGlobalResult(userId, token, payload) {
+  const now = Date.now();
+  for (const [key, entry] of globalResults) {
+    if (now - entry.at > GLOBAL_RESULT_TTL_MS) globalResults.delete(key);
+  }
+  globalResults.set(`${userId}${token}`, { at: now, ...payload });
+}
+
+function getGlobalResult(userId, token) {
+  const entry = globalResults.get(`${userId}${token}`);
+  if (!entry) return null;
+  if (Date.now() - entry.at > GLOBAL_RESULT_TTL_MS) {
+    globalResults.delete(`${userId}${token}`);
+    return null;
+  }
+  return entry;
+}
+
+// Token pendek yang aman untuk customId (tanpa pemisah `:`).
+function resultToken(seed) {
+  return `${seed.toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+}
+
+// Simulasi besar bisa berjalan lama, jadi hasil sementara ditampilkan di satu
+// pesan yang diedit berkala lalu ditimpa hasil akhir. Dipakai bersama oleh
+// mode biasa dan mode global supaya perilakunya sama.
+//
+// `sendEmbed` mengirim embed saja, `sendPayload` mengirim payload penuh
+// (embed + tombol). Keduanya dipisah karena pemanggil lama hanya menyediakan
+// `sendEmbed`.
+function makeProgressPublisher(message, sendEmbed, sendPayload, labels, mode) {
+  let progressMessage = null;
+  let progressDisabled = false;
+  let lastEdit = 0;
+  let editing = false;
+
+  const publish = async progress => {
+    if (progressDisabled) return;
+    const embed = simProgressEmbed(progress, {
+      ...labels,
+      title: mode === 'global' ? '🌍 Simulasi Global — berjalan' : null,
+    });
+
+    if (!progressMessage) {
+      const sent = await sendEmbed(message, embed);
+      // Pengirim tanpa objek Message (mis. tes) tidak bisa diedit: cukup satu
+      // pesan, sisanya dilewati supaya channel tidak dibanjiri.
+      if (!sent?.edit) { progressDisabled = true; return; }
+      progressMessage = sent;
+      lastEdit = Date.now();
+      return;
+    }
+
+    // Discord membatasi edit pesan; satu edit per detik cukup untuk menunjukkan
+    // progres tanpa kena rate limit.
+    if (editing || Date.now() - lastEdit < PROGRESS_EDIT_MS) return;
+    editing = true;
+    try {
+      await progressMessage.edit({ embeds: [embed] });
+      lastEdit = Date.now();
+    } catch {
+      progressDisabled = true;
+      progressMessage = null;
+    } finally {
+      editing = false;
+    }
+  };
+
+  // Kirim (atau timpa) hasil akhir di pesan progres yang sama. Pemanggil yang
+  // hanya menyediakan `sendEmbed` (tes, perintah lama) tetap dapat embed-nya.
+  publish.finish = async payload => {
+    if (progressMessage) {
+      try {
+        await progressMessage.edit(payload);
+        return progressMessage;
+      } catch {
+        // Gagal mengedit (pesan dihapus / rate limit): kirim sebagai pesan baru.
+      }
+    }
+    if (sendPayload) return sendPayload(message, payload);
+    const embed = payload?.embeds?.[0];
+    return embed ? sendEmbed(message, embed) : null;
+  };
+
+  return publish;
+}
+
+function globalUsage(prefix = 'd') {
+  return [
+    `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** milik user lain`,
+    '',
+    'Hasil berisi: rata-rata streak, rata-rata kalah, dan rekap menang/seri/kalah',
+    'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
+    'Tombol **Lihat kekalahan** menampilkan tim mana saja yang mengalahkan kamu',
+    '(hanya terlihat olehmu, senjata lawan disembunyikan).',
+    '',
+    `Opsi: \`-m <jumlah>\` (default 100, berapa kali tiap tim dilawan), \`-s <seed>\``,
+    `Cooldown: **10 detik** untuk selain developer.`,
+  ].join('\n');
+}
+
+async function handleGlobalSim(message, args, prefix, deps = {}) {
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  const sendPayload = deps.sendPayload || null;
+  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  const userId = message.author.id;
+
+  const team = store.getActiveTeam(userId);
+  if (!team) {
+    return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
+  }
+  if (!team.slots.length) {
+    return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
+  }
+
+  const { flags, rest } = parseFlags(args);
+  if (rest.length) {
+    return send(message, errorEmbed(`Argumen \`${rest.join(' ')}\` tidak dikenal di simulasi global. Lihat \`${prefix} sim global help\`.`));
+  }
+
+  const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 100;
+  const runCount = Number(runs);
+  if (!Number.isSafeInteger(runCount) || runCount < 1) {
+    return send(message, errorEmbed('Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim global -m 50`.'));
+  }
+  const seed = flags['-s'] ?? flags['-seed'];
+  if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
+
+  const player = resolveTeamSpecs(team);
+  if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
+
+  const opponents = [];
+  for (const other of store.listOpponentTeams(userId)) {
+    const specs = resolveTeamSpecs(other);
+    // Tim lawan yang statnya belum lengkap dilewati, bukan menggagalkan
+    // seluruh simulasi: data lawan bukan milik user yang menjalankan perintah.
+    if (specs.error) continue;
+    opponents.push({
+      teamId: other.id,
+      slotId: other.slotId,
+      label: teamLabel(other),
+      specs: specs.specs,
+    });
+  }
+  if (!opponents.length) {
+    return send(message, warnEmbed('Belum ada tim lawan yang bisa dipakai. Simulasi global butuh tim tersimpan dari user lain.'));
+  }
+
+  // Gerbang cooldown dipasang setelah validasi supaya salah ketik tidak
+  // menghabiskan jatah. Developer melewati cooldown untuk pengujian.
+  if (!isDev) {
+    const waiting = store.cooldownRemaining(userId, GLOBAL_COOLDOWN_ACTION);
+    if (waiting > 0) {
+      return send(message, warnEmbed(
+        `⏳ Simulasi global baru bisa dipakai lagi dalam **${(waiting / 1000).toFixed(1)} detik**.`
+      ));
+    }
+    store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + GLOBAL_COOLDOWN_MS);
+  }
+
+  const labels = { playerLabel: teamLabel(team) };
+  const publishProgress = makeProgressPublisher(message, send, sendPayload, labels, 'global');
+
+  const result = await globalSim.runGlobalSim(player.specs, opponents, {
+    runs: runCount,
+    seed: seed != null ? Number(seed) : undefined,
+    onProgress: publishProgress,
+  });
+  if (!isDev) store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + GLOBAL_COOLDOWN_MS);
+
+  await animalDex.ensureAnimalEmojis([
+    ...player.specs.map(spec => spec.animal),
+    ...opponents.flatMap(o => o.specs.map(spec => spec.animal)),
+  ]);
+
+  const token = resultToken(result.seed);
+  rememberGlobalResult(userId, token, { result, playerLabel: labels.playerLabel });
+
+  const finalEmbed = globalSimEmbed(result, { playerLabel: labels.playerLabel, prefix });
+  const payload = {
+    embeds: [finalEmbed],
+    // Tombol tetap ditampilkan walau belum ada kekalahan; saat dibuka akan
+    // menjawab bahwa tidak ada tim yang menang.
+    components: [globalLossButton(userId, token)],
+  };
+
+  return publishProgress.finish(payload);
+}
+
+// Tombol "lihat kekalahan": balasan ephemeral berisi tim yang mengalahkan
+// pemain, dengan ikon senjata diganti tanda tanya.
+async function handleGlobalLossButton(i) {
+  const parsed = parseGlobalLossButton(i.customId);
+  if (!parsed.ok) {
+    return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `d sim global` lagi.', flags: MessageFlags.Ephemeral });
+  }
+  if (parsed.userId !== i.user.id) {
+    return i.reply({
+      content: 'Tombol ini milik orang lain. Jalankan `d sim global` untuk hasilmu sendiri.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  const entry = getGlobalResult(parsed.userId, parsed.token);
+  if (!entry) {
+    return i.reply({
+      content: 'Hasil simulasi ini sudah kedaluwarsa. Jalankan `d sim global` lagi.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  await animalDex.ensureAnimalEmojis(
+    entry.result.losses.flatMap(loss => loss.specs.map(spec => spec.animal))
+  );
+  return i.reply({
+    embeds: [globalLossesEmbed(entry.result, { playerLabel: entry.playerLabel })],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
 async function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const userId = message.author.id;
@@ -97,6 +332,16 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // `help` tidak kena cooldown: perintah bantuan tidak menjalankan simulasi.
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
     return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix)));
+  }
+
+  // `d sim global` / `d sim g` — mode simulasi melawan semua tim tersimpan.
+  const mode = (args[0] || '').toLowerCase();
+  if (['global', 'g'].includes(mode)) {
+    const rest = args.slice(1);
+    if (['help', 'bantuan'].includes((rest[0] || '').toLowerCase())) {
+      return send(message, usageEmbed('🌍 Simulasi Global', globalUsage(prefix)));
+    }
+    return handleGlobalSim(message, rest, prefix, deps);
   }
 
   const team = store.getActiveTeam(userId);
@@ -142,39 +387,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // berkala, lalu timpa dengan hasil akhir di pesan yang sama supaya channel
   // tidak dibanjiri pesan.
   const labels = { playerLabel: teamLabel(team), enemyLabel: enemy.label };
-  let progressMessage = null;
-  let progressDisabled = false;
-  let lastEdit = 0;
-  let editing = false;
-
-  const publishProgress = async progress => {
-    if (progressDisabled) return;
-    const embed = simProgressEmbed(progress, labels);
-
-    if (!progressMessage) {
-      const sent = await send(message, embed);
-      // Pengirim tanpa objek Message (mis. tes) tidak bisa diedit: cukup satu
-      // pesan, sisanya dilewati supaya channel tidak dibanjiri.
-      if (!sent?.edit) { progressDisabled = true; return; }
-      progressMessage = sent;
-      lastEdit = Date.now();
-      return;
-    }
-
-    // Discord membatasi edit pesan; satu edit per detik cukup untuk menunjukkan
-    // progres tanpa kena rate limit.
-    if (editing || Date.now() - lastEdit < PROGRESS_EDIT_MS) return;
-    editing = true;
-    try {
-      await progressMessage.edit({ embeds: [embed] });
-      lastEdit = Date.now();
-    } catch {
-      progressDisabled = true;
-      progressMessage = null;
-    } finally {
-      editing = false;
-    }
-  };
+  const publishProgress = makeProgressPublisher(message, send, deps.sendPayload || null, labels, 'duel');
 
   // Gerbang cooldown dipasang setelah validasi: perintah yang salah ketik tetap
   // dapat pesan errornya sendiri, dan tidak menghabiskan jatah user. Yang mahal
@@ -209,15 +422,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     matchup: renderMatchup(playerSpecs, enemySpecs),
   });
 
-  if (progressMessage) {
-    try {
-      await progressMessage.edit({ embeds: [finalEmbed] });
-      return progressMessage;
-    } catch {
-      // Gagal mengedit (pesan dihapus / rate limit): kirim hasil sebagai pesan baru.
-    }
-  }
-  return send(message, finalEmbed);
+  return publishProgress.finish({ embeds: [finalEmbed] });
 }
 
 // Tim aktif → spec engine, dengan stat diambil dari dex bila perlu.
@@ -291,4 +496,8 @@ function resolveEnemy(userId, args, overrideLevel) {
   return { specs: [{ slot: 1, coeffs, level, label: animal.name, animal }], label: animal.name };
 }
 
-module.exports = { handleSimCommand, parseFlags, resolveEnemy, resolveTeamSpecs, usage };
+module.exports = {
+  handleSimCommand, handleGlobalSim, handleGlobalLossButton,
+  parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage,
+  GLOBAL_COOLDOWN_MS, globalResults,
+};

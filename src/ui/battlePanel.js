@@ -171,7 +171,7 @@ function simColor(winRate) {
 
 // Hasil sementara selama simulasi panjang masih berjalan. Angkanya dari tally
 // yang sama dengan hasil akhir, jadi tidak ada hitungan ulang.
-function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan' } = {}) {
+function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', title = null } = {}) {
   const { done, total, tally } = progress;
   const percent = Math.min(100, Math.round((done / total) * 1000) / 10);
   const stats = [
@@ -182,7 +182,7 @@ function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'La
 
   return new EmbedBuilder()
     .setColor(COLOR.warn)
-    .setTitle('⚔️ Simulasi Battle — berjalan')
+    .setTitle(title || '⚔️ Simulasi Battle — berjalan')
     .setDescription(`**${playerLabel}** vs **${enemyLabel}**\n\`\`\`\n${stats}\n\`\`\``)
     .addFields(
       { name: '⏳ Progres', value: `${bar(done, total)} ${percent}%`, inline: true },
@@ -281,6 +281,154 @@ function isTeamButton(customId) {
   return typeof customId === 'string' && customId.startsWith(`${TEAM_BUTTON}${ID_SEP}`);
 }
 
+// Tombol "lihat kekalahan" pada hasil simulasi global. customId membawa userId
+// supaya hasil milik orang lain tidak bisa dibuka, dan `token` supaya tombol
+// lama tidak menampilkan data dari simulasi yang sudah digantikan.
+const GLOBAL_BUTTON = 'battle_global_losses';
+
+function globalLossButton(userId, token) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}`)
+      .setLabel('Lihat kekalahan')
+      .setEmoji('🔍')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
+function isGlobalLossButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${GLOBAL_BUTTON}${ID_SEP}`);
+}
+
+function parseGlobalLossButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 3 || parts[0] !== GLOBAL_BUTTON) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2] };
+}
+
+function percent(value) {
+  return `${Number(value || 0).toLocaleString('id-ID')}%`;
+}
+
+// Satu kelompok level pada laporan: jumlah tim, rata-rata level, dan hasil.
+function bucketLines(bucket) {
+  if (!bucket.teams) {
+    return `*Tidak ada tim lawan di kelompok ini.*`;
+  }
+  const { tally } = bucket;
+  return [
+    `**${tally.player.toLocaleString('id-ID')}** menang · **${tally.tie.toLocaleString('id-ID')}** seri · **${tally.enemy.toLocaleString('id-ID')}** kalah`,
+    `-# ${bucket.teams.toLocaleString('id-ID')} tim · rata-rata L.**${bucket.avgLevel}** · ${bucket.battles.toLocaleString('id-ID')} pertarungan`,
+  ].join('\n');
+}
+
+// Hasil simulasi global. Angka utama ditaruh di description mengikuti gaya
+// laporan yang sudah dipakai bot lain, lalu rincian per kelompok level.
+function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd' } = {}) {
+  const seconds = (result.durationMs / 1000).toFixed(2);
+  const low = result.buckets.low;
+  const high = result.buckets.high;
+
+  const embed = new EmbedBuilder()
+    .setColor(simColor(result.winRate))
+    .setTitle('🌍 Simulasi Global')
+    .setDescription([
+      `### Hasil Simulasi Global (${seconds}s)`,
+      `**Tim kamu:** ${playerLabel}`,
+      `**Lawan:** ${result.opponents.toLocaleString('id-ID')} tim · ${result.battles.toLocaleString('id-ID')} pertarungan (${result.runs.toLocaleString('id-ID')}× per tim)`,
+    ].join('\n'))
+    .addFields(
+      {
+        name: `🔅 ${low.label}`,
+        value: bucketLines(low),
+        inline: false,
+      },
+      {
+        name: `🔅 ${high.label}`,
+        value: bucketLines(high),
+        inline: false,
+      },
+      {
+        name: '📊 Rekap',
+        value: [
+          `Menang **${result.tally.player.toLocaleString('id-ID')}** (${percent(result.winRate)})`,
+          `Seri **${result.tally.tie.toLocaleString('id-ID')}** (${percent(result.tieRate)})`,
+          `Kalah **${result.tally.enemy.toLocaleString('id-ID')}** (${percent(result.lossRate)})`,
+        ].join('\n'),
+        inline: true,
+      },
+      {
+        name: '🔥 Streak',
+        value: [
+          `Rata-rata **${result.streak.avg.toLocaleString('id-ID')}**`,
+          `Terpanjang **${result.streak.max.toLocaleString('id-ID')}**`,
+        ].join('\n'),
+        inline: true,
+      },
+      {
+        name: '📉 Kalah per tim',
+        value: `Rata-rata **${result.avgLosses.toLocaleString('id-ID')}**`,
+        inline: true,
+      },
+    )
+    .setFooter({ text: `Seed ${result.seed} · hasil bisa berbeda karena RNG · cooldown ${prefix} sim global 10 detik` });
+
+  if (!result.tally.enemy) {
+    embed.addFields({ name: '🏆 Tanpa kekalahan', value: 'Tidak ada tim lawan yang berhasil mengalahkan tim kamu.' });
+  }
+  return embed;
+}
+
+// Ikon senjata disembunyikan saat membuka daftar kekalahan: lawan tidak perlu
+// tahu senjata apa yang dipakai tim yang mengalahkan kamu.
+const HIDDEN_WEAPON = '❓';
+
+// Slot tanpa senjata tidak diberi tanda tanya: itu akan menyiratkan ada senjata
+// yang disembunyikan padahal memang kosong.
+function hiddenSpecLine(spec, index) {
+  const label = spec.label || `slot${spec.slot || index + 1}`;
+  const weapon = spec.weapon ? ` ${HIDDEN_WEAPON}` : '';
+  return `\`${spec.slot || index + 1}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}${weapon}`;
+}
+
+// Daftar tim yang mengalahkan pemain, dipakai sebagai balasan ephemeral.
+function globalLossesEmbed(result, { playerLabel = 'Tim kamu' } = {}) {
+  const embed = new EmbedBuilder()
+    .setColor(COLOR.error)
+    .setTitle('🔍 Tim yang mengalahkan kamu');
+
+  if (!result.losses.length) {
+    return embed.setDescription(
+      `**${playerLabel}** tidak kalah dari satu tim pun dalam simulasi ini. 🏆`
+    );
+  }
+
+  embed.setDescription(
+    `**${playerLabel}** kalah dari **${result.losses.length}** tim`
+    + ` (total ${result.tally.enemy.toLocaleString('id-ID')} kekalahan).\n`
+    + '-# Senjata lawan disembunyikan.'
+  );
+
+  // Discord membatasi jumlah field; sisanya diringkas dalam satu baris.
+  const shown = result.losses.slice(0, 20);
+  for (const loss of shown) {
+    const { tally } = loss;
+    const detail = [
+      `Kalah **${tally.enemy.toLocaleString('id-ID')}**× · seri ${tally.tie.toLocaleString('id-ID')}× · menang ${tally.player.toLocaleString('id-ID')}×`,
+      ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i)),
+    ].join('\n');
+    embed.addFields({
+      name: `${loss.label} · L.${loss.level}`.slice(0, 256),
+      value: detail.slice(0, 1024),
+      inline: false,
+    });
+  }
+  if (result.losses.length > shown.length) {
+    embed.setFooter({ text: `…dan ${result.losses.length - shown.length} tim lain tidak ditampilkan.` });
+  }
+  return embed;
+}
+
 function parseTeamButton(customId) {
   const parts = String(customId || '').split(ID_SEP);
   if (parts.length !== 3 || parts[0] !== TEAM_BUTTON) return { ok: false };
@@ -294,4 +442,5 @@ module.exports = {
   weaponName, bar, slotField, slotStats, slotIcon,
   teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
+  GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
 };

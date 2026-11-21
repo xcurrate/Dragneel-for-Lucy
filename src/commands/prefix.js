@@ -181,7 +181,13 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   }
 
   if (sub === 'sim') {
-    return handleSimCommand(message, args, prefix, { sendEmbed: _sendEmbed });
+    // Simulasi global memakai tombol interaksi, jadi butuh jalur payload penuh
+    // (embed + components) selain jalur embed biasa.
+    return handleSimCommand(message, args, prefix, {
+      sendEmbed: _sendEmbed,
+      sendPayload: _send,
+      isDeveloper: _isDeveloper,
+    });
   }
 
   if (sub === 'menu') {

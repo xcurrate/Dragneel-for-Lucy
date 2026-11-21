@@ -246,6 +246,21 @@ function countTeams(userId) {
     .get(String(userId)).n;
 }
 
+// Semua tim milik semua user. Dipakai simulasi global yang mengadu satu tim
+// melawan seluruh tim tersimpan; tim tanpa slot tetap ikut terambil lalu
+// dibuang pemanggil karena tidak bisa dipertarungkan.
+function listAllTeams() {
+  const rows = getDb().prepare('SELECT * FROM teams ORDER BY user_id, slot_id, id').all();
+  return rows.map(row => rowToTeam(row, loadSlots(row.id)));
+}
+
+// Tim yang bisa dipakai sebagai lawan: milik user lain dan punya isi slot.
+// Tim milik sendiri dikecualikan supaya simulasi tidak mengadu tim dengan
+// dirinya sendiri.
+function listOpponentTeams(userId) {
+  return listAllTeams().filter(team => team.userId !== String(userId) && team.slots.length);
+}
+
 // ID tim 1..MAX_TEAM_ID milik satu user. ID bebas terkecil dipakai lebih dulu,
 // jadi menghapus tim benar-benar mengosongkan slot ID-nya.
 function usedSlotIds(userId) {
@@ -507,6 +522,8 @@ module.exports = {
   normalizeName,
   uniqueName,
   listTeams,
+  listAllTeams,
+  listOpponentTeams,
   getTeam,
   findTeam,
   getTeamById,
