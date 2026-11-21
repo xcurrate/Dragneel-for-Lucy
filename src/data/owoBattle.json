@@ -2,6 +2,8 @@
   "source": "https://github.com/ChristopherBThai/Discord-OwO-Bot",
   "sourceLicense": "CC BY-NC-SA 4.0",
   "note": "Data battle OwO hasil pembacaan kode (animals, weapons, buffs). Angka divalidasi dengan menjalankan class asli. Stat hewan skala kecil (0-8); kekuatan berasal dari level. Tiga rune (Forgotten/Celebration/Luck) bertanda disabled=true di OwO: tidak bisa di-roll baru, tapi tetap berfungsi di battle.",
+  "passiveBonus": 1,
+  "passiveBonusNote": "Setiap senjata boleh memakai pasif bawaan `passiveCount` sampai `passiveCount + passiveBonus`. Senjata bisa menimpa lewat field `passiveBonus` sendiri (Rune of the Forgotten: 2, karena 0+1 masih dianggap terlalu sempit untuk rune ber-stat TRUE).",
   "formulas": {
     "hp": "500 + lvl * hpr * 2",
     "wp": "500 + lvl * wpr * 2",
@@ -457,7 +459,8 @@
         ]
       },
       "disabled": true,
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "passiveBonus": 2
     },
     {
       "id": 5,

@@ -475,3 +475,10 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   "berjalan", memperbaruinya maksimal sekali per detik (`PROGRESS_EDIT_MS`) karena Discord
   membatasi edit, lalu **mengedit pesan yang sama** menjadi hasil akhir. Bila pengirim tidak
   mengembalikan objek Message (tes) atau edit gagal, hasil akhir dikirim sebagai pesan baru.
+- **Jumlah pasif senjata kini berupa rentang, bukan angka pasti.** `passiveCount` adalah batas
+  bawah, dan setiap senjata boleh memakai sampai `passiveCount + passiveBonus` (global 1 di
+  `owoBattle.json`, bisa ditimpa per senjata). Pakai `data.passiveRange(weapon)` → `{min,max}`;
+  jangan membandingkan langsung dengan `passiveCount`. Hasilnya: Great Sword 1-2, Orb of Potency
+  2-3, Rune of the Forgotten 0-2 (boleh tanpa pasif). Bila pemanggil tidak memilih pasif,
+  `rollPassives` tetap mengundi sebanyak `passiveCount` bawaan — jangan diganti ke batas atas,
+  karena itu mengubah hasil simulasi lama tanpa diminta.

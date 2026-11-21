@@ -31,6 +31,19 @@ const buffsById = new Map(data.buffs.map(b => [b.id, b]));
 // terlihat di `d team show` itulah yang dipakai `d sim`.
 const DEFAULT_QUALITY = 100;
 
+// Senjata kini boleh memakai satu pasif lebih banyak dari `passiveCount`
+// bawaannya. Batas ini berlaku global, dan senjata tertentu bisa menimpanya
+// lewat field `passiveBonus` di datanya (Rune of the Forgotten: 0 -> 2).
+const PASSIVE_BONUS = data.passiveBonus ?? 0;
+
+// Rentang jumlah pasif yang sah untuk satu senjata.
+function passiveRange(weapon) {
+  if (!weapon) return { min: 0, max: 0 };
+  const min = weapon.passiveCount ?? 0;
+  const bonus = weapon.passiveBonus ?? PASSIVE_BONUS;
+  return { min, max: min + bonus };
+}
+
 // Level default hewan saat dimasukkan ke tim, dan batas atas level.
 const DEFAULT_LEVEL = 50;
 const MAX_LEVEL = 1000;
@@ -88,7 +101,7 @@ module.exports = {
   formulas: data.formulas,
   statOrder: data.statOrder,
   limits: data.limits,
-  DEFAULT_QUALITY, DEFAULT_LEVEL, MAX_LEVEL,
+  DEFAULT_QUALITY, DEFAULT_LEVEL, MAX_LEVEL, PASSIVE_BONUS,
   animals: () => data.animals,
   weapons: () => data.weapons,
   buffs: () => data.buffs,
@@ -96,6 +109,7 @@ module.exports = {
   findAnimal,
   findWeapon,
   findPendingWeapon,
+  passiveRange,
   pending,
   baseStats,
   statsFromArray,

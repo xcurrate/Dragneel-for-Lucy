@@ -69,6 +69,9 @@ function buildWeapon(spec, rng, globalQuality) {
 
   // Pasif memakai tier yang sama dengan senjatanya, supaya ikon rank di
   // `d team show` sesuai dengan stat yang benar-benar dipakai simulasi.
+  // Bila pemanggil tidak memilih pasif, undi sebanyak `passiveCount` bawaan —
+  // bukan batas atas rentang — supaya hasil simulasi tidak berubah hanya karena
+  // senjata kini boleh memakai satu pasif tambahan.
   const chosen = explicit.passives;
   weapon.passives = Array.isArray(chosen) && chosen.length
     ? chosen.map(id => createPassive(id, quality, rng)).filter(Boolean)

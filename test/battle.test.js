@@ -834,7 +834,7 @@ describe('dtm s memasang senjata ke slot', () => {
 
   it('menolak senjata berpasif tanpa pasif', () => {
     const text = run('s', 'gsword');
-    assert.ok(text.includes('butuh 1 pasif'), text);
+    assert.ok(text.includes('minimal 1 pasif'), text);
     assert.strictEqual(slotOf(1).weaponId, null, 'tidak tersimpan');
   });
 
@@ -850,14 +850,20 @@ describe('dtm s memasang senjata ke slot', () => {
     assert.strictEqual(slotOf(1).weaponId, null, 'slot 1 tidak ikut terisi');
   });
 
-  it('Rune of the Forgotten justru harus tanpa pasif', () => {
+  it('Rune of the Forgotten boleh tanpa pasif sampai dua pasif', () => {
     const ok = run('s', 'rune');
     assert.ok(ok.includes('tanpa pasif'), ok);
     assert.strictEqual(slotOf(1).weaponId, 4);
     assert.strictEqual(slotOf(1).passives, null);
 
-    const bad = run('s', 'rune', 'crit');
-    assert.ok(bad.includes('tidak punya pasif'), bad);
+    // 0 pasif bawaan + bonus 2: satu dan dua pasif sama-sama sah.
+    run('s', 'rune', 'crit');
+    assert.deepStrictEqual(slotOf(1).passives, [12]);
+    run('s', 'rune', 'crit', 'th');
+    assert.deepStrictEqual(slotOf(1).passives, [12, 8]);
+
+    const bad = run('s', 'rune', 'crit', 'th', 'str');
+    assert.ok(bad.includes('0-2 pasif'), bad);
   });
 
   it('dtm s sword crit 2 memasang senjata + pasif ke slot 2', () => {
@@ -882,21 +888,36 @@ describe('dtm s memasang senjata ke slot', () => {
     assert.strictEqual(slotOf(1).weaponQuality, 60);
   });
 
-  it('menolak jumlah pasif melebihi passiveCount senjata', () => {
-    const text = run('s', 'gs', 'crit', 'str', '1');
-    assert.ok(text.includes('punya 1 slot pasif'), text);
+  it('senjata satu pasif boleh memakai dua pasif (+1)', () => {
+    run('s', 'gs', 'crit', 'str', '1');
+    assert.strictEqual(slotOf(1).weaponId, 1);
+    assert.deepStrictEqual(slotOf(1).passives, [12, 1]);
+  });
+
+  it('menolak pasif melebihi batas +1', () => {
+    const text = run('s', 'gs', 'crit', 'str', 'ls', '1');
+    assert.ok(text.includes('1-2 pasif'), text);
     assert.strictEqual(slotOf(1).weaponId, null, 'tidak tersimpan sebagian');
   });
 
-  it('menolak jumlah pasif kurang dari passiveCount senjata', () => {
+  it('menolak jumlah pasif di bawah batas bawaan', () => {
     const text = run('s', 'orb', 'crit', '1');
-    assert.ok(text.includes('punya 2 slot pasif'), text);
+    assert.ok(text.includes('minimal 2 pasif'), text);
     assert.strictEqual(slotOf(1).weaponId, null);
+  });
+
+  it('Orb of Potency boleh memakai tiga pasif (+1)', () => {
+    run('s', 'orb', 'crit', 'th', 'str', '1');
+    assert.strictEqual(slotOf(1).weaponId, 6);
+    assert.deepStrictEqual(slotOf(1).passives, [12, 8, 1]);
+
+    const bad = run('s', 'orb', 'crit', 'th', 'str', 'ls', '1');
+    assert.ok(bad.includes('2-3 pasif'), bad);
   });
 
   it('d team add dengan weapon= juga wajib menyebut pasif', () => {
     const bad = run('add', '1', STATS, 'weapon=gs');
-    assert.ok(bad.includes('butuh 1 pasif'), bad);
+    assert.ok(bad.includes('minimal 1 pasif'), bad);
     assert.strictEqual(slotOf(1).weaponId, null);
 
     run('add', '1', STATS, 'weapon=gs', 'passive=12');
@@ -908,6 +929,30 @@ describe('dtm s memasang senjata ke slot', () => {
     run('s', 'orb', 'crit', 'th', '1');
     assert.strictEqual(slotOf(1).weaponId, 6);
     assert.deepStrictEqual(slotOf(1).passives, [12, 8]);
+  });
+
+  it('pasif tambahan benar-benar menambah stat di simulasi', () => {
+    const weapon = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const rng = { next: () => 0.5 };
+    const stats = () => ({ hp: [20, 1000, 0, 0], wp: [10, 500, 0, 0], att: [50, 100, 0, 0], mag: [50, 100, 0, 0], pr: [20, 50, 0, 0], mr: [20, 50, 0, 0] });
+
+    const one = weapon.buildWeapon({ id: 1, quality: 100, passives: [1] }, rng);
+    const two = weapon.buildWeapon({ id: 1, quality: 100, passives: [1, 3] }, rng);
+    const a = stats(); one.alterStats(a);
+    const b = stats(); two.alterStats(b);
+
+    assert.strictEqual(one.passives.length, 1);
+    assert.strictEqual(two.passives.length, 2, 'Great Sword +1 pasif dipakai engine');
+    assert.ok(b.att[1] > a.att[1] || b.hp[3] > a.hp[3], 'stat bertambah, bukan hanya tersimpan');
+    assert.ok(b.hp[3] > 0, 'Health Point menambah hp');
+  });
+
+  it('senjata tanpa pasif eksplisit tetap mengundi sejumlah passiveCount bawaan', () => {
+    const weapon = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const rng = { next: () => 0.5 };
+    assert.strictEqual(weapon.buildWeapon({ id: 1, quality: 100 }, rng).passives.length, 1, 'Great Sword');
+    assert.strictEqual(weapon.buildWeapon({ id: 6, quality: 100 }, rng).passives.length, 2, 'Orb');
+    assert.strictEqual(weapon.buildWeapon({ id: 4, quality: 100 }, rng).passives.length, 0, 'Rune');
   });
 
   it('menolak slot kosong dan slot di luar batas', () => {

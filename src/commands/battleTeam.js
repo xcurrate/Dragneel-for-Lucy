@@ -110,23 +110,25 @@ function parseWeaponArgs(args) {
   return { slot, weaponId: weapon.weaponId, passives };
 }
 
-// OwO selalu memberi senjata tepat `passiveCount` pasif, tidak lebih dan tidak
-// kurang. Jadi senjata berpasif tidak boleh dipasang kosong, dan senjata tanpa
-// pasif (Rune of the Forgotten) tidak boleh diberi pasif.
+// Senjata punya `passiveCount` pasif bawaan dan kini boleh ditambah sampai
+// `passiveCount + passiveBonus`. Jadi jumlah pasif yang sah adalah rentang,
+// bukan angka pasti: Great Sword 1-2, Orb of Potency 2-3, Rune of the Forgotten
+// 0-2 (boleh tanpa pasif sama sekali).
 function validatePassiveCount(weapon, passives) {
   if (!weapon) return null;
-  const limit = weapon.passiveCount ?? 0;
+  const { min, max } = data.passiveRange(weapon);
   const given = passives.length;
-  if (given === limit) return null;
+  if (given >= min && given <= max) return null;
 
-  if (limit === 0) {
-    return `**${weapon.name}** tidak punya pasif, jadi jangan sebutkan pasif. Cukup \`dtm s ${weapon.aliases[0]}\`.`;
+  const slotText = min === max ? `${max} pasif` : `${min}-${max} pasif`;
+  const alias = weapon.aliases[0];
+
+  if (given > max) {
+    return `**${weapon.name}** hanya bisa memakai ${slotText}, kamu menyebut ${given}.`;
   }
-  if (given === 0) {
-    const need = limit === 1 ? '1 pasif' : `${limit} pasif`;
-    return `**${weapon.name}** butuh ${need}. Contoh: \`dtm s ${weapon.aliases[0]} ${'crit'}${limit > 1 ? ' th' : ''}\`.`;
-  }
-  return `**${weapon.name}** punya ${limit} slot pasif, kamu menyebut ${given}.`;
+  const example = ['crit', 'th', 'str'].slice(0, min).join(' ');
+  return `**${weapon.name}** butuh minimal ${min} pasif (maksimal ${max}), kamu menyebut ${given}. ` +
+    `Contoh: \`dtm s ${alias} ${example}\`.`;
 }
 
 // Nama pasif yang punya mekanik, dipakai untuk pesan bantuan.

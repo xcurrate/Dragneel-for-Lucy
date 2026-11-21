@@ -329,9 +329,12 @@ dan label hewan di slot itu tetap.
 
 ```
 dtm s sword crit       # Great Sword + pasif Critical ke slot 1
+dtm s sword crit str   # Great Sword + Critical + Strength (slot pasif +1)
 dtm s sword crit 2     # Great Sword + Critical ke slot 2
-dtm s orb crit th 1    # Orb of Potency: pasifnya 2, jadi sebut dua
-dtm s rune             # Rune of the Forgotten: justru tanpa pasif
+dtm s orb crit th 1    # Orb of Potency: 2 pasif bawaan
+dtm s orb crit th str  # Orb of Potency + 1 pasif tambahan, jadi 3
+dtm s rune             # Rune of the Forgotten: boleh tanpa pasif
+dtm s rune crit th     # ...atau dengan dua pasif
 ```
 
 Aturannya:
@@ -340,12 +343,15 @@ Aturannya:
   `dtm s gsword crit 2` memasang ke slot 2, bukan slot 1 dengan pasif "2".
 - **Nama lengkap maupun singkatan diterima.** `sword`, `gs`, dan `gsword` sama
   sama menunjuk Great Sword; `crit` sama dengan Critical.
-- **Pasif wajib, persis sebanyak `passiveCount`.** OwO tidak memberi pasif acak
-  saat senjata dipasang, jadi senjata berpasif tidak boleh dipasang kosong:
-  Great Sword selalu butuh 1 pasif, Orb of Potency 2. Kurang atau lebih
-  sama-sama ditolak, bukan dipotong atau diundi.
-- **Pengecualian: senjata yang memang tanpa pasif.** Hanya Rune of the
-  Forgotten (`passiveCount` 0), dan ia justru ditolak kalau diberi pasif.
+- **Jumlah pasif berupa rentang: `passiveCount` sampai `passiveCount` + 1.**
+  Setiap senjata boleh memakai satu pasif lebih banyak dari bawaannya, jadi
+  Great Sword 1-2, Orb of Potency 2-3. Kurang dari batas bawah atau lebih dari
+  batas atas ditolak, bukan dipotong atau diundi.
+- **Rune of the Forgotten: 0-2 pasif.** Boleh dipasang tanpa pasif sama sekali,
+  boleh juga dengan satu atau dua. Batasnya lebih longgar karena `passiveCount`
+  bawaannya 0, sehingga +1 saja tidak menyisakan ruang.
+- **Tanpa pasif eksplisit, simulasi tetap mengundi sebanyak `passiveCount`
+  bawaan.** Batas baru tidak mengubah hasil run yang sudah ada diam-diam.
 - **Mengganti senjata mempertahankan `quality=` slot.** Tier yang sudah diatur
   tidak hilang diam-diam.
 - **Slot harus sudah berisi hewan.** `dtm s bow crit 3` pada slot kosong ditolak.
