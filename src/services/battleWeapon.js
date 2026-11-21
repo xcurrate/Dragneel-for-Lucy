@@ -89,9 +89,13 @@ function buildWeapon(spec, rng, globalQuality) {
       statsObj.mr[1] += statsObj.mr[0] * pct;
     }
   };
-  // Aegis memasang Taunt di awal turn, bukan sebagai ability aktif (OwO: Shield.preTurn).
+  // Aegis dan Vanguard's Banner memasang efeknya di awal turn, bukan sebagai
+  // ability aktif (OwO: Shield.preTurn, VanguardsBanner.preTurn).
   if (def.ability?.kind === 'taunt') {
     weapon.preTurn = (ctx, unit) => ABILITIES.taunt(ctx, weapon, unit);
+  }
+  if (def.ability?.kind === 'attack_up_chain') {
+    weapon.preTurn = (ctx, unit) => ABILITIES.attack_up_chain(ctx, weapon, unit);
   }
   return weapon;
 }
@@ -159,7 +163,8 @@ const ABILITIES = {
     const dealt = e.inflictDamage(ctx, actor, target, raw, e.MAGICAL);
     const stolen = Math.min((dealt * weapon.stats[1]) / 100, target.stats.wp[0]);
     target.stats.wp[0] -= stolen;
-    const receiver = e.lowestWp(actor.team, actor) || actor;
+    // OwO AbsorbWand memakai getLowestWp(team), jadi pemakai sendiri ikut dihitung.
+    const receiver = e.lowestWp(actor.team) || actor;
     e.replenish(ctx, receiver, stolen, actor);
     return true;
   },
@@ -196,7 +201,7 @@ const ABILITIES = {
     if (target.stats.wp[0] + 1 >= e.maxWp(target) * 1.5) return false;
     e.useMana(actor, weapon.manaCost);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
-    e.replenish(ctx, target, raw, actor);
+    e.replenish(ctx, target, raw, actor, { overreplenish: true });
     return true;
   },
 
@@ -227,15 +232,21 @@ const ABILITIES = {
     return true;
   },
 
+  // OwO VanguardsBanner.preTurn: tiap 3 turn pasang Attack Up ke SEMUA rekan,
+  // lalu naikkan tier (Attack Up → + → ++) pada pemasangan berikutnya.
   attack_up_chain(ctx, weapon, actor) {
-    // Banner menaikkan tingkat Attack Up rekan yang belum punya tier tertinggi.
     const e = require('./battleEngine');
     const tiers = weapon.def.buffList;
-    const target = actor.team.find(u => u.stats.hp[0] > 0 && u.buffs.filter(b => tiers.includes(b.id)).length < tiers.length);
-    if (!target) return false;
+    if (actor.stats.wp[0] < weapon.manaCost) return false;
+    const current = actor.buffs.find(b => tiers.includes(b.id));
+    if (current && current.duration > 1) return false;
+    const nextId = current ? Math.min(current.id + 1, tiers[tiers.length - 1]) : tiers[0];
     e.useMana(actor, weapon.manaCost);
-    const owned = target.buffs.filter(b => tiers.includes(b.id)).length;
-    applyBuff(ctx, tiers[owned], actor, target, 2, buffQuality(weapon.def, weapon.quality));
+    for (const unit of e.aliveOf(actor.team)) {
+      if (current) unit.buffs = unit.buffs.filter(b => !(b.id === current.id && b.from === actor));
+      applyBuff(ctx, nextId, actor, unit, 3, buffQuality(weapon.def, weapon.quality));
+    }
+    actor.skippedAttack = true;
     return true;
   },
 
@@ -297,8 +308,8 @@ function applyBuff(ctx, buffId, from, target, duration, quality) {
 function weaponAbility(ctx, weapon, actor) {
   const ab = weapon.ability;
   if (!ab || ab.kind === 'none') return false;
-  // Taunt dipasang di awal turn (preTurn), bukan sebagai ability aktif.
-  if (ab.kind === 'taunt') return false;
+  // Dipasang di awal turn (preTurn), bukan sebagai ability aktif.
+  if (ab.kind === 'taunt' || ab.kind === 'attack_up_chain') return false;
   const handler = ABILITIES[ab.kind];
   if (!handler) return false;
   return handler(ctx, weapon, actor) === true;

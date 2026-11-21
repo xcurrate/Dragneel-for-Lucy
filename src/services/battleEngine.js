@@ -157,9 +157,10 @@ function heal(ctx, target, amount, from, { overheal = false, revive = false } = 
   return Math.round(total);
 }
 
-function replenish(ctx, target, amount, from) {
+// `overreplenish` mengizinkan WP melewati maksimum hingga 150% (OwO: Arcane Scepter).
+function replenish(ctx, target, amount, from, { overreplenish = false } = {}) {
   if (!target || !isAlive(target)) return 0;
-  const cap = maxWp(target);
+  const cap = maxWp(target) * (overreplenish ? 1.5 : 1);
   if (target.stats.wp[0] >= cap) return 0;
   const bucket = { amount, bonus: 0 };
 

@@ -422,3 +422,8 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
 - **`heal()` menolak target ber-HP 0 kecuali `{ revive: true }`.** Resurrection Staff menyetel
   `hp[0] = 0` lalu memanggil `heal`; tanpa flag itu rekan tidak pernah benar-benar hidup dan
   hanya WP yang terbuang. Target revive mengikuti `WeaponInterface.getDead()` (slot pertama).
+- **Vanguard's Banner juga `preTurn`, bukan ability aktif.** OwO memasang Attack Up ke *semua*
+  rekan selama 3 turn dan menaikkan tier (6 → 7 → 8) saat buff lama tinggal ≤1 turn; unit lalu
+  melewati serangan di turn itu (`skippedAttack`). Arcane Scepter boleh `overreplenish` 150%.
+- **Angka mengikuti `qualityList` di kode OwO, bukan deskripsi `?%`.** Deskripsi sengaja
+  menyembunyikan nilainya; Sacrifice misalnya `[[50,75],[50,75]]` — jangan "menebak" dari teks.

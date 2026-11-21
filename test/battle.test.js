@@ -1481,8 +1481,54 @@ describe('Resurrection Staff', () => {
   });
 });
 
+describe("Vanguard's Banner", () => {
+  function setup() {
+    const rng = rngModule.createRng(11);
+    const unit = engine.buildUnit({ label: 'banner', level: 50, coeffs: COEFFS_STRONG, weapon: { id: 16 } }, rng);
+    const ally = engine.buildUnit({ label: 'ally', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const foe = engine.buildUnit({ label: 'foe', level: 50, coeffs: COEFFS_STRONG }, rng);
+    unit.team = [unit, ally]; unit.foes = [foe];
+    ally.team = unit.team; ally.foes = unit.foes;
+    foe.team = [foe]; foe.foes = unit.team;
+    return { rng, unit, ally, foe, ctx: { rng, tags: new Set(), damageDealt: 0 } };
+  }
+
+  it('memasang Attack Up ke semua rekan di preTurn, bukan ability aktif', () => {
+    const { unit, ally, ctx } = setup();
+    assert.strictEqual(weaponModule.weaponAbility(ctx, unit.weapon, unit), false, 'bukan ability aktif');
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    for (const member of [unit, ally]) {
+      const buff = member.buffs.find(b => b.id === 6);
+      assert.ok(buff, `${member.label} mendapat Attack Up`);
+      assert.strictEqual(buff.duration, 3, 'durasi 3 turn seperti OwO');
+    }
+  });
+
+  it('menaikkan tier ke Attack Up+ setelah buff lama hampir habis', () => {
+    const { unit, ctx } = setup();
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    unit.buffs.find(b => b.id === 6).duration = 1;
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    assert.ok(unit.buffs.some(b => b.id === 7), 'tier naik ke Attack Up+');
+    assert.ok(!unit.buffs.some(b => b.id === 6), 'Attack Up lama dilepas');
+  });
+
+  it('tidak memasang apa pun bila buff masih berjalan atau WP kurang', () => {
+    const { unit, ctx } = setup();
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    const before = unit.buffs.filter(b => b.id === 6).length;
+    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    assert.strictEqual(unit.buffs.filter(b => b.id === 6).length, before, 'tidak menumpuk');
+
+    const poor = setup();
+    poor.unit.stats.wp[0] = poor.unit.weapon.manaCost - 1;
+    poor.unit.weapon.preTurn(poor.ctx, poor.unit, poor.unit.team, poor.unit.foes);
+    assert.strictEqual(poor.unit.buffs.length, 0, 'WP kurang tidak memasang buff');
+  });
+});
+
 describe('Sacrifice', () => {
-  it('memakai 25-50% Max HP dan 15-35% Max WP sesuai deskripsi', () => {
+  it('memakai 50-75% Max HP dan WP sesuai qualityList OwO', () => {
     const rng = rngModule.createRng(5);
     const dead = engine.buildUnit({ label: 'mati', level: 50, coeffs: COEFFS_STRONG }, rng);
     const ally = engine.buildUnit({ label: 'ally', level: 50, coeffs: COEFFS_STRONG }, rng);
@@ -1499,8 +1545,8 @@ describe('Sacrifice', () => {
     const maxWp = engine.maxWp(dead);
     const healed = ally.stats.hp[0] - 1;
     const refilled = ally.stats.wp[0];
-    assert.ok(healed >= maxHp * 0.25 - 50 && healed <= maxHp * 0.5 + 50, `heal ${healed} di luar 25-50% dari ${maxHp}`);
-    assert.ok(refilled >= maxWp * 0.15 - 50 && refilled <= maxWp * 0.35 + 50, `WP ${refilled} di luar 15-35% dari ${maxWp}`);
+    assert.ok(healed >= maxHp * 0.5 - 50 && healed <= maxHp * 0.75 + 50, `heal ${healed} di luar 50-75% dari ${maxHp}`);
+    assert.ok(refilled >= maxWp * 0.5 - 50 && refilled <= maxWp * 0.75 + 50, `WP ${refilled} di luar 50-75% dari ${maxWp}`);
   });
 });
 
