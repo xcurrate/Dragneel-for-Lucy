@@ -21,14 +21,17 @@ const ANIMAL = process.env.LIVE_TEST_ANIMAL || 'pidgeotto';
 
 const userToken = process.env.USER_DISCORD_TOKEN;
 const botToken = process.env.DISCORD_TOKEN;
-const botId = process.env.LUCY_BOT_ID;
+let botMe = null;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function call(token, route, opts = {}) {
+  // Bot memakai skema "Bot <token>"; token akun dikirim apa adanya. Tanpa
+  // pembeda ini Discord menolak token bot dengan 401.
+  const authorization = token === botToken ? `Bot ${token}` : token;
   const res = await fetch(API + route, {
     ...opts,
-    headers: { Authorization: token, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: { Authorization: authorization, 'Content-Type': 'application/json', ...(opts.headers || {}) },
   });
   const text = await res.text();
   if (!res.ok) {
@@ -43,7 +46,6 @@ function preflight() {
   const missing = [
     !userToken && 'USER_DISCORD_TOKEN',
     !botToken && 'DISCORD_TOKEN',
-    !botId && 'LUCY_BOT_ID',
   ].filter(Boolean);
   if (missing.length) {
     console.error(`❌ Variabel belum ada: ${missing.join(', ')}`);
@@ -55,13 +57,15 @@ function preflight() {
 
 // Bot menjawab dengan pesan baru, lalu hasil akhirnya menimpa pesan yang sama.
 // Tunggu sampai isi pesan berhenti berubah agar yang dibaca adalah hasil akhir.
-async function waitReply(afterId, { timeout = 120000 } = {}) {
+// Yang dijawab adalah bot pemilik DISCORD_TOKEN (perintah `d`), bukan Lucy yang
+// hanya mengirim pesan boss.
+async function waitReply(afterId, replyBotId, { timeout = 120000 } = {}) {
   const deadline = Date.now() + timeout;
   let last = null;
   let stable = 0;
   while (Date.now() < deadline) {
     const msgs = await call(botToken, `/channels/${CHANNEL}/messages?limit=15`);
-    const mine = msgs.filter(m => m.author.id === botId && BigInt(m.id) > BigInt(afterId));
+    const mine = msgs.filter(m => m.author.id === replyBotId && BigInt(m.id) > BigInt(afterId));
     if (mine.length) {
       const current = mine[0];
       const sig = JSON.stringify(current.embeds?.[0] || current.content);
@@ -106,7 +110,7 @@ function render(label, msg) {
     process.exit(2);
   }
   try {
-    await call(botToken, '/users/@me');
+    botMe = await call(botToken, '/users/@me');
   } catch (err) {
     console.error(`❌ Token bot ditolak Discord: ${err.message}`);
     process.exit(2);
@@ -119,7 +123,7 @@ function render(label, msg) {
       body: JSON.stringify({ content: command }),
     });
     created.push(sent.id);
-    const reply = await waitReply(sent.id);
+    const reply = await waitReply(sent.id, botMe.id);
     render(`${label}  »  ${command}`, reply);
     console.log();
     return reply;
