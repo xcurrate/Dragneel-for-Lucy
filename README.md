@@ -457,6 +457,40 @@ Kutukan tidak dipasang ulang pada musuh yang sudah terkena. Kalau dipasang tiap
 giliran, aturan `merge` akan menggabung durasi dan kutukan bertahan jauh lebih
 lama dari 2 turn yang disebut sumber — sekaligus membuang 140 WP tanpa hasil.
 
+### Bleeding Gaze, Conduit Claw, Corruption, Scepter
+
+Empat senjata yang biayanya atau efeknya tidak lazim, jadi perlu dicatat:
+
+- **Bleeding Gaze** (`bgaze`) — biaya WP **0**, diganti biaya HP 20-10% Max HP.
+  Karena biayanya nol, `act()` di mesin tidak boleh mensyaratkan `manaCost`
+  truthy; kalau tidak, ability-nya tidak pernah dipanggil. Kalau musuh lebih
+  dari satu, satu musuh dipaksa menyerang rekannya dengan efektivitas 30-50%;
+  kalau musuh hanya satu, damage langsung 150-200% MAG.
+- **Conduit Claw** (`cclaw`) — memindahkan satu debuff dari musuh ke sekutu
+  musuh yang punya buff terbanyak, lalu efektivitasnya dipotong 20-50%.
+  Tanpa debuff atau tanpa sekutu, senjata ini tidak memakai WP dan menyerang
+  biasa.
+- **Staff of Corruption** (`cstaff`) — menurunkan efektivitas buff musuh acak
+  menjadi 70-50%, lalu memberi damage 80-120% STR. Persen buff yang dilemahkan
+  dihitung dari `effectiveness`, bukan dengan mengubah angka aslinya.
+- **Scepter of Celebrations** (`cscept`) — memasang Anniversary Blessing 2 turn
+  ke seluruh tim tiap 4 giliran (turn 1, 5, 9, ...), memakai `ctx.turn`.
+
+Anniversary Blessing: ATT & MAG +15-50%, PR & MR +10-30%, heal 5-10% Max HP
+tiap akhir turn. Tiga slot quality-nya terpisah, jadi `quality=` di slot
+senjata memotong tiga angka sekaligus.
+
+**Efektivitas buff** kini satu jalur untuk semua buff yang memakainya
+(`eff()` di `battleBuffs.js`). Sebelumnya hanya Wither yang punya konsep ini,
+dan angkanya dikalikan langsung di tiap hook.
+
+### Adaptation (pasif 27)
+
+Tiap menerima damage, dapat satu stack resistensi 5-10% terhadap tipe damage
+terakhir. Stack Physical dan Magical dihitung terpisah (sumber menyebut dua
+ikon berbeda: Stoneskin dan Spellskin). Stack baru berlaku setelah damage yang
+memicunya, dan totalnya dibatasi 80% agar damage tidak pernah nol.
+
 ### Tier senjata
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
@@ -481,15 +515,15 @@ memengaruhi hasil pertarungan.
 
 ### Sumber angka
 
-- `src/data/owoBattle.js` — 20 hewan, 24 senjata, 15 buff, plus formula.
+- `src/data/owoBattle.js` — 20 hewan, 28 senjata, 16 buff, plus formula.
   Angkanya dibaca langsung dari tabel OwO, bukan perkiraan.
-- `src/data/owoPassives.json` — 21 pasif (lihat bagian di bawah).
+- `src/data/owoPassives.json` — 22 pasif (lihat bagian di bawah).
 - `src/data/owoPending.json` — senjata/pasif yang nama dan alias-nya sudah
   dikenal tetapi stat serta ability-nya belum ada. Dipakai agar input seperti
-  `weapon=cstaff` dijawab "belum punya data simulasi", bukan "tidak dikenal".
+  `weapon=stithe` dijawab "belum punya data simulasi", bukan "tidak dikenal".
 - `src/services/battleEngine.js` — turn loop, damage, resistensi, heal, WP.
-- `src/services/battleWeapon.js` — ability 22 senjata.
-- `src/services/battleBuffs.js` — 12 buff/debuff.
+- `src/services/battleWeapon.js` — ability 26 senjata.
+- `src/services/battleBuffs.js` — 16 buff/debuff.
 - `src/services/battlePassives.js` — hook pasif.
 - `src/services/battleSim.js` — batch simulasi + parsing stat.
 - `src/utils/battleTeamStorage.js` — penyimpanan tim (`data/battle-teams.db`).

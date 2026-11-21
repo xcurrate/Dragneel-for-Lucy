@@ -46,6 +46,7 @@ const STACK = {
   13: 'independent', // Sacred Ward: tiap stack instance terpisah
   14: 'merge', // Wither: durasi digabung, persennya tidak dijumlah
   15: 'merge', // Midnight Curse: idem, satu kutukan per unit
+  16: 'merge', // Anniversary Blessing: pasang ulang memperpanjang durasi
 };
 
 // `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
@@ -65,17 +66,26 @@ function buffDamage(ctx, from, target, stat, multiplier, type) {
 
 function damageReduction(stats) {
   return {
+    effectiveness: 1,
     attacked(ctx, unit, attacker, bucket) {
-      bucket.bonus -= ((bucket.amount + bucket.bonus) * stats[0]) / 100;
+      bucket.bonus -= (bucket.amount + bucket.bonus) * eff(this, stats[0]);
     },
   };
+}
+
+// Efektivitas mengalikan semua persen milik buff. Dipakai Wither (melemah saat
+// menyebar) dan Staff of Corruption (menurunkan buff musuh). Dibaca lewat
+// `this.effectiveness`, bukan dari `stats`, supaya angka aslinya tetap utuh.
+function eff(self, pct) {
+  return (pct * (self.effectiveness ?? 1)) / 100;
 }
 
 function attackUp(def, stats, from) {
   return {
     id: def.id, name: def.name, debuff: false, stats, duration: 2, from,
+    effectiveness: 1,
     attack(ctx, unit, target, bucket) {
-      bucket.bonus += (bucket.amount * stats[0]) / 100;
+      bucket.bonus += bucket.amount * eff(this, stats[0]);
     },
   };
 }
@@ -177,15 +187,15 @@ const FACTORIES = {
     id: 14, name: def.name, debuff: true, stats, duration: 2, from,
     effectiveness: 1,
     healed(ctx, unit, healer, bucket) {
-      bucket.bonus -= (bucket.amount * stats[0] * this.effectiveness) / 100;
+      bucket.bonus -= bucket.amount * eff(this, stats[0]);
     },
     replenished(ctx, unit, healer, bucket) {
-      bucket.bonus -= (bucket.amount * stats[1] * this.effectiveness) / 100;
+      bucket.bonus -= bucket.amount * eff(this, stats[1]);
     },
     postTurn(ctx, unit, team, foes) {
       if (unit.stats.hp[0] <= 0) return;
       const e = engine();
-      if (ctx.rng.next() * 100 >= stats[2] * this.effectiveness) return;
+      if (ctx.rng.next() >= eff(this, stats[2])) return;
       const targets = e.aliveOf(foes).filter(u => !u.buffs.some(b => b.id === 14));
       const target = e.pickRandom(targets, ctx.rng);
       if (!target) return;
@@ -215,6 +225,25 @@ const FACTORIES = {
       // Kehilangan WP dihitung dari Max WP, bukan dari WP yang tersisa.
       const drain = (e.maxWp(unit) * (def.wpDrain ?? 20)) / 100;
       if (drain > 0) unit.stats.wp[0] = Math.max(0, unit.stats.wp[0] - drain);
+    },
+  }),
+
+  // Anniversary Blessing: naikkan ATT/MAG (stats[0]), PR/MR (stats[1]), dan
+  // heal persen Max HP tiap akhir turn (stats[2]). Slot-nya tiga, sesuai
+  // qualityList sumber, sehingga `buffQuality` memotong tiga angka.
+  16: (def, stats, from) => ({
+    id: 16, name: def.name, debuff: false, stats, duration: 2, from,
+    effectiveness: 1,
+    attack(ctx, unit, target, bucket) {
+      bucket.bonus += bucket.amount * eff(this, stats[0]);
+    },
+    attacked(ctx, unit, attacker, bucket) {
+      bucket.bonus -= (bucket.amount + bucket.bonus) * eff(this, stats[1]);
+    },
+    postTurn(ctx, unit) {
+      if (unit.stats.hp[0] <= 0) return;
+      const e = engine();
+      e.heal(ctx, unit, (e.maxHp(unit) * eff(this, stats[2])), from);
     },
   }),
 

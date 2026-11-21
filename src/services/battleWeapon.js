@@ -103,6 +103,9 @@ function buildWeapon(spec, rng, globalQuality) {
   if (def.ability?.kind === 'curse_all') {
     weapon.preTurn = (ctx, unit, team, foe) => ABILITIES.curse_all(ctx, weapon, unit, foe);
   }
+  if (def.ability?.kind === 'anniversary') {
+    weapon.preTurn = (ctx, unit) => ABILITIES.anniversary(ctx, weapon, unit);
+  }
   return weapon;
 }
 
@@ -281,6 +284,97 @@ const ABILITIES = {
     return true;
   },
 
+  // Scepter of Celebrations: tiap 4 giliran memasang Anniversary Blessing ke
+  // seluruh tim. Penghitungnya per unit (`ctx.turn`) supaya tidak bergantung
+  // pada urutan giliran.
+  anniversary(ctx, weapon, actor) {
+    const e = require('./battleEngine');
+    const ab = weapon.ability;
+    const every = ab.interval || 4;
+    const turn = ctx.turn || 1;
+    if ((turn - 1) % every !== 0) return false;
+    if (actor.stats.wp[0] < weapon.manaCost) return false;
+    e.useMana(actor, weapon.manaCost);
+    for (const ally of e.aliveOf(actor.team)) {
+      applyBuff(ctx, weapon.def.buffList[0], actor, ally, ab.duration, buffQuality(weapon.def, weapon.quality));
+    }
+    return true;
+  },
+
+  // Bleeding Gaze: biaya WP 0, biaya HP 20-10% Max HP. Satu musuh dipaksa
+  // menyerang sekutunya dengan efektivitas senjata 30-50%; kalau musuh hanya
+  // satu, damage 150-200% MAG langsung ke dia.
+  bleeding_gaze(ctx, weapon, actor) {
+    const e = require('./battleEngine');
+    const ab = weapon.ability;
+    const enemies = e.aliveOf(actor.foes || []);
+    if (!enemies.length) return false;
+    const hpCost = e.maxHp(actor) * (weapon.stats[2] / 100);
+    if (actor.stats.hp[0] <= hpCost) return false;
+    e.useMana(actor, weapon.manaCost);
+    actor.stats.hp[0] -= hpCost;
+
+    const target = e.pickRandom(enemies, ctx.rng);
+    if (!target) return true;
+    const allies = e.aliveOf(target.team).filter(u => u !== target);
+    if (!allies.length) {
+      const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[1] / 100, ctx.rng);
+      e.inflictDamage(ctx, actor, target, raw, e.MAGICAL);
+      return true;
+    }
+    // Serangan paksa: target memakai senjatanya sendiri, tapi efektivitasnya
+    // dipotong ke stats[0]. Efek debuff-nya tetap menempel seperti serangan biasa.
+    const victim = e.pickRandom(allies, ctx.rng);
+    const raw = e.getDamage(target.stats.att, weapon.stats[0] / 100, ctx.rng);
+    e.inflictDamage(ctx, target, victim, raw, e.PHYSICAL);
+    return true;
+  },
+
+  // Conduit Claw: pindahkan satu debuff dari musuh ke sekutu dengan buff
+  // terbanyak, efektivitasnya dipotong, lalu beri damage MAG ke musuh itu.
+  conduit(ctx, weapon, actor) {
+    const e = require('./battleEngine');
+    const ab = weapon.ability;
+    const targets = e.aliveOf(actor.foes || []).filter(u => u.buffs.some(b => b.debuff));
+    const target = e.pickRandom(targets, ctx.rng);
+    if (!target) return false;
+    const allies = e.aliveOf(actor.team);
+    if (!allies.length) return false;
+    // "Sekutu dengan buff terbanyak" milik tim musuh, bukan tim pemakai.
+    const receiver = target.team
+      .filter(u => e.isAlive(u) && u !== target)
+      .sort((a, b) => b.buffs.length - a.buffs.length)[0];
+    if (!receiver) return false;
+    e.useMana(actor, weapon.manaCost);
+
+    const idx = target.buffs.findIndex(b => b.debuff);
+    const [moved] = target.buffs.splice(idx, 1);
+    moved.effectiveness = (moved.effectiveness ?? 1) * (1 - weapon.stats[0] / 100);
+    moved.from = actor; // stat caster asli tetap dipakai, hanya pemberinya berubah
+    e.bindBuff(ctx, receiver, moved);
+
+    const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[1] / 100, ctx.rng);
+    e.inflictDamage(ctx, actor, target, raw, e.MAGICAL);
+    return true;
+  },
+
+  // Staff of Corruption: efektivitas buff musuh acak turun ke 70-50%, lalu buff
+  // itu mengenai pemakai sebesar 80-120% STR.
+  corrupt_buff(ctx, weapon, actor) {
+    const e = require('./battleEngine');
+    const ab = weapon.ability;
+    const targets = e.aliveOf(actor.foes || []).filter(u => u.buffs.length);
+    const target = e.pickRandom(targets, ctx.rng);
+    if (!target) return false;
+    e.useMana(actor, weapon.manaCost);
+
+    const buff = e.pickRandom(target.buffs, ctx.rng);
+    buff.effectiveness = (buff.effectiveness ?? 1) * (weapon.stats[0] / 100);
+    const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[1] / 100, ctx.rng);
+    e.inflictDamage(ctx, actor, target, raw, e.PHYSICAL);
+    return true;
+  },
+
   celebration(ctx, weapon, actor) {
     const e = require('./battleEngine');
     const target = e.lowestHp(actor.team, 10);
@@ -335,6 +429,7 @@ function weaponAbility(ctx, weapon, actor) {
   if (!ab || ab.kind === 'none') return false;
   // Dipasang di awal turn (preTurn), bukan sebagai ability aktif.
   if (ab.kind === 'taunt' || ab.kind === 'attack_up_chain' || ab.kind === 'curse_all') return false;
+  if (ab.kind === 'anniversary') return false;
   const handler = ABILITIES[ab.kind];
   if (!handler) return false;
   return handler(ctx, weapon, actor) === true;

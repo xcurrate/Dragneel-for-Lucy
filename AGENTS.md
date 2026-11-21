@@ -506,3 +506,20 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   kosong; tes menerima `defaultEmoji` ATAU `emojiNote`. `resolve()` di `battleEmoji`
   tetap jatuh ke ikon netral kalau client Discord belum punya emoji itu di cache —
   itu wajar di tes, bukan bug.
+- **`id` internal ≠ `owoId`.** Senjata lama memakai id 1-22 (urutan internal), sedangkan
+  OwO punya id resmi sendiri (Flame Staff 10 vs 110, Glacial Axe 15 vs 115). JANGAN
+  renumber `id`: dipakai tes, penyimpanan tim, dan alias. Id resmi disimpan di `owoId`.
+  Saat menambah senjata baru, `id` internal dimulai dari 123 dan `owoId` boleh sama.
+- **Alias harus unik lintas senjata DAN pending.** `bgaze`/`cclaw`/`cstaff` dulu menunjuk
+  Burning Gaze/Cursed Claw/Cursed Staff; deskripsi live memindahkannya ke Bleeding
+  Gaze/Conduit Claw/Staff of Corruption. Saat memindahkan alias, hapus dari
+  `owoPending.json` dan catat di `aliasNotes`, kalau tidak alias lama tetap menang.
+- **`act()` wajib memeriksa ability, bukan `manaCost`.** Bleeding Gaze berbiaya WP 0;
+  gerbang lama `if (weapon.manaCost && ...)` membuat ability-nya tidak pernah jalan
+  (bug senyap: senjata tampak normal, hanya efeknya hilang).
+- **`ctx.turn`** diisi `runTurn` dan dipakai senjata berjadwal (Scepter: tiap 4 turn).
+  Kalau membuat hook `preTurn` baru yang butuh nomor giliran, jangan pakai `ctx.tags`.
+- **Efektivitas buff lewat `eff(self, pct)`.** Jangan kalikan `this.effectiveness`
+  manual di tiap hook; `eff()` sudah menangani `undefined` (default 1).
+- **`d team add` hanya menerima pasif numerik (`passive=27`).** Alias pasif (`adapt`,
+  `sg`) hanya berlaku di `dtm s`/`dtm w`. Ini perilaku lama, bukan bug baru.

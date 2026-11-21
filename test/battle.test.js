@@ -21,8 +21,8 @@ const COEFFS_WEAK = { hp: 4, att: 2, pr: 3, wp: 1, mag: 1, mr: 2 };
 describe('data battle OwO', () => {
   it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
     assert.strictEqual(data.animals().length, 20);
-    assert.strictEqual(data.weapons().length, 24);
-    assert.strictEqual(data.buffs().length, 15);
+    assert.strictEqual(data.weapons().length, 28);
+    assert.strictEqual(data.buffs().length, 16);
   });
 
   it('mencari hewan lewat alias', () => {
@@ -939,6 +939,177 @@ describe('Withering Staff dan Wither', () => {
   });
 });
 
+describe('batch senjata baru: Bleeding Gaze, Conduit Claw, Corruption, Scepter', () => {
+  const engine = require(path.join(ROOT, 'src/services/battleEngine'));
+  const buffs = require(path.join(ROOT, 'src/services/battleBuffs'));
+  const { buildWeapon, weaponAbility } = require(path.join(ROOT, 'src/services/battleWeapon'));
+  const rng = { next: () => 0.5 };
+  const unit = (name, stats = {}) => ({
+    pid: name, slot: name, nickname: name, level: 60,
+    stats: Object.assign({
+      hp: [5000, 5000, 5000, 0], wp: [2000, 2000, 2000, 0],
+      mag: [1000, 0], att: [500, 0], pr: [0, 0], mr: [0, 0],
+    }, stats),
+    buffs: [], weapon: null, team: [], foes: [],
+  });
+  // `team`/`foes` dipasang di tiap unit, bukan di array-nya.
+  const link = (me, them) => {
+    for (const u of me) { u.team = me; u.foes = them; }
+    for (const u of them) { u.team = them; u.foes = me; }
+  };
+  const ctxOf = () => ({ rng, damageDealt: 0, tags: new Set(), turn: 1 });
+
+  it('mengenali alias baru dari deskripsi sumber', () => {
+    const pairs = {
+      flamestaff: 10, absorbwand: 9, glacialaxe: 15, leechscythe: 20, foulfish: 21,
+      bgaze: 123, cclaw: 124, cstaff: 125, cscept: 131,
+    };
+    for (const [alias, id] of Object.entries(pairs)) {
+      assert.strictEqual(data.findWeapon(alias).id, id, `alias ${alias}`);
+    }
+  });
+
+  it('menyimpan ID resmi OwO tanpa mengubah ID internal', () => {
+    const pairs = [[9, 109], [10, 110], [15, 115], [20, 120], [21, 121]];
+    for (const [internal, owo] of pairs) {
+      const w = data.weapons().find(x => x.id === internal);
+      assert.strictEqual(w.owoId, owo, `${w.name} owoId`);
+    }
+  });
+
+  it('Flame meledak 80-110% saat menimpa, bukan 70-100%', () => {
+    const flame = createBuff(3, { quality: [100, 100] });
+    assert.deepStrictEqual(flame.stats, [40, 110]);
+  });
+
+  it('Bleeding Gaze: biaya HP 20-10% Max HP, bukan WP', () => {
+    const me = [unit('me')];
+    const them = [unit('e1'), unit('e2')];
+    link(me, them);
+    me[0].weapon = buildWeapon({ id: 123 }, rng, 100);
+    assert.strictEqual(me[0].weapon.manaCost, 0, 'biaya WP 0');
+    assert.deepStrictEqual(me[0].weapon.stats, [50, 200, 10]);
+    const hp0 = me[0].stats.hp[0];
+    assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0], me, them), true);
+    assert.strictEqual(me[0].stats.hp[0], hp0 - 500, 'biaya 10% dari 5000');
+  });
+
+  it('Bleeding Gaze tetap dipakai walau biaya WP 0', () => {
+    // Regresi: `act()` dulu mensyaratkan manaCost truthy, sehingga ability
+    // berbiaya 0 tidak pernah dipanggil.
+    const me = [unit('me')];
+    const them = [unit('e1')];
+    link(me, them);
+    me[0].weapon = buildWeapon({ id: 123 }, rng, 100);
+    engine.runTurn(ctxOf(), me, them);
+    assert.ok(them[0].stats.hp[0] < 5000, 'musuh tunggal kena damage langsung');
+  });
+
+  it('Bleeding Gaze: musuh tunggal kena 150-200% MAG, bukan serangan paksa', () => {
+    const me = [unit('me')];
+    const them = [unit('e1')];
+    link(me, them);
+    me[0].weapon = buildWeapon({ id: 123 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, them);
+    assert.strictEqual(them[0].stats.hp[0], 3000, '200% x 1000 MAG');
+  });
+
+  it('Conduit Claw memindahkan debuff ke sekutu musuh dan melemahkannya', () => {
+    const me = [unit('me')];
+    const them = [unit('e1'), unit('e2')];
+    link(me, them);
+    them[0].buffs.push(createBuff(15, { quality: [100], from: them[0], rng }));
+    them[1].buffs.push(createBuff(6, { quality: [100], from: them[1], rng }));
+    me[0].weapon = buildWeapon({ id: 124 }, rng, 100);
+    assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0], me, them), true);
+    assert.strictEqual(them[0].buffs.some(b => b.id === 15), false, 'debuff pindah');
+    const moved = them[1].buffs.find(b => b.id === 15);
+    assert.ok(moved, 'debuff ada di sekutu dengan buff terbanyak');
+    assert.strictEqual(moved.effectiveness, 0.5, 'efektivitas -50%');
+    assert.strictEqual(them[0].stats.hp[0], 3300, '170% x 1000 MAG');
+  });
+
+  it('Conduit Claw tidak memakai WP bila tidak ada debuff atau tidak ada sekutu', () => {
+    const me = [unit('me')];
+    const them = [unit('e1')];
+    link(me, them);
+    me[0].weapon = buildWeapon({ id: 124 }, rng, 100);
+    const wp0 = me[0].stats.wp[0];
+    assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0], me, them), false);
+    assert.strictEqual(me[0].stats.wp[0], wp0);
+  });
+
+  it('Staff of Corruption menurunkan efektivitas buff musuh', () => {
+    const me = [unit('me')];
+    const them = [unit('e1')];
+    link(me, them);
+    const up = createBuff(6, { quality: [100], from: them[0], rng });
+    them[0].buffs.push(up);
+    me[0].weapon = buildWeapon({ id: 125 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, them);
+    assert.strictEqual(up.effectiveness, 0.5, 'turun ke 50%');
+    const bucket = { amount: 100, bonus: 0 };
+    up.attack(ctxOf(), them[0], me[0], bucket);
+    assert.strictEqual(bucket.amount + bucket.bonus, 112.5, 'buff 25% jadi 12.5%');
+    assert.strictEqual(them[0].stats.hp[0], 4400, '120% x 500 STR');
+  });
+
+  it('Anniversary Blessing: ATT/MAG, PR/MR, dan heal Max HP', () => {
+    const a = unit('a', { hp: [1000, 2000, 2000, 0] });
+    const b = unit('f');
+    a.buffs.push(createBuff(16, { quality: [100, 100, 100], from: a, rng }));
+    const bless = a.buffs[0];
+    let bucket = { amount: 100, bonus: 0 };
+    bless.attack(ctxOf(), a, b, bucket);
+    assert.strictEqual(bucket.amount + bucket.bonus, 150, '+50%');
+    bucket = { amount: 100, bonus: 0 };
+    bless.attacked(ctxOf(), a, b, bucket);
+    assert.strictEqual(bucket.amount + bucket.bonus, 70, '-30%');
+    bless.postTurn(ctxOf(), a, [a], [b]);
+    assert.strictEqual(a.stats.hp[0], 1200, '10% dari Max HP 2000');
+  });
+
+  it('Scepter of Celebrations memasang blessing tiap 4 giliran', () => {
+    const me = [unit('me')];
+    const them = [unit('e1')];
+    link(me, them);
+    me[0].weapon = buildWeapon({ id: 131 }, rng, 100);
+    const turns = [];
+    for (let t = 1; t <= 9; t++) {
+      const ctx = ctxOf();
+      ctx.turn = t;
+      const ok = me[0].weapon.preTurn(ctx, me[0], me, them);
+      turns.push(ok);
+      me[0].buffs = me[0].buffs.filter(x => x.id !== 16);
+    }
+    assert.deepStrictEqual(turns, [true, false, false, false, true, false, false, false, true]);
+  });
+
+  it('Adaptation menumpuk resistensi per tipe damage', () => {
+    const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
+    const me = unit('me', { hp: [100000, 100000, 100000, 0] });
+    const foe = unit('f');
+    link([me], [foe]);
+    const adapt = createPassive(27, [100], rng);
+    me.weapon = { id: 0, name: 'x', passives: [adapt], stats: [0], manaCost: 0, def: {}, quality: 100 };
+    const ctx = ctxOf();
+    const hits = [];
+    for (let i = 0; i < 3; i++) hits.push(engine.inflictDamage(ctx, foe, me, 1000, engine.PHYSICAL));
+    assert.deepStrictEqual(hits, [1000, 900, 800], 'stack pertama belum berlaku');
+    const magic = engine.inflictDamage(ctx, foe, me, 1000, engine.MAGICAL);
+    assert.strictEqual(magic, 1000, 'stack MAGICAL terpisah');
+  });
+
+  it('semua senjata baru bisa dipakai simulasi tanpa error', async () => {
+    const sim = require(path.join(ROOT, 'src/services/battleSim'));
+    const spec = id => ({ coeffs: { hp: 8, wp: 8, att: 6, mag: 5, pr: 2, mr: 1 }, level: 60, weapon: { id }, passives: [11] });
+    for (const id of [123, 124, 125, 131]) {
+      const r = await sim.simulate([spec(id)], [spec(1)], { runs: 20, seed: 7 });
+      assert.strictEqual(r.tally.player + r.tally.enemy + r.tally.tie, 20, `senjata ${id}`);
+    }
+  });
+});
+
 describe('Witching Hour dan Midnight Curse', () => {
   const buffs = require(path.join(ROOT, 'src/services/battleBuffs'));
   const engine = require(path.join(ROOT, 'src/services/battleEngine'));
@@ -1079,6 +1250,7 @@ describe('emoji battle', () => {
     for (const weapon of battle.weapons()) {
       // Senjata boleh tanpa 7 varian rank bila memakai satu emoji untuk semua
       // tier (`defaultEmoji`), atau bila ID-nya memang belum ada (`emojiNote`).
+      // Satu token juga sah selama catatannya menyebut varian lain belum ada.
       if (!weapon.emojis.length) {
         assert.ok(
           weapon.defaultEmoji || weapon.emojiNote,
@@ -1086,9 +1258,16 @@ describe('emoji battle', () => {
         );
         continue;
       }
-      assert.strictEqual(weapon.emojis.length, 7, `${weapon.name} punya emoji lengkap`);
+      if (weapon.emojis.length !== 7) {
+        assert.ok(weapon.emojiNote, `${weapon.name} dengan ${weapon.emojis.length} emoji harus punya emojiNote`);
+        continue;
+      }
     }
     for (const passive of passives) {
+      if (!passive.emojis.length) {
+        assert.ok(passive.emojiNote, `${passive.name} tanpa emoji harus punya emojiNote`);
+        continue;
+      }
       assert.strictEqual(passive.emojis.length, 7, `${passive.name} punya emoji lengkap`);
     }
   });
@@ -1288,7 +1467,8 @@ describe('dtm s memasang senjata ke slot', () => {
   });
 
   it('membedakan senjata belum ada mekanik dari tidak dikenal', () => {
-    assert.ok(run('s', 'cstaff', 'crit').includes('belum punya data simulasi'));
+    // `cstaff` sekarang sudah bermekanik, jadi contoh pending memakai Soul Tithe.
+    assert.ok(run('s', 'stithe', 'crit').includes('belum punya data simulasi'));
     assert.ok(run('s', 'zzz', 'crit').includes('tidak dikenal'));
   });
 
@@ -1353,7 +1533,7 @@ describe('alias senjata dan pasif', () => {
     store.createTeam('u', 'T');
     store.setActiveTeam('u', 'T');
     const replies = [];
-    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=cstaff'], 'd', {
+    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=stithe'], 'd', {
       sendEmbed: (m, e) => replies.push(e.toJSON()),
     });
     assert.ok(replies[0].description.includes('belum punya data simulasi'));
@@ -1365,7 +1545,13 @@ describe('alias senjata dan pasif', () => {
     const pending = battleData.pending;
     assert.ok(pending.weapons.length > 0 && pending.passives.length > 0);
     for (const w of pending.weapons) {
-      assert.ok(w.name && w.aliases.length, `${w.name} punya alias`);
+      assert.ok(w.name, `${w.name} punya nama`);
+      // Alias boleh habis bila semuanya sudah dipindah ke senjata yang sudah
+      // bermekanik; `aliasNotes` menjelaskan ke mana perginya.
+      if (!w.aliases.length) {
+        assert.ok(w.aliasNotes?.length, `${w.name} tanpa alias harus punya aliasNotes`);
+        continue;
+      }
       assert.strictEqual(battleData.findWeapon(w.aliases[0]), null, 'belum masuk data simulasi');
       assert.ok(battleData.findPendingWeapon(w.aliases[0]), 'terdaftar sebagai pending');
     }
@@ -1848,7 +2034,7 @@ describe('wiring mesin battle', () => {
     const single = createBuff(2, { quality: [100, 100] });
     assert.strictEqual(single.stats[0], 65, 'Poison q100 = 65%');
     const flame = createBuff(3, { quality: [100, 100] });
-    assert.deepStrictEqual(flame.stats, [40, 100], 'Flame q100 = [40, 100]');
+    assert.deepStrictEqual(flame.stats, [40, 110], 'Flame q100 = [40, 110]');
   });
 
   it('Rune of the Forgotten tidak punya ability aktif, hanya override serangan dasar', () => {

@@ -74,6 +74,25 @@ const PASSIVES = {
     },
   }),
 
+  // Adaptation: tiap kali menerima damage, dapat stack resistensi terhadap tipe
+  // damage terakhir. Stack dihitung terpisah untuk PHYSICAL dan MAGICAL karena
+  // sumber menyebut dua ikon berbeda (Stoneskin / Spellskin).
+  27: (stats) => ({
+    id: 27, name: 'Adaptation', stats,
+    stacks: { p: 0, m: 0 },
+    attacked(ctx, unit, attacker, bucket, type) {
+      const { PHYSICAL } = engine();
+      if (unit.stats.hp[0] <= 0) return;
+      const key = type === PHYSICAL ? 'p' : 'm';
+      // Stack baru berlaku setelah damage ini, supaya hit pertama tidak
+      // mengurangi damage yang memicunya.
+      // Dibatasi 80% supaya damage tidak pernah nol walau stack menumpuk.
+      const pct = Math.min(80, stats[0] * this.stacks[key]);
+      if (pct > 0) bucket.bonus -= (bucket.amount + bucket.bonus) * (pct / 100);
+      this.stacks[key] += 1;
+    },
+  }),
+
   11: (stats) => ({
     id: 11, name: 'Safeguard', stats,
     attacked(ctx, unit, attacker, bucket) {

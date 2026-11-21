@@ -614,8 +614,11 @@
       "aliases": [
         "wand",
         "absorb",
-        "awand"
+        "awand",
+        "absorbwand"
       ],
+      "owoId": 109,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
       "type": "MAGICAL",
       "qualityList": [
         [
@@ -653,8 +656,11 @@
       ],
       "aliases": [
         "fstaff",
-        "flame"
+        "flame",
+        "flamestaff"
       ],
+      "owoId": 110,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
       "type": "MAGICAL",
       "qualityList": [
         [
@@ -839,8 +845,11 @@
       "aliases": [
         "gaxe",
         "glacial",
-        "axe"
+        "axe",
+        "glacialaxe"
       ],
+      "owoId": 115,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
       "type": "PHYSICAL",
       "qualityList": [
         [
@@ -1032,8 +1041,11 @@
         "lscythe",
         "leeching",
         "lsyth",
-        "lsy"
+        "lsy",
+        "leechscythe"
       ],
+      "owoId": 120,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
       "type": "PHYSICAL",
       "qualityList": [
         [
@@ -1076,8 +1088,11 @@
       "aliases": [
         "ffish",
         "fish",
-        "foul"
+        "foul",
+        "foulfish"
       ],
+      "owoId": 121,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
       "type": "PHYSICAL",
       "qualityList": [
         [
@@ -1214,6 +1229,139 @@
         "Sumber tidak menyebut slot pasif; dipakai 1 mengikuti mayoritas senjata dan aturan rentang pasif global (1-2).",
         "Sumber tidak menyebut senjata ini menyerang; karena itu tidak ada damage langsung dan unit tetap melakukan serangan fisik biasa setelah kutukan terpasang."
       ]
+    },
+    {
+      "id": 123,
+      "name": "Bleeding Gaze",
+      "owoId": 123,
+      "emojis": [
+        "<:fbgaze:1550294886463438896>"
+      ],
+      "emojiNote": "Hanya emoji Fabled yang ada di repo. Varian common-lucky belum diberikan; render memakai token ini untuk semua tier sampai 7 token diisi.",
+      "aliases": [
+        "bleedinggaze",
+        "bgaze"
+      ],
+      "type": "MIXED",
+      "qualityList": [
+        [
+          30,
+          50
+        ],
+        [
+          150,
+          200
+        ],
+        [
+          20,
+          10
+        ]
+      ],
+      "manaRange": [
+        0,
+        0
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "bleeding_gaze",
+        "stat": "mag"
+      },
+      "abilityNote": "Biaya WP 0, biaya HP 20-10% Max HP (stats[2]). Satu musuh dipaksa menyerang sekutunya dengan 30-50% efektivitas; kalau musuh cuma satu, damage langsung 150-200% MAG."
+    },
+    {
+      "id": 124,
+      "name": "Conduit Claw",
+      "owoId": 124,
+      "emojis": [],
+      "emojiNote": "ID emoji `:fcclaw:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ⚔️.",
+      "aliases": [
+        "conduitclaw",
+        "cclaw"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          20,
+          50
+        ],
+        [
+          120,
+          170
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "conduit",
+        "stat": "mag"
+      },
+      "abilityNote": "Pindahkan satu debuff dari musuh ke sekutu dengan buff terbanyak, efektivitasnya -20-50%, lalu beri 120-170% MAG ke musuh itu."
+    },
+    {
+      "id": 125,
+      "name": "Staff of Corruption",
+      "owoId": 125,
+      "emojis": [],
+      "emojiNote": "ID emoji `:fcorstaff:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ⚔️.",
+      "aliases": [
+        "corruptionstaff",
+        "cstaff"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          70,
+          50
+        ],
+        [
+          80,
+          120
+        ]
+      ],
+      "manaRange": [
+        250,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "corrupt_buff",
+        "stat": "att"
+      },
+      "abilityNote": "Efektivitas buff musuh acak turun menjadi 70-50% dari nilai aslinya, lalu buff itu mengenai pemakai 80-120% STR."
+    },
+    {
+      "id": 131,
+      "name": "Scepter of Celebrations",
+      "owoId": 131,
+      "emojis": [],
+      "emojiNote": "ID emoji `:fcscept:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ⚔️.",
+      "aliases": [
+        "cscept",
+        "cscepter",
+        "scepterofcelebrations"
+      ],
+      "type": "BUFF",
+      "qualityList": [],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        16
+      ],
+      "ability": {
+        "kind": "anniversary",
+        "duration": 2,
+        "interval": 4
+      },
+      "abilityNote": "preTurn: tiap 4 giliran (turn 1, 5, 9, ...) memasang Anniversary Blessing 2 turn ke seluruh tim. Biaya 200-100 WP dibayar saat memasang."
     }
   ],
   "buffs": [
@@ -1251,11 +1399,11 @@
           40
         ],
         [
-          70,
-          100
+          80,
+          110
         ]
       ],
-      "note": "MAG di akhir turn 20-40%; menimpa Flame yang ada = ledakan 70-100%."
+      "note": "MAG di akhir turn 20-40%; menimpa Flame yang ada = ledakan 80-110%."
     },
     {
       "id": 4,
@@ -1421,6 +1569,26 @@
         "qualityList hanya memuat damage MAG (30%); sumber tidak menyebut quality untuk -20% damage, -40% heal, dan -20% Max WP, jadi ketiganya tetap di semua tier.",
         "Damage dari kutukan ini mengurangi angka damage, bukan peluang terkena; tidak ada roll RNG tambahan."
       ]
+    },
+    {
+      "id": 16,
+      "name": "Anniversary Blessing",
+      "debuff": false,
+      "qualityList": [
+        [
+          15,
+          50
+        ],
+        [
+          10,
+          30
+        ],
+        [
+          5,
+          10
+        ]
+      ],
+      "note": "ATT & MAG +15-50%, PR & MR +10-30%, dan heal 5-10% Max HP tiap akhir turn selama 2 turn."
     }
   ],
   "limits": {

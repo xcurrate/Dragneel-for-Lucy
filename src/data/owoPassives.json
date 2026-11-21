@@ -618,6 +618,28 @@
         "knowledge",
         "n"
       ]
+    },
+    {
+      "id": 27,
+      "name": "Adaptation",
+      "emojis": [],
+      "emojiNote": "ID emoji `:fadapt:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ✨.",
+      "category": "defense",
+      "summary": "Tiap kali menerima damage, dapat stack resistensi terhadap tipe damage terakhir (Physical: Stoneskin, Magical: Spellskin).",
+      "sourceText": "Gain **?%** resistance per stack against the last damage type received.",
+      "qualityList": [
+        [
+          5,
+          10
+        ]
+      ],
+      "hooks": [
+        "attacked"
+      ],
+      "aliases": [
+        "adapt",
+        "adaptation"
+      ]
     }
   ]
 }

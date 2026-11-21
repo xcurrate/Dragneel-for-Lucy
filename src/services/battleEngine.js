@@ -263,6 +263,8 @@ function bindBuff(ctx, target, buff) {
 }
 
 function runTurn(ctx, player, enemy) {
+  // Nomor giliran dipakai senjata berjadwal (Scepter of Celebrations: tiap 4 turn).
+  ctx.turn = (ctx.turn || 0) + 1;
   for (const [team, foe] of [[player, enemy], [enemy, player]]) {
     for (const unit of team) {
       if (!isAlive(unit)) continue;
@@ -332,7 +334,11 @@ function runTurn(ctx, player, enemy) {
 
 function act(ctx, actor, allies, foes) {
   const weapon = actor.weapon;
-  if (weapon && weapon.manaCost && actor.stats.wp[0] >= weapon.manaCost) {
+  // `manaCost` bisa 0 (Bleeding Gaze), jadi yang diperiksa keberadaan ability,
+  // bukan truthiness biayanya — kalau tidak, senjata berbiaya WP 0 tidak pernah
+  // memakai ability-nya.
+  const hasAbility = weapon && weapon.ability && weapon.ability.kind !== 'none';
+  if (hasAbility && actor.stats.wp[0] >= (weapon.manaCost || 0)) {
     if (weaponAbility(ctx, weapon, actor, allies, foes)) return;
   }
   basicAttack(ctx, actor, allies, foes);
