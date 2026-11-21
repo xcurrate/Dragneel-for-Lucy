@@ -498,8 +498,13 @@ jadi hit pertama selalu penuh.
 
 Damage ke boss +10-25% sesuai quality. Efek ini hanya berlaku bila sasaran
 **bertanda boss** (`spec.isBoss`); simulasi PvP, mirror, dan lawan tim biasa
-tidak terpengaruh karena lawannya bukan boss. Emoji yang tersedia dari sumber
-baru varian `fgslayer`, jadi token itu dipakai untuk semua rank.
+tidak terpengaruh karena lawannya bukan boss.
+
+Emoji mengikuti pola OwO: awalan huruf menandai rank — `c`ommon, `u`ncommon,
+`r`are, `e`pic, `m`ythical, `l`egendary, `f`abled. Jadi `fgslayer` adalah
+varian Fabled (quality 100), setara `fthorns` untuk Thorns. Sumber baru memberi
+ID untuk varian `fgslayer`; enam varian lain belum ada ID-nya, sehingga token
+itu sementara dipakai untuk semua rank (`emojiNote` di data mencatatnya).
 
 ### Tier senjata
 

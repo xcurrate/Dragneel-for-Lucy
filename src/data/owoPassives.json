@@ -642,8 +642,7 @@
         ]
       ],
       "note": "Hanya berlaku bila sasaran bertanda boss (ctx.isBoss). Battle PvP/mirror tidak terpengaruh karena lawan bukan boss.",
-      "defaultEmoji": "<:fgslayer:1552764472253358132>",
-      "emojiNote": "Hanya varian Fabled (`fgslayer`) yang diberikan sumber; satu token dipakai untuk semua rank.",
+      "emojiNote": "Pola OwO: awalan rank c/u/r/e/m/l/f (common..Fabled), jadi 7 token = cgslayer, ugslayer, rgslayer, egslayer, mgslayer, lgslayer, fgslayer. Baru fgslayer (Fabled, quality 100) yang punya ID; 6 lainnya belum diberikan sumber. Selama hanya satu token, token itu dipakai untuk semua rank.",
       "hooks": [
         "attack"
       ]
