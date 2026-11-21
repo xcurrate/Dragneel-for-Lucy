@@ -8,7 +8,13 @@ const ROOT = path.join(__dirname, '..');
 const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
 const globalSim = require(path.join(ROOT, 'src/services/globalSim'));
 const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
-const { handleSimCommand, handleGlobalLossButton, GLOBAL_COOLDOWN_MS } = require(path.join(ROOT, 'src/commands/battleSim'));
+const {
+  handleSimCommand, handleGlobalLossButton, resolveRunCount,
+  GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES,
+} = require(path.join(ROOT, 'src/commands/battleSim'));
+const engine = require(path.join(ROOT, 'src/services/battleEngine'));
+const core = require(path.join(ROOT, 'src/services/globalSimCore'));
+const rngModule = require(path.join(ROOT, 'src/services/battleRng'));
 
 // Stat kuat vs lemah supaya arah hasilnya pasti, bukan acak.
 const COEFFS_STRONG = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
@@ -43,10 +49,15 @@ describe('simulasi global', () => {
   });
 
   afterEach(() => {
+    // Kembali ke root sebelum direktori sementara dihapus: worker thread butuh
+    // cwd yang masih ada.
+    process.chdir(ROOT);
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); return { edit: async () => {} }; };
+  // Tanpa `.edit`, pengirim dianggap tidak bisa diedit: hasil akhir dikirim
+  // lewat sendPayload. Ini jalur yang dipakai tes untuk memeriksa payload.
+  const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); return null; };
 
   it('hanya memakai tim milik user lain sebagai lawan', () => {
     seedWorld();
@@ -249,5 +260,161 @@ describe('simulasi global', () => {
     assert.ok(body.includes('Streak'), 'ada rata-rata streak');
     assert.ok(body.includes('Kalah per tim'), 'ada rata-rata kalah');
     assert.ok(body.includes('menang') && body.includes('seri') && body.includes('kalah'));
+  });
+});
+
+describe('jumlah pertarungan simulasi global', () => {
+  it('memakai default yang besar supaya winrate stabil', () => {
+    assert.ok(DEFAULT_GLOBAL_RUNS >= 1000, `default ${DEFAULT_GLOBAL_RUNS}`);
+    const out = resolveRunCount({}, 5);
+    assert.strictEqual(out.value, DEFAULT_GLOBAL_RUNS);
+    assert.strictEqual(out.total, DEFAULT_GLOBAL_RUNS * 5);
+  });
+
+  it('menerima -m sebagai jumlah per tim', () => {
+    assert.strictEqual(resolveRunCount({ '-m': '500' }, 4).value, 500);
+    assert.strictEqual(resolveRunCount({ '-m': '500' }, 4).total, 2000);
+  });
+
+  it('membagi -total rata ke semua tim', () => {
+    const out = resolveRunCount({ '-total': '1000000' }, 8);
+    assert.strictEqual(out.value, 125000);
+    assert.strictEqual(out.total, 1000000);
+    // Pembulatan ke bawah: total tidak boleh melebihi yang diminta.
+    const odd = resolveRunCount({ '-total': '1000' }, 3);
+    assert.strictEqual(odd.value, 333);
+    assert.ok(odd.value * 3 <= 1000);
+  });
+
+  it('menolak permintaan di atas batas dan menyebut nilai maksimumnya', () => {
+    const out = resolveRunCount({ '-m': String(MAX_GLOBAL_BATTLES) }, 10);
+    assert.ok(out.error.includes('Terlalu besar'));
+    assert.ok(out.error.includes('Maksimum'));
+    assert.ok(resolveRunCount({ '-total': String(MAX_GLOBAL_BATTLES + 1) }, 2).error.includes('Maksimum'));
+  });
+
+  it('menolak -m dan -total sekaligus', () => {
+    const out = resolveRunCount({ '-m': '10', '-total': '100' }, 3);
+    assert.ok(out.error.includes('salah satu'));
+  });
+
+  it('menolak angka nol, negatif, dan bukan angka', () => {
+    for (const bad of ['0', '-5', 'abc', '1.5']) {
+      assert.ok(resolveRunCount({ '-m': bad }, 3).error, `-m ${bad} harus ditolak`);
+    }
+  });
+});
+
+describe('paralelisasi simulasi global', () => {
+  const COEFFS_A = { hp: 6, att: 5, pr: 4, wp: 4, mag: 5, mr: 4 };
+  const P = [{ slot: 1, label: 'p', level: 80, coeffs: COEFFS_A, customStats: true, animal: null, finalStats: null }];
+  const mk = (lv, i) => [{
+    slot: 1, label: 'e' + i, level: lv, coeffs: COEFFS_A,
+    customStats: true, animal: null, finalStats: null,
+    weapon: { id: 3, quality: 50 + i * 5, passives: [1] },
+  }];
+  const opps = [60, 80, 95, 101, 70].map((lv, i) => ({ label: 't' + i, teamId: i, specs: mk(lv, i) }));
+
+  // Referensi: jalankan sendiri lalu hitung streak dengan cara paling lugas.
+  function reference(seed, runs) {
+    const seq = [];
+    opps.forEach((o, idx) => {
+      for (let i = 0; i < runs; i++) {
+        seq.push(engine.runBattle(P, o.specs, { rng: rngModule.createRng(core.runSeed(seed, idx, i)) }).winner);
+      }
+    });
+    let cur = 0; let sum = 0; let count = 0; let max = 0;
+    const tally = { player: 0, enemy: 0, tie: 0 };
+    for (const w of seq) {
+      tally[w] += 1;
+      if (w === 'player') { cur += 1; max = Math.max(max, cur); }
+      else { if (cur > 0) { sum += cur; count += 1; } cur = 0; }
+    }
+    if (cur > 0) { sum += cur; count += 1; }
+    return { tally, max, avg: count ? Math.round((sum / count) * 10) / 10 : 0, count };
+  }
+
+  it('hasil sama persis antara 1, 3, dan 4 worker', async () => {
+    for (const seed of [7, 2024]) {
+      const ref = reference(seed, 20);
+      for (const workers of [1, 3, 4]) {
+        const r = await globalSim.runGlobalSim(P, opps, { runs: 20, seed, workers });
+        assert.deepStrictEqual(r.tally, ref.tally, `seed ${seed} worker ${workers}`);
+        assert.strictEqual(r.streak.max, ref.max, `streak max seed ${seed} worker ${workers}`);
+        assert.strictEqual(r.streak.avg, ref.avg, `streak avg seed ${seed} worker ${workers}`);
+        assert.strictEqual(r.streak.count, ref.count, `streak count seed ${seed} worker ${workers}`);
+      }
+    }
+  });
+
+  it('menghitung setiap pertarungan tepat satu kali walau dipecah antar-worker', async () => {
+    const r = await globalSim.runGlobalSim(P, opps, { runs: 37, seed: 11, workers: 4 });
+    assert.strictEqual(r.battles, 37 * opps.length);
+    const sum = r.tally.player + r.tally.enemy + r.tally.tie;
+    assert.strictEqual(sum, r.battles);
+    // Jumlah tim di kedua kelompok harus utuh, tidak terhitung per potongan.
+    assert.strictEqual(r.buckets.low.teams + r.buckets.high.teams, opps.length);
+  });
+
+  it('satu tim lawan pun tetap bisa dibagi ke beberapa worker', async () => {
+    const solo = [{ label: 'solo', teamId: 0, specs: mk(101, 0) }];
+    const r = await globalSim.runGlobalSim(P, solo, { runs: 30000, seed: 5 });
+    assert.strictEqual(r.battles, 30000);
+    assert.strictEqual(r.workers, globalSim.MAX_WORKERS);
+  });
+
+  it('memakai satu proses untuk simulasi kecil', () => {
+    assert.strictEqual(globalSim.planWorkers(5, 10), 1, '500 pertarungan terlalu kecil');
+    assert.strictEqual(globalSim.planWorkers(5, 100000), globalSim.MAX_WORKERS);
+  });
+
+  it('menggabungkan streak yang melewati batas potongan', async () => {
+    // Tim super kuat: semua menang, jadi streak harus sepanjang total pertarungan
+    // meski dipecah ke beberapa worker.
+    const dewa = [{
+      slot: 1, label: 'dewa', level: 900, customStats: true, animal: null, finalStats: null,
+      coeffs: { hp: 40, att: 40, pr: 10, wp: 10, mag: 40, mr: 10 },
+    }];
+    const cupu = [{ label: 'cupu', teamId: 1, specs: mk(1, 1) }];
+    const r = await globalSim.runGlobalSim(dewa, cupu, { runs: 50000, seed: 3 });
+    assert.strictEqual(r.tally.enemy, 0);
+    assert.strictEqual(r.streak.max, 50000, 'streak melintasi batas potongan');
+  });
+});
+
+describe('antrean simulasi global', () => {
+  const C = { hp: 6, att: 5, pr: 4, wp: 4, mag: 5, mr: 4 };
+  const P = [{ slot: 1, label: 'p', level: 80, coeffs: C, customStats: true, animal: null, finalStats: null }];
+  const opps = [70, 90].map((lv, i) => ({
+    label: 't' + i,
+    teamId: i,
+    specs: [{ slot: 1, label: 'e' + i, level: lv, coeffs: C, customStats: true, animal: null, finalStats: null }],
+  }));
+
+  it('menjalankan simulasi berat satu per satu, bukan bersamaan', async () => {
+    let peak = 0;
+    const runs = [1, 2, 3].map(seed => globalSim.runGlobalSim(P, opps, { runs: 2000, seed })
+      .then(result => {
+        peak = Math.max(peak, globalSim.queueInfo().active);
+        return result;
+      }));
+    const results = await Promise.all(runs);
+    assert.strictEqual(results.length, 3);
+    assert.strictEqual(peak, 1, 'hanya satu simulasi aktif pada satu waktu');
+    assert.deepStrictEqual(globalSim.queueInfo(), { active: 0, waiting: 0 });
+  });
+
+  it('menolak dengan pesan jelas saat antrean penuh', async () => {
+    // Isi antrean sampai batasnya.
+    const held = [];
+    for (let i = 0; i <= globalSim.MAX_QUEUE; i++) {
+      held.push(globalSim.runGlobalSim(P, opps, { runs: 3000, seed: 100 + i }));
+    }
+    await assert.rejects(
+      () => globalSim.runGlobalSim(P, opps, { runs: 10, seed: 9 }),
+      /Antrean simulasi penuh/
+    );
+    await Promise.all(held);
+    assert.deepStrictEqual(globalSim.queueInfo(), { active: 0, waiting: 0 });
   });
 });

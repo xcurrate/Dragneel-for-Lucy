@@ -78,7 +78,7 @@ function parseFlags(args) {
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const arg = String(args[i]).toLowerCase();
-    if (['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe'].includes(arg)) {
+    if (['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe', '-total', '-t'].includes(arg)) {
       flags[arg] = args[i + 1];
       i++;
       continue;
@@ -99,6 +99,16 @@ function parseFlags(args) {
 // mengadu tim melawan SEMUA tim tersimpan, jadi jauh lebih mahal.
 const GLOBAL_COOLDOWN_MS = 10000;
 const GLOBAL_COOLDOWN_ACTION = 'sim-global';
+
+// Default jauh lebih besar dari `dsim` karena tujuannya mengukur winrate yang
+// stabil. Dengan 5-11 tim lawan, 10.000 run per tim berarti puluhan ribu
+// pertarungan dan selesai dalam hitungan detik.
+const DEFAULT_GLOBAL_RUNS = 10000;
+
+// Batas per perintah. Diukur ~240 ribu pertarungan/detik dengan 4 worker, jadi
+// 10 juta kira-kira 40 detik: masih di bawah batas waktu interaksi Discord dan
+// jauh di atas kebutuhan normal.
+const MAX_GLOBAL_BATTLES = 10_000_000;
 
 // Hasil simulasi global disimpan sebentar di memori supaya tombol "lihat
 // kekalahan" bisa membacanya. Kunci = userId + token; token acak per simulasi
@@ -202,9 +212,57 @@ function globalUsage(prefix = 'd') {
     'Tombol **Lihat kekalahan** menampilkan tim mana saja yang mengalahkan kamu',
     '(hanya terlihat olehmu, senjata lawan disembunyikan).',
     '',
-    `Opsi: \`-m <jumlah>\` (default 100, berapa kali tiap tim dilawan), \`-s <seed>\``,
-    `Cooldown: **10 detik** untuk selain developer.`,
+    `Opsi:`,
+    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${DEFAULT_GLOBAL_RUNS.toLocaleString('id-ID')})`,
+    `\`-total <jumlah>\` total pertarungan, dibagi rata ke semua tim lawan`,
+    `\`-s <seed>\` ulangi hasil yang sama`,
+    '',
+    `Batas: **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}** pertarungan per perintah.`,
+    'Pertarungan dibagi ke beberapa worker, jadi jutaan pertarungan selesai',
+    'dalam hitungan detik sampai puluhan detik.',
+    `Cooldown: **${Math.round(GLOBAL_COOLDOWN_MS / 1000)} detik** untuk selain developer.`,
   ].join('\n');
+}
+
+// Terima dua bentuk: `-m <per tim>` atau `-total <total pertarungan>`.
+// Keduanya dibatasi MAX_GLOBAL_BATTLES supaya satu perintah tidak menahan bot
+// terlalu lama.
+function resolveRunCount(flags, opponentCount) {
+  const perTeam = flags['-m'] ?? flags['-n'] ?? flags['-runs'];
+  const total = flags['-total'] ?? flags['-t'];
+
+  if (perTeam != null && total != null) {
+    return { error: 'Pakai salah satu: `-m` (per tim) atau `-total` (total pertarungan), jangan keduanya.' };
+  }
+
+  if (total != null) {
+    const value = Number(total);
+    if (!Number.isSafeInteger(value) || value < 1) {
+      return { error: 'Total pertarungan harus bilangan bulat 1 atau lebih. Contoh: `d sim global -total 1000000`.' };
+    }
+    if (value > MAX_GLOBAL_BATTLES) {
+      return { error: `Total pertarungan terlalu besar. Maksimum **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}**.` };
+    }
+    // Dibulatkan ke bawah supaya total tidak melebihi yang diminta; sisa
+    // pembagian tidak dijalankan.
+    return { value: Math.max(1, Math.floor(value / opponentCount)), total: value };
+  }
+
+  const runs = perTeam ?? DEFAULT_GLOBAL_RUNS;
+  const value = Number(runs);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    return { error: 'Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim global -m 5000`.' };
+  }
+  if (value * opponentCount > MAX_GLOBAL_BATTLES) {
+    const maxPerTeam = Math.floor(MAX_GLOBAL_BATTLES / opponentCount);
+    return {
+      error: `Terlalu besar: ${value.toLocaleString('id-ID')} × ${opponentCount} tim = `
+        + `${(value * opponentCount).toLocaleString('id-ID')} pertarungan, batasnya `
+        + `**${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}**. `
+        + `Maksimum untuk ${opponentCount} tim: \`-m ${maxPerTeam.toLocaleString('id-ID')}\`.`,
+    };
+  }
+  return { value, total: value * opponentCount };
 }
 
 async function handleGlobalSim(message, args, prefix, deps = {}) {
@@ -226,11 +284,6 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     return send(message, errorEmbed(`Argumen \`${rest.join(' ')}\` tidak dikenal di simulasi global. Lihat \`${prefix} sim global help\`.`));
   }
 
-  const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 100;
-  const runCount = Number(runs);
-  if (!Number.isSafeInteger(runCount) || runCount < 1) {
-    return send(message, errorEmbed('Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim global -m 50`.'));
-  }
   const seed = flags['-s'] ?? flags['-seed'];
   if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
 
@@ -254,6 +307,11 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     return send(message, warnEmbed('Belum ada tim lawan yang bisa dipakai. Simulasi global butuh tim tersimpan dari user lain.'));
   }
 
+  // Jumlah run baru bisa dihitung setelah jumlah lawan diketahui, karena
+  // `-total` dibagi rata ke semua lawan.
+  const runCount = resolveRunCount(flags, opponents.length);
+  if (runCount.error) return send(message, errorEmbed(runCount.error));
+
   // Gerbang cooldown dipasang setelah validasi supaya salah ketik tidak
   // menghabiskan jatah. Developer melewati cooldown untuk pengujian.
   if (!isDev) {
@@ -269,11 +327,19 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   const labels = { playerLabel: teamLabel(team) };
   const publishProgress = makeProgressPublisher(message, send, sendPayload, labels, 'global');
 
-  const result = await globalSim.runGlobalSim(player.specs, opponents, {
-    runs: runCount,
-    seed: seed != null ? Number(seed) : undefined,
-    onProgress: publishProgress,
-  });
+  let result;
+  try {
+    result = await globalSim.runGlobalSim(player.specs, opponents, {
+      runs: runCount.value,
+      seed: seed != null ? Number(seed) : undefined,
+      onProgress: publishProgress,
+    });
+  } catch (error) {
+    // Antrean penuh bukan kesalahan user: beri tahu dan lepas cooldown supaya
+    // bisa langsung mencoba lagi.
+    if (!isDev) store.clearCooldown(userId, GLOBAL_COOLDOWN_ACTION);
+    return send(message, errorEmbed(`❌ ${error.message}`));
+  }
   if (!isDev) store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + GLOBAL_COOLDOWN_MS);
 
   await animalDex.ensureAnimalEmojis([
@@ -498,6 +564,6 @@ function resolveEnemy(userId, args, overrideLevel) {
 
 module.exports = {
   handleSimCommand, handleGlobalSim, handleGlobalLossButton,
-  parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage,
-  GLOBAL_COOLDOWN_MS, globalResults,
+  parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,
+  GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
 };

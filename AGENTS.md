@@ -577,3 +577,38 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   `◀ [n/total] ▶` + satu select menu (`src/ui/teamPanel.js`). Jangan menambah tombol
   per tim: 21 tim menghabiskan seluruh baris komponen Discord. Select menu menyimpan
   **indeks** di `value`, bukan nama tim.
+- **Jangan `require` di dalam fungsi yang dipanggil per serangan.** `battleWeapon.js`
+  dulu memanggil `require('./battleEngine')` di 20 handler ability. Node meng-cache
+  modulnya, tetapi resolusi nama tetap jalan dan profil CPU menunjukkan ~40% waktu
+  simulasi habis di module loader. Pakai aksesor malas ber-cache seperti
+  `battleBuffs`/`battlePassives` (`let engineRef = null; function engine()`).
+  Perbaikan ini menaikkan throughput dari ~28 ribu ke ~90 ribu pertarungan/detik
+  tanpa mengubah hasil battle sama sekali.
+- **Simulasi global dipecah ke `worker_threads`.** `globalSimCore.js` berisi
+  agregasi murni (dipakai worker maupun proses utama), `globalSimWorker.js` hanya
+  pembungkus tipis, dan `globalSim.js` mengatur pembagian kerja + penggabungan.
+  Worker mengirim **ringkasan**, bukan daftar pertarungan: jutaan hasil akan jauh
+  lebih mahal dikirim daripada dihitung.
+- **Seed tiap pertarungan = `runSeed(seed, nomorLawan, nomorRun)`.** Pertarungan
+  jadi saling lepas, sehingga hasilnya identik berapa pun jumlah worker dan
+  bagaimana pekerjaan dibagi (diuji 1/3/4 worker), dan satu rentang run bisa
+  dihitung tanpa memajukan RNG lebih dulu. Pembagian kerja memakai rentang run,
+  bukan per tim, supaya satu tim lawan pun tetap bisa diparalelkan.
+- **Streak gabungan butuh head/tail/sum/count per potong.** Tiap potong melaporkan
+  kemenangan beruntun di awal (`head`), di akhir (`tail`), dan streak yang sudah
+  selesai (`sum`/`count`). Penggabung menyambung `tail` potong sebelumnya dengan
+  `head` potong berikutnya. Streak pertama di dalam potong **tidak** dihitung di
+  sana — kalau dihitung, streak itu terhitung dua kali.
+- **Jumlah tim dihitung sekali per lawan, bukan per unit kerja.** Tim yang
+  terpecah antar-potong hanya dihitung saat `unit.from === 0`. Tanpa penjagaan ini
+  `buckets.*.teams` membengkak dan rata-rata level jadi salah.
+- **Hanya satu simulasi berat berjalan sekaligus.** `runGlobalSim` memakai antrean
+  (`MAX_QUEUE = 3`); dua simulasi jutaan pertarungan bersamaan berebut core yang
+  sama dan memakai memori dua kali. Antrean penuh bukan kesalahan user: command
+  melepas cooldown dan menampilkan pesan agar bisa langsung dicoba lagi.
+- **Batas `MAX_GLOBAL_BATTLES` = 10 juta** (~39 detik dengan 4 worker pada 4 vCPU;
+  mesin uji punya 2 core fisik, jadi speedup praktis ~2x). Jangan naikkan tanpa
+  mengukur ulang: batas waktu interaksi Discord dan memori VPS jadi taruhannya.
+- **`-m` = per tim, `-total` = total pertarungan** (dibulatkan ke bawah agar tidak
+  melebihi permintaan). Keduanya wajib terdaftar di `parseFlags`; flag yang tidak
+  terdaftar akan jatuh ke `rest` dan ditolak sebagai "argumen tidak dikenal".

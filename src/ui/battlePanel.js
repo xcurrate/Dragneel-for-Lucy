@@ -171,6 +171,13 @@ function simColor(winRate) {
 
 // Hasil sementara selama simulasi panjang masih berjalan. Angkanya dari tally
 // yang sama dengan hasil akhir, jadi tidak ada hitungan ulang.
+function formatDuration(ms) {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds} detik`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} menit ${seconds % 60} detik`;
+}
+
 function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', title = null } = {}) {
   const { done, total, tally } = progress;
   const percent = Math.min(100, Math.round((done / total) * 1000) / 10);
@@ -187,7 +194,12 @@ function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'La
     .addFields(
       { name: '⏳ Progres', value: `${bar(done, total)} ${percent}%`, inline: true },
       { name: '📊 Selesai', value: `**${done.toLocaleString('id-ID')}** / ${total.toLocaleString('id-ID')}`, inline: true },
-      { name: '⏱️ Durasi', value: `Rata-rata **${progress.avgTurns}** turn`, inline: true }
+      {
+        name: '⏱️ Perkiraan',
+        // `etaMs` hanya ada pada simulasi global; simulasi duel memakai rata-rata turn.
+        value: progress.etaMs != null ? `Sisa ~**${formatDuration(progress.etaMs)}**` : `Rata-rata **${progress.avgTurns}** turn`,
+        inline: true,
+      }
     )
     .setFooter({ text: 'Hasil akhir menyusul.' });
 }
@@ -336,6 +348,7 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd' } = {})
       `### Hasil Simulasi Global (${seconds}s)`,
       `**Tim kamu:** ${playerLabel}`,
       `**Lawan:** ${result.opponents.toLocaleString('id-ID')} tim · ${result.battles.toLocaleString('id-ID')} pertarungan (${result.runs.toLocaleString('id-ID')}× per tim)`,
+      `-# ${result.workers || 1} worker · ${Math.round(result.battles / Math.max(1, result.durationMs / 1000)).toLocaleString('id-ID')} pertarungan/detik`,
     ].join('\n'))
     .addFields(
       {
@@ -344,7 +357,7 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd' } = {})
         inline: false,
       },
       {
-        name: `🔅 ${high.label}`,
+        name: `🔆 ${high.label}`,
         value: bucketLines(high),
         inline: false,
       },

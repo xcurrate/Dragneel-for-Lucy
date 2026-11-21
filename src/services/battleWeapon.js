@@ -7,6 +7,16 @@ const data = require('../data/owoBattle');
 const { createBuff } = require('./battleBuffs');
 const { createPassive, rollPassives } = require('./battlePassives');
 
+// battleEngine mengimpor modul ini, jadi import top-level akan melingkar.
+// Aksesor malas ini membuat siklusnya aman sekaligus menyimpan hasilnya:
+// `require` di dalam fungsi ability berarti resolusi modul terjadi pada setiap
+// serangan, dan itu mendominasi waktu simulasi.
+let engineRef = null;
+function engine() {
+  if (!engineRef) engineRef = require('./battleEngine');
+  return engineRef;
+}
+
 function statAt(range, quality) {
   const q = Math.min(100, Math.max(0, Number(quality) || 0));
   const [min, max] = range;
@@ -113,7 +123,7 @@ function buildWeapon(spec, rng, globalQuality) {
 // pemanggil harus jatuh ke serangan fisik (mis. tidak ada target valid).
 const ABILITIES = {
   damage_all(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     e.useMana(actor, weapon.manaCost);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
@@ -122,7 +132,7 @@ const ABILITIES = {
   },
 
   damage_one(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
     if (!target) return false;
@@ -133,7 +143,7 @@ const ABILITIES = {
   },
 
   damage_one_buff(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const buffId = weapon.def.buffList[0];
     const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng, {
@@ -151,7 +161,7 @@ const ABILITIES = {
   },
 
   damage_all_heal_team(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     e.useMana(actor, weapon.manaCost);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
@@ -163,7 +173,7 @@ const ABILITIES = {
   },
 
   damage_one_steal_wp(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
     if (!target) return false;
@@ -179,7 +189,7 @@ const ABILITIES = {
   },
 
   heal_lowest(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const target = e.lowestHp(actor.team);
     if (!target) return false;
@@ -191,7 +201,7 @@ const ABILITIES = {
   },
 
   heal_all_buff(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     e.useMana(actor, weapon.manaCost);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
@@ -203,7 +213,7 @@ const ABILITIES = {
   },
 
   replenish_ally(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const target = e.lowestWp(actor.team, actor);
     if (!target) return false;
@@ -215,7 +225,7 @@ const ABILITIES = {
   },
 
   revive(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     // OwO WeaponInterface.getDead(): ambil rekan mati pertama (urutan slot).
     const dead = actor.team.find(u => u.stats.hp[0] <= 0);
@@ -230,7 +240,7 @@ const ABILITIES = {
   },
 
   taunt(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     // OwO Shield.preTurn: hanya menolak bila Taunt sudah menempel.
     if (actor.buffs.some(b => b.id === 1)) return false;
     // preTurn dipanggil di luar `act()`, jadi cek WP dilakukan di sini.
@@ -244,7 +254,7 @@ const ABILITIES = {
   // Vanguard's Banner memasang Attack Up ke SEMUA rekan di awal turn. Saat buff
   // tinggal 1 turn, pemasangan berikutnya menaikkan tier (Attack Up → + → ++).
   attack_up_chain(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const tiers = weapon.def.buffList;
     if (actor.stats.wp[0] < weapon.manaCost) return false;
@@ -266,7 +276,7 @@ const ABILITIES = {
   // Witching Hour: kutuk SEMUA musuh di awal turn. Biaya WP dibayar tiap
   // giliran (bukan sekali), jadi unit yang kehabisan WP berhenti mengutuk.
   curse_all(ctx, weapon, actor, foes) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const buffId = weapon.def.buffList[0];
     // Hanya musuh yang belum terkutuk: memasang ulang tiap turn akan
@@ -288,7 +298,7 @@ const ABILITIES = {
   // seluruh tim. Penghitungnya per unit (`ctx.turn`) supaya tidak bergantung
   // pada urutan giliran.
   anniversary(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const every = ab.interval || 4;
     const turn = ctx.turn || 1;
@@ -305,7 +315,7 @@ const ABILITIES = {
   // menyerang sekutunya dengan efektivitas senjata 30-50%; kalau musuh hanya
   // satu, damage 150-200% MAG langsung ke dia.
   bleeding_gaze(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const enemies = e.aliveOf(actor.foes || []);
     if (!enemies.length) return false;
@@ -333,7 +343,7 @@ const ABILITIES = {
   // Conduit Claw: pindahkan satu debuff dari musuh ke sekutu dengan buff
   // terbanyak, efektivitasnya dipotong, lalu beri damage MAG ke musuh itu.
   conduit(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const targets = e.aliveOf(actor.foes || []).filter(u => u.buffs.some(b => b.debuff));
     const target = e.pickRandom(targets, ctx.rng);
@@ -361,7 +371,7 @@ const ABILITIES = {
   // Staff of Corruption: efektivitas buff musuh acak turun ke 70-50%, lalu buff
   // itu mengenai pemakai sebesar 80-120% STR.
   corrupt_buff(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const targets = e.aliveOf(actor.foes || []).filter(u => u.buffs.length);
     const target = e.pickRandom(targets, ctx.rng);
@@ -376,7 +386,7 @@ const ABILITIES = {
   },
 
   celebration(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const target = e.lowestHp(actor.team, 10);
     if (!target) return false;
     if (target.stats.hp[0] + 1 >= e.maxHp(target)) return false;
@@ -388,7 +398,7 @@ const ABILITIES = {
   // Staff of Purity: buang debuff dari rekan acak, heal 50-100% MAG, lalu
   // pasang 1 stack Sacred Ward 2 turn.
   purify(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const ab = weapon.ability;
     const debuffed = e.pickRandom(e.aliveOf(actor.team).filter(u => u.buffs.some(b => b.debuff)), ctx.rng);
     if (!debuffed) return false;
@@ -402,7 +412,7 @@ const ABILITIES = {
   },
 
   luck_hits(ctx, weapon, actor) {
-    const e = require('./battleEngine');
+    const e = engine();
     const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
     if (!target) return false;
     e.useMana(actor, weapon.manaCost);
@@ -418,7 +428,7 @@ const ABILITIES = {
 };
 
 function applyBuff(ctx, buffId, from, target, duration, quality) {
-  const e = require('./battleEngine');
+  const e = engine();
   if (!e.isAlive(target)) return;
   const buff = createBuff(buffId, { quality, from, duration, rng: ctx.rng });
   if (buff) e.bindBuff(ctx, target, buff);
