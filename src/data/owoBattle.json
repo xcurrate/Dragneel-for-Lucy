@@ -1185,11 +1185,11 @@
           40
         ],
         [
-          60,
-          80
+          70,
+          100
         ]
       ],
-      "note": "MAG di akhir turn; menimpa Flame yang ada = ledakan."
+      "note": "MAG di akhir turn 20-40%; menimpa Flame yang ada = ledakan 70-100%."
     },
     {
       "id": 4,
@@ -1265,14 +1265,14 @@
       "qualityList": [
         [
           20,
-          50
+          45
         ],
         [
           15,
-          40
+          35
         ]
       ],
-      "note": "Heal dari PR, isi WP dari MR tiap akhir turn."
+      "note": "Heal 20-45% PR dan isi WP 15-35% MR tiap akhir turn."
     },
     {
       "id": 11,

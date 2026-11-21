@@ -1375,7 +1375,7 @@ describe('wiring mesin battle', () => {
     const single = createBuff(2, { quality: [100, 100] });
     assert.strictEqual(single.stats[0], 65, 'Poison q100 = 65%');
     const flame = createBuff(3, { quality: [100, 100] });
-    assert.deepStrictEqual(flame.stats, [40, 80], 'Flame q100 = [40, 80]');
+    assert.deepStrictEqual(flame.stats, [40, 100], 'Flame q100 = [40, 100]');
   });
 
   it('Rune of the Forgotten tidak punya ability aktif, hanya override serangan dasar', () => {
