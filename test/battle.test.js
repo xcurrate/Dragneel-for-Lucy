@@ -337,12 +337,12 @@ describe('buff', () => {
     assert.ok(bucket.bonus > 0);
   });
 
-  it('Poison Dagger: 70-100% STR, 200-100 WP, Poison 30-50% MAG 3 turn', () => {
+  it('Poison Dagger: 70-100% STR, 200-100 WP, Poison 40-65% MAG 3 turn', () => {
     const def = data.weapons().find(w => w.id === 8);
     assert.strictEqual(def.name, 'Poison Dagger');
     assert.deepStrictEqual(def.qualityList[0], [70, 100]);
     assert.deepStrictEqual(def.manaRange, [200, 100]);
-    assert.deepStrictEqual(data.buffById(2).qualityList[0], [30, 50]);
+    assert.deepStrictEqual(data.buffById(2).qualityList[0], [40, 65]);
     assert.strictEqual(def.ability.duration, 3);
 
     const at = q => weaponModule.buildWeapon({ id: 8, quality: q, passives: [12] }, rngModule.createRng(1), q).stats[0];
@@ -353,12 +353,12 @@ describe('buff', () => {
   it('kualitas Poison mengikuti kualitas senjata, bukan diundi', () => {
     const rng = rngModule.createRng(1);
     const seen = [0, 50, 100].map(quality => createBuff(2, { quality, from: null, duration: 3, rng }).stats[0]);
-    assert.deepStrictEqual(seen, [30, 40, 50]);
+    assert.deepStrictEqual(seen, [40, 52.5, 65]);
 
-    // Lewat senjata: q100 harus memberi Poison 50%, bukan hasil undian.
+    // Lewat senjata: q100 harus memberi Poison 65%, bukan hasil undian.
     const q100 = weaponModule.buildWeapon({ id: 8, quality: 100, passives: [12] }, rng, 100);
     assert.strictEqual(q100.quality, 100);
-    assert.strictEqual(createBuff(2, { quality: q100.quality, from: null, duration: 3, rng }).stats[0], 50);
+    assert.strictEqual(createBuff(2, { quality: q100.quality, from: null, duration: 3, rng }).stats[0], 65);
   });
 
   it('Poison memberi damage tiap akhir turn', () => {
@@ -888,12 +888,12 @@ describe('alias senjata dan pasif', () => {
 
   it('mengenali semua alias senjata dari daftar resmi', () => {
     const cases = {
-      aegis: 'Shield', gsword: 'Great Sword', sword: 'Great Sword',
+      aegis: "Defender's Aegis", shield: "Defender's Aegis", gsword: 'Great Sword', sword: 'Great Sword',
       hstaff: 'Healing Staff', rune: 'Rune of the Forgotten', orb: 'Orb of Potency',
       vstaff: 'Vampiric Staff', pdag: 'Poison Dagger', pd: 'Poison Dagger',
       awand: 'Wand of Absorption', ascept: 'Arcane Scepter', scepter: 'Arcane Scepter',
       rstaff: 'Resurrection Staff', axe: 'Glacial Axe', gaxe: 'Glacial Axe',
-      vban: 'VanguardsBanner', banner: 'VanguardsBanner', sythe: 'Culling Scythe',
+      vban: "Vanguard's Banner", banner: "Vanguard's Banner", sythe: 'Culling Scythe',
       csy: 'Culling Scythe', scythe: 'Culling Scythe', cel: 'Rune of Celebration',
       pstaff: 'Staff of Purity', lsy: 'Leeching Scythe', ffish: 'Foul Fish',
       lrune: 'Rune of Luck',
@@ -1373,7 +1373,7 @@ describe('wiring mesin battle', () => {
 
   it('createBuff menerima quality berupa array', () => {
     const single = createBuff(2, { quality: [100, 100] });
-    assert.strictEqual(single.stats[0], 50, 'Poison q100 = 50%');
+    assert.strictEqual(single.stats[0], 65, 'Poison q100 = 65%');
     const flame = createBuff(3, { quality: [100, 100] });
     assert.deepStrictEqual(flame.stats, [40, 80], 'Flame q100 = [40, 80]');
   });

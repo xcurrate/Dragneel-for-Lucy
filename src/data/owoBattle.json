@@ -461,7 +461,7 @@
     },
     {
       "id": 5,
-      "name": "Shield",
+      "name": "Defender's Aegis",
       "emojis": [
         "<:cshield:546552025828163585>",
         "<:ushield:546552083348848641>",
@@ -472,8 +472,9 @@
         "<:fshield:546552026084016149>"
       ],
       "aliases": [
+        "aegis",
         "shield",
-        "aegis"
+        "defender's aegis"
       ],
       "type": "TAUNT",
       "qualityList": [],
@@ -862,7 +863,7 @@
     },
     {
       "id": 16,
-      "name": "VanguardsBanner",
+      "name": "Vanguard's Banner",
       "emojis": [
         "<:cvban:618001307411677195>",
         "<:uvban:618001308355395584>",
@@ -873,10 +874,11 @@
         "<:fvban:618001308544270337>"
       ],
       "aliases": [
+        "vban",
         "banner",
         "vanguard",
         "vbanner",
-        "vban"
+        "vanguard's banner"
       ],
       "type": "BUFF",
       "qualityList": [],
@@ -1167,11 +1169,11 @@
       "debuff": true,
       "qualityList": [
         [
-          30,
-          50
+          40,
+          65
         ]
       ],
-      "note": "TRUE damage 30-50% MAG di akhir turn, 3 turn."
+      "note": "TRUE damage 40-65% MAG di akhir turn, 3 turn."
     },
     {
       "id": 3,
