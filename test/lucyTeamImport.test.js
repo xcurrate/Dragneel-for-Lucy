@@ -54,6 +54,7 @@ describe('Lucy team import', () => {
     assert.deepEqual(parsed.slots[0], {
       slot: 2,
       label: 'for',
+      headerEmoji: 'animal',
       level: 83,
       displayedStats: { hp: 2990, wp: 666, att: 100, mag: 100, pr: 67, mr: 67 },
       weaponId: 5,
@@ -66,6 +67,67 @@ describe('Lucy team import', () => {
     assert.equal(importer.parseLucyTeamMessage(cardMessage({ author: { id: 'other-bot' } })), null);
     const parsed = importer.parseLucyTeamMessage(cardMessage());
     assert.equal(parsed.slots[0].passives.includes('2PI'), false);
+  });
+
+  // Kartu asli Lucy memakai judul bebas tanpa awalan `⭐` dan tanpa akhiran
+  // `'s team` (`## **free 550 xp!**`, `## **Dm me**`). Dulu deteksi judul
+  // mensyaratkan `⭐`/`team**`, sehingga semua tim hasil impor bernama
+  // "Lucy Import - Lucy team".
+  it('memakai nama tim apa adanya, bukan fallback "Lucy team"', () => {
+    for (const [title, expected] of [
+      ['## ⭐ **win solution**', 'win solution'],
+      ['## **free 550 xp!**', 'free 550 xp!'],
+      ['## **Dm me**', 'Dm me'],
+      ["## ⭐ **nnneozen's team**", "nnneozen's team"],
+      ["## **nnneozen's team**", "nnneozen's team"],
+      ['## ⭐ **My Team**', 'My Team'],
+      ['## <:hp:1> `100`', 'Lucy team'],
+    ]) {
+      const parsed = importer.parseLucyTeamMessage(cardMessage({ components: [
+        { type: 17, components: [{ type: 10, content: title }] },
+        ...cardMessage().components[0].components.slice(1)
+      ] }));
+      assert.equal(parsed.name, expected, title);
+    }
+  });
+
+  // Bug: slot hasil import tidak punya `animalKey`, jadi `battlePanel` tidak bisa
+  // mengambil emoji hewan dan semua pet tampil sebagai 🐾 (`:feet:`). Hewan
+  // dikenali dari emoji header kartu, bukan dari label yang bisa diganti user.
+  it('menyimpan animalKey dari emoji header agar emoji hewan bisa dirender', () => {
+    const dexStore = require('../src/utils/animalDexStorage');
+    const dex = require('../src/services/animalDex');
+    dexStore.upsertAnimal({
+      nameKey: 'animal', name: 'animal', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 1, attack: 1, protection: 1, wisdom: 1, magic: 1, mr: 1 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1557672128059539466.gif', emojiName: 'animal',
+    });
+
+    const parsed = importer.parseLucyTeamMessage(cardMessage());
+    assert.equal(parsed.slots[0].headerEmoji, 'animal');
+    assert.equal(parsed.slots[0].label, 'for');
+
+    const result = importer.importLucyTeam('user-1', parsed);
+    const slot = result.team.slots[0];
+    assert.equal(slot.animalKey, 'animal');
+    // Stat kartu tetap dipakai apa adanya, tidak dihitung ulang dari dex.
+    assert.deepEqual(slot.finalStats, { hp: 2990, att: 100, pr: 67, wp: 666, mag: 100, mr: 67 });
+
+    // Tanpa `animalKey` rantai ini berhenti di null dan panel memakai 🐾.
+    const animal = dexStore.resolveAnimal(slot.animalKey);
+    assert.equal(animal.name, 'animal');
+    assert.equal(dex.animalEmoji(animal), '<a:animal:1557672128059539466>');
+  });
+
+  // Emoji header yang belum pernah tertangkap tidak boleh menggagalkan import:
+  // slotnya tetap masuk dengan stat dari kartu, hanya `animalKey` yang kosong.
+  it('tetap mengimpor slot saat hewannya belum ada di dex', () => {
+    const parsed = importer.parseLucyTeamMessage(cardMessage());
+    const result = importer.importLucyTeam('user-1', parsed);
+    assert.equal(result.imported, 1);
+    assert.equal(result.team.slots[0].animalKey, null);
+    assert.equal(result.team.slots[0].finalStats.hp, 2990);
   });
 
   it('mengimpor final stats tanpa menambahkan stat senjata dua kali', () => {

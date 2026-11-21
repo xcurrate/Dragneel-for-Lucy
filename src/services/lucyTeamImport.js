@@ -2,6 +2,7 @@
 const battleData = require('../data/owoBattle');
 const passiveData = require('../data/owoPassives');
 const store = require('../utils/battleTeamStorage');
+const dexStore = require('../utils/animalDexStorage');
 
 const LUCY_BOT_ID = '1438615298012872817';
 const IMPORT_REACTION = '📊';
@@ -44,6 +45,11 @@ function parseSlot(text) {
   const slot = Number(slotMatch[1]);
   const labelMatch = header.match(/\*\*\[(?:\d+)\][^\n]*?\*\*\s*([^*\n]+?)\s*\*\*/);
   const label = labelMatch ? labelMatch[1].trim() : `slot${slot}`;
+  // Hewan pemilik slot dikenali dari emoji pertama di header kartu
+  // (`**[2] <a:ulquiorracifer:...> **for** **`), bukan dari label: label bisa
+  // diganti user jadi apa saja. Tanpa ini slot tidak punya `animalKey`, panel
+  // tidak bisa mengambil emoji hewan, dan semua pet tampil sebagai 🐾.
+  const headerEmoji = header.match(/<a?:(\w+):\d+>/)?.[1] || null;
   const levelMatch = text.match(/Lvl\s+(\d+)/i);
   const displayedStats = {
     hp: statAfterEmoji('hp', text),
@@ -60,6 +66,7 @@ function parseSlot(text) {
   return {
     slot,
     label,
+    headerEmoji,
     level: Number(levelMatch[1]),
     displayedStats,
     weaponId: weapon?.id || null,
@@ -71,9 +78,12 @@ function parseSlot(text) {
 function parseLucyTeamMessage(message) {
   if (!message || message.author?.id !== LUCY_BOT_ID) return null;
   const texts = componentTexts(message.components || message.message?.components || []);
-  const teamText = texts.find(text => /^##\s*⭐/.test(text)) || texts.find(text => /team\*\*/i.test(text));
-  const teamMatch = teamText?.match(/##\s*⭐\s*\*\*([^*]+?)['’]s team\*\*/i);
-  const name = teamMatch ? `${teamMatch[1].trim()}'s team` : 'Lucy team';
+  // Judul kartu selalu heading `## ` berisi bold, tapi bentuknya bebas:
+  // `## ⭐ **win solution**`, `## **free 550 xp!**`, atau `## **nnneozen's team**`.
+  // Baris statistik juga heading (`## <:hp:...>`) tapi tanpa bold, jadi aman.
+  const teamText = texts.find(text => /^##\s+⭐?\s*\*\*/.test(text));
+  const teamMatch = teamText?.match(/^##\s+⭐?\s*\*\*([^*\n]+?)\*\*/);
+  const name = teamMatch ? teamMatch[1].trim() : 'Lucy team';
   const slots = texts.filter(text => /\*\*\[\d+\]/.test(text)).map(parseSlot).filter(Boolean);
   if (!slots.length) return null;
   return {
@@ -110,6 +120,7 @@ function importLucyTeam(userId, parsed) {
   for (const slot of parsed.slots) {
     const result = store.setSlot(userId, name, slot.slot, {
       label: slot.label,
+      animalKey: resolveAnimalKey(slot),
       level: slot.level,
       finalStats: slot.displayedStats,
       weaponId: slot.weaponId,
@@ -120,6 +131,16 @@ function importLucyTeam(userId, parsed) {
   }
   if (parsed.sourceMessageId) store.markTeamImport(userId, parsed.sourceMessageId, name);
   return { team: store.getTeam(userId, name), imported: parsed.slots.length };
+}
+
+// Emoji header kartu adalah nama hewan di dex (`ellie`, `void2`, ...). Dipakai
+// sebagai `animalKey` supaya panel bisa menampilkan emoji pet, bukan 🐾. Emoji
+// yang belum pernah tertangkap jatuh ke null dan slotnya tetap bisa dipakai
+// lewat stat hasil import.
+function resolveAnimalKey(slot) {
+  const key = slot.headerEmoji || slot.label;
+  const animal = dexStore.resolveAnimal(key);
+  return animal ? animal.nameKey : null;
 }
 
 async function prepareLucyTeamMessage(message) {

@@ -319,7 +319,10 @@ function setSlot(userId, teamName, slot, data) {
   }
   const custom = data.custom || null;
   if (!data.animalKey && !custom && !data.finalStats) return { error: 'Isi nama hewan dex atau stat manual.' };
-  if ((data.animalKey && custom) || (data.finalStats && (data.animalKey || custom))) {
+  // `animalKey` + `finalStats` memang berpasangan: import tim Lucy menyimpan
+  // hewan (untuk emoji/nama) sekaligus stat tampilan kartu (yang sudah final,
+  // termasuk senjata). Hanya `custom` yang eksklusif terhadap keduanya.
+  if (custom && (data.animalKey || data.finalStats)) {
     return { error: 'Pilih satu format stat: hewan, stat manual, atau stat import.' };
   }
 
