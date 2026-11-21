@@ -534,6 +534,32 @@ memengaruhi hasil pertarungan.
 Resistensi memakai `(res / (100 + res)) × 0.8`, jadi damage tidak pernah nol
 total tetapi juga tidak pernah kebal.
 
+## Panel tim (`d tm`)
+
+`d tm` langsung menampilkan **komposisi** tim aktif, bukan daftar nama. Berpindah
+tim lewat tombol panah atau menu pilih, lalu tim itu otomatis menjadi aktif:
+
+```text
+Baris 1: menu "Pilih tim (3/21)"   ← lompat langsung ke tim mana pun
+Baris 2: [◀] [Tim 2/3] [▶]         ← geser satu per satu, membungkus di ujung
+```
+
+Setiap tim punya **ID 1-21** per user:
+
+```text
+d tm                      panel + navigasi
+d team list               daftar tim beserta ID
+d team new <nama>         ID otomatis = nomor bebas terkecil
+d team pick <id|nama>     jadikan tim aktif
+d sim <id>                simulasi tim aktif lawan tim ber-ID itu
+d team del <id|nama>      hapus; ID-nya langsung bebas dipakai tim baru
+```
+
+ID hanya dipakai sebagai penanda singkat; nama tim tetap bisa dipakai di semua
+perintah supaya kebiasaan lama tidak rusak. Karena ID mengikuti slot yang bebas,
+menghapus tim **benar-benar mengosongkan** slot ID-nya untuk tim berikutnya.
+Batas tim per user sama dengan jumlah ID: 21.
+
 ## Import tim dari Lucy
 
 Dragneel dapat mengenali kartu tim Lucy Components V2 dari bot Lucy resmi

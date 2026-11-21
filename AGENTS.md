@@ -541,3 +541,11 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   (mis. '0' berbentuk `10011/10101/11001`) tidak dikenali sebagai digit dan bikin
   tes gagal; pakai bentuk kanonik. Angka yang digambar lebih lebar dari region akan
   terpotong secara fisik — itu batas fixture, bukan bug OCR.
+- **Tim punya ID 1-21 per user.** `slot_id` di tabel `teams` diisi nomor bebas
+  terkecil, jadi `del` mengosongkan slot ID dan ID itu dipakai ulang. `findTeam`
+  mencoba ID lebih dulu, lalu nama; JANGAN memakai `getTeam` untuk input pengguna
+  karena input `"3"` akan dianggap nama, bukan ID. Batas tim = `MAX_TEAM_ID` (21).
+- **`dtm` menampilkan komposisi, bukan daftar nama.** Navigasi lewat tombol sempit
+  `◀ [n/total] ▶` + satu select menu (`src/ui/teamPanel.js`). Jangan menambah tombol
+  per tim: 21 tim menghabiskan seluruh baris komponen Discord. Select menu menyimpan
+  **indeks** di `value`, bukan nama tim.

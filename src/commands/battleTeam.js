@@ -24,17 +24,19 @@ const {
   teamEmbed, teamListEmbed, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
 } = require('../ui/battlePanel');
+const teamPanel = require('../ui/teamPanel');
 
 function usage(prefix = 'd') {
   return [
-    `\`${prefix} team list\` — daftar tim kamu`,
-    `\`${prefix} team new <nama>\` — buat tim baru`,
-    `\`${prefix} team pick <nama>\` — jadikan tim aktif`,
-    `\`${prefix} team show [nama]\` — lihat isi tim`,
+    `\`${prefix} tm\` — panel tim (pindah lewat ◀ ▶ atau menu pilih)`,
+    `\`${prefix} team list\` — daftar tim beserta ID`,
+    `\`${prefix} team new <nama>\` — buat tim baru (ID otomatis 1-21)`,
+    `\`${prefix} team pick <id|nama>\` — jadikan tim aktif`,
+    `\`${prefix} team show [id|nama]\` — lihat isi tim`,
     `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
     `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
     `\`${prefix} team clear <slot>\` — kosongkan slot`,
-    `\`${prefix} team del <nama>\` / \`${prefix} team rename <lama> <baru>\``,
+    `\`${prefix} team del <id|nama>\` / \`${prefix} team rename <id|nama> <baru>\``,
     '',
     'Opsi slot: `level=50` (default 50), `weapon=gsword`, `quality=80`, `passive=1,12`, `label=tank`',
     'Stat manual: `hp=14,att=6,pr=2,wp=3,mag=0,mr=1` atau `14,6,2,3,0,1`',
@@ -153,6 +155,13 @@ function parseWeapon(value) {
   return { error: `Senjata \`${value}\` tidak dikenal. Contoh: ${names}.` };
 }
 
+// Nama tim selalu ditampilkan bersama ID-nya supaya user langsung tahu angka
+// yang bisa dipakai di `d sim` atau `d team pick`.
+function labelOf(team) {
+  if (!team) return '-';
+  return team.slotId != null ? `[${team.slotId}] ${team.name}` : team.name;
+}
+
 // Pesan singkat ditulis sebagai teks di call site; helper ini mengubahnya jadi
 // embed dengan warna sesuai isinya supaya tidak ada balasan teks polos.
 function say(send, message, text) {
@@ -175,11 +184,17 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
 
   const userId = message.author.id;
-  const sub = (args[0] || 'list').toLowerCase();
+  const sub = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
 
   if (sub === 'help' || sub === 'bantuan') {
     return send(message, usageEmbed('🐾 Tim Kustom', usage(prefix)));
+  }
+
+  // Tanpa argumen `dtm` langsung menampilkan panel komposisi tim, bukan daftar
+  // nama. Pindah tim lewat tombol panah atau select menu.
+  if (!sub || sub === 'panel') {
+    return sendTeamPanel(message, prefix, userId, deps);
   }
 
   if (sub === 'list') {
@@ -201,7 +216,7 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     if (result.error) return say(send, message, `❌ ${result.error}`);
     // Tim pertama otomatis aktif supaya user bisa langsung memakainya.
     if (!store.getActiveTeam(userId)) store.setActiveTeam(userId, result.team.name);
-    return say(send, message, `✅ Tim **${result.team.name}** dibuat. Isi slot dengan \`${prefix} team add 1 <hewan>\`.`);
+    return say(send, message, `✅ Tim **[${result.team.slotId}] ${result.team.name}** dibuat. Isi slot dengan \`${prefix} team add 1 <hewan>\`.`);
   }
 
   if (sub === 'pick' || sub === 'pilih' || sub === 'use') {
@@ -209,33 +224,33 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     if (!name) return say(send, message, `Format: \`${prefix} team pick <nama>\``);
     const result = store.setActiveTeam(userId, name);
     if (result.error) return say(send, message, `❌ ${result.error}`);
-    return say(send, message, `✅ Tim aktif: **${result.team.name}**.`);
+    return say(send, message, `✅ Tim aktif: **${labelOf(result.team)}**.`);
   }
 
   if (sub === 'show' || sub === 'lihat') {
     const name = rest.join(' ');
-    const team = name ? store.getTeam(userId, name) : store.getActiveTeam(userId);
+    const team = name ? store.findTeam(userId, name) : store.getActiveTeam(userId);
     if (team) await animalDex.ensureAnimalEmojis(animalsOf(team));
     if (!team) return say(send, message, name ? `❌ Tim **${name}** tidak ditemukan.` : `Belum ada tim aktif. Buat dengan \`${prefix} team new <nama>\`.`);
     const active = store.getActiveTeam(userId);
-    return send(message, teamEmbed(team, { prefix, active: !!active && active.id === team.id }));
+    return send(message, teamEmbed(team, { prefix, active: !!active && active.id === team.id, slotId: team.slotId }));
   }
 
   if (sub === 'del' || sub === 'hapus' || sub === 'delete') {
     const name = rest.join(' ');
-    if (!name) return say(send, message, `Format: \`${prefix} team del <nama>\``);
+    if (!name) return say(send, message, `Format: \`${prefix} team del <id|nama>\``);
     const result = store.deleteTeam(userId, name);
     if (result.error) return say(send, message, `❌ ${result.error}`);
-    return say(send, message, `🗑️ Tim **${result.team.name}** dihapus.`);
+    return say(send, message, `🗑️ Tim **${labelOf(result.team)}** dihapus. Slot ID ${result.team.slotId ?? '-'} sekarang bebas.`);
   }
 
   if (sub === 'rename' || sub === 'ganti') {
     const [from, ...toParts] = rest;
     const to = toParts.join(' ');
-    if (!from || !to) return say(send, message, `Format: \`${prefix} team rename <lama> <baru>\``);
+    if (!from || !to) return say(send, message, `Format: \`${prefix} team rename <id|nama lama> <nama baru>\``);
     const result = store.renameTeam(userId, from, to);
     if (result.error) return say(send, message, `❌ ${result.error}`);
-    return say(send, message, `✅ Tim **${from}** sekarang bernama **${result.team.name}**.`);
+    return say(send, message, `✅ Tim **${labelOf(result.team)}** sekarang bernama **${result.team.name}**.`);
   }
 
   if (sub === 'clear' || sub === 'kosongkan') {
@@ -371,6 +386,59 @@ function handleWeaponCommand(message, rest, prefix, send, userId) {
 }
 
 // Klik tombol pemilih tim. Hanya pemilik panel yang boleh memakainya.
+
+// Panel `dtm`: satu pesan berisi komposisi tim. Emoji hewan perlu disiapkan
+// dulu supaya render pertama tidak jatuh ke ikon netral.
+async function sendTeamPanel(message, prefix, userId, deps = {}) {
+  const teams = store.listTeams(userId);
+  const active = store.getActiveTeam(userId);
+  await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
+  const payload = teamPanel.panelPayload(teams, teamPanel.indexOfActive(teams, active), userId, { prefix, active });
+  delete payload.team;
+  delete payload.index;
+  delete payload.total;
+  if (deps.sendPayload) return deps.sendPayload(message, payload);
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  return send(message, payload.embeds[0]);
+}
+
+// Navigasi panel: panah menggeser indeks, select menu melompat ke tim pilihan,
+// lalu tim itu dijadikan aktif dan panel digambar ulang di tempat.
+async function handleTeamPanelNav(i) {
+  const parsed = teamPanel.parsePanelNav(i.customId);
+  const expired = { embeds: [errorEmbed('Panel kedaluwarsa. Jalankan `dtm` lagi.')], flags: MessageFlags.Ephemeral };
+  if (!parsed.ok) return i.reply(expired);
+  if (parsed.kind !== 'pick' && parsed.userId !== i.user.id) {
+    return i.reply({ embeds: [errorEmbed('Panel ini milik orang lain. Jalankan `dtm` untuk panel kamu.')], flags: MessageFlags.Ephemeral });
+  }
+
+  const teams = store.listTeams(i.user.id);
+  if (!teams.length) return i.reply({ embeds: [errorEmbed('Belum ada tim. Buat dengan `d team new <nama>`.')], flags: MessageFlags.Ephemeral });
+
+  let index = parsed.index;
+  if (parsed.kind === 'pick') {
+    // Select menu mengirim nilai berupa indeks, bukan nama tim.
+    const value = i.isStringSelectMenu?.() ? Number(i.values?.[0]) : index;
+    index = Number.isInteger(value) && value >= 0 ? value : teamPanel.indexOfActive(teams, store.getActiveTeam(i.user.id));
+  }
+
+  const ordered = teamPanel.orderedTeams(teams);
+  const target = ordered[Math.max(0, Math.min(index, ordered.length - 1))];
+  if (!target) return i.reply(expired);
+
+  store.setActiveTeam(i.user.id, String(target.slotId ?? target.name));
+  await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
+  const fresh = store.listTeams(i.user.id);
+  const active = store.getActiveTeam(i.user.id);
+  const payload = teamPanel.panelPayload(fresh, teamPanel.indexOfActive(fresh, active), i.user.id, { prefix: 'd', active });
+  delete payload.team;
+  delete payload.index;
+  delete payload.total;
+  return i.update(payload).catch(async () => {
+    await i.reply({ embeds: [errorEmbed('Panel tidak bisa diperbarui. Jalankan `dtm` lagi.')], flags: MessageFlags.Ephemeral });
+  });
+}
+
 async function handleTeamButton(i) {
   const parsed = parseTeamButton(i.customId);
   if (!parsed.ok) return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `dteam list` lagi.', flags: 64 });
@@ -396,4 +464,7 @@ async function handleTeamButton(i) {
     .catch(() => i.reply(confirmed));
 }
 
-module.exports = { handleTeamCommand, handleTeamButton, findDexAnimal, parseOptions, parseWeapon, usage, isTeamButton };
+module.exports = {
+  handleTeamCommand, handleTeamButton, handleTeamPanelNav, sendTeamPanel,
+  findDexAnimal, parseOptions, parseWeapon, usage, isTeamButton,
+};

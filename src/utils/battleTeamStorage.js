@@ -9,7 +9,9 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 
 const MAX_SLOTS = 3;
-const MAX_TEAMS = 10;
+// ID tim 1-21 sekaligus menjadi batas jumlah tim per user.
+const MAX_TEAM_ID = 21;
+const MAX_TEAMS = MAX_TEAM_ID;
 
 // Semua tim disimpan pada satu lingkup global; kolom `guild_id` hanya diisi
 // nilai ini supaya skema lama tetap valid.
@@ -39,6 +41,7 @@ function getDb() {
       user_id TEXT NOT NULL,
       name TEXT NOT NULL,
       name_key TEXT NOT NULL,
+      slot_id INTEGER,
       created_at INTEGER,
       updated_at INTEGER,
       UNIQUE (guild_id, user_id, name_key)
@@ -87,6 +90,7 @@ function getDb() {
       PRIMARY KEY (user_id, action)
     );
   `);
+  try { db.exec('ALTER TABLE teams ADD COLUMN slot_id INTEGER'); } catch {}
   for (const column of [
     'final_hp INTEGER', 'final_att INTEGER', 'final_pr INTEGER',
     'final_wp INTEGER', 'final_mag INTEGER', 'final_mr INTEGER',
@@ -94,6 +98,7 @@ function getDb() {
     try { db.exec(`ALTER TABLE team_slots ADD COLUMN ${column}`); } catch {}
   }
   migrateToGlobal(db);
+  backfillSlotIds();
   return db;
 }
 
@@ -172,6 +177,7 @@ function rowToSlot(row) {
 function rowToTeam(row, slots = []) {
   return {
     id: row.id,
+    slotId: row.slot_id ?? null,
     guildId: row.guild_id,
     userId: row.user_id,
     name: row.name,
@@ -211,22 +217,78 @@ function countTeams(userId) {
     .get(String(userId)).n;
 }
 
+// ID tim 1..MAX_TEAM_ID milik satu user. ID bebas terkecil dipakai lebih dulu,
+// jadi menghapus tim benar-benar mengosongkan slot ID-nya.
+function usedSlotIds(userId) {
+  const rows = getDb().prepare('SELECT slot_id FROM teams WHERE user_id = ?').all(String(userId));
+  return new Set(rows.map(row => row.slot_id).filter(id => id != null));
+}
+
+function nextFreeSlotId(userId) {
+  const used = usedSlotIds(userId);
+  for (let id = 1; id <= MAX_TEAM_ID; id++) if (!used.has(id)) return id;
+  return null;
+}
+
 function createTeam(userId, name) {
   const clean = normalizeName(name);
   if (!clean) return { error: 'Nama tim tidak boleh kosong.' };
   if (countTeams(userId) >= MAX_TEAMS) {
-    return { error: `Sudah mencapai batas ${MAX_TEAMS} tim. Hapus salah satu dulu.` };
+    return { error: `Semua slot ID 1-${MAX_TEAM_ID} sudah terpakai. Hapus salah satu tim dulu dengan \`d team del <id>\`.` };
   }
   if (getTeam(userId, clean)) return { error: `Tim **${clean}** sudah ada.` };
+  const slotId = nextFreeSlotId(userId);
+  if (slotId == null) return { error: `Semua slot ID 1-${MAX_TEAM_ID} sudah terpakai.` };
   const now = Date.now();
   const info = getDb().prepare(
-    'INSERT INTO teams (guild_id, user_id, name, name_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(GLOBAL_SCOPE, String(userId), clean, keyOf(clean), now, now);
+    'INSERT INTO teams (guild_id, user_id, name, name_key, slot_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(GLOBAL_SCOPE, String(userId), clean, keyOf(clean), slotId, now, now);
   return { team: getTeamById(info.lastInsertRowid) };
 }
 
+// Tim hasil `d team new` sebelum ada ID diberi nomor urut sekali saja.
+function backfillSlotIds() {
+  const rows = getDb().prepare(
+    'SELECT id, user_id FROM teams WHERE slot_id IS NULL ORDER BY user_id, id'
+  ).all();
+  if (!rows.length) return 0;
+  const used = new Map();
+  const touchId = getDb().prepare('UPDATE teams SET slot_id = ? WHERE id = ?');
+  for (const row of rows) {
+    if (!used.has(row.user_id)) used.set(row.user_id, usedSlotIds(row.user_id));
+    const set = used.get(row.user_id);
+    const free = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+      .find(id => !set.has(id));
+    if (free == null) continue;
+    touchId.run(free, row.id);
+    set.add(free);
+  }
+  return rows.length;
+}
+
+// Mencari tim berdasarkan ID (angka) atau nama. ID dicoba lebih dulu supaya
+// tim bernama "3" tetap bisa dipilih lewat namanya bila ada tim ber-ID 3.
+function findTeam(userId, query) {
+  const text = String(query == null ? '' : query).trim();
+  if (!text) return null;
+  if (/^\d+$/.test(text)) {
+    const byId = getDb().prepare(
+      'SELECT * FROM teams WHERE user_id = ? AND slot_id = ?'
+    ).get(String(userId), Number(text));
+    if (byId) return rowToTeam(byId, loadSlots(byId.id));
+  }
+  return getTeam(userId, text);
+}
+
+function isSlotIdTaken(userId, slotId, exceptTeamId = null) {
+  const row = getDb().prepare(
+    'SELECT id FROM teams WHERE user_id = ? AND slot_id = ? AND id <> ?'
+  ).get(String(userId), Number(slotId), exceptTeamId == null ? -1 : Number(exceptTeamId));
+  return Boolean(row);
+}
+
 function renameTeam(userId, from, to) {
-  const team = getTeam(userId, from);
+  const team = findTeam(userId, from);
   if (!team) return { error: `Tim **${from}** tidak ditemukan.` };
   const clean = normalizeName(to);
   if (!clean) return { error: 'Nama baru tidak boleh kosong.' };
@@ -237,7 +299,7 @@ function renameTeam(userId, from, to) {
 }
 
 function deleteTeam(userId, name) {
-  const team = getTeam(userId, name);
+  const team = findTeam(userId, name);
   if (!team) return { error: `Tim **${name}** tidak ditemukan.` };
   const d = getDb();
   d.prepare('DELETE FROM team_slots WHERE team_id = ?').run(team.id);
@@ -249,7 +311,7 @@ function deleteTeam(userId, name) {
 // Menulis satu slot. `slot` 1..MAX_SLOTS. Data hewan bisa dari dex (`animalKey`)
 // atau stat manual (`custom`), tidak keduanya.
 function setSlot(userId, teamName, slot, data) {
-  const team = getTeam(userId, teamName);
+  const team = findTeam(userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
   const index = Number(slot);
   if (!Number.isInteger(index) || index < 1 || index > MAX_SLOTS) {
@@ -292,7 +354,7 @@ function setSlot(userId, teamName, slot, data) {
 // Memasang atau mengganti senjata pada slot yang sudah berisi hewan. Hanya
 // kolom senjata yang disentuh, jadi level dan stat hewan tidak ikut berubah.
 function setWeapon(userId, teamName, slot, { weaponId, weaponQuality = null, passives = null }) {
-  const team = getTeam(userId, teamName);
+  const team = findTeam(userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
   const index = Number(slot);
   if (!Number.isInteger(index) || index < 1 || index > MAX_SLOTS) {
@@ -313,7 +375,7 @@ function setWeapon(userId, teamName, slot, { weaponId, weaponQuality = null, pas
 }
 
 function clearSlot(userId, teamName, slot) {
-  const team = getTeam(userId, teamName);
+  const team = findTeam(userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
   getDb().prepare('DELETE FROM team_slots WHERE team_id = ? AND slot = ?').run(team.id, Number(slot));
   touch(team.id);
@@ -325,7 +387,7 @@ function touch(teamId) {
 }
 
 function setActiveTeam(userId, name) {
-  const team = getTeam(userId, name);
+  const team = findTeam(userId, name);
   if (!team) return { error: `Tim **${name}** tidak ditemukan.` };
   getDb().prepare(`
     INSERT INTO active_team (guild_id, user_id, team_id) VALUES (?, ?, ?)
@@ -387,6 +449,7 @@ function markTeamImport(userId, sourceMessageId, teamName) {
 module.exports = {
   MAX_SLOTS,
   MAX_TEAMS,
+  MAX_TEAM_ID,
   getDb,
   cooldownRemaining,
   setCooldown,
@@ -394,7 +457,10 @@ module.exports = {
   normalizeName,
   listTeams,
   getTeam,
+  findTeam,
   getTeamById,
+  nextFreeSlotId,
+  isSlotIdTaken,
   createTeam,
   renameTeam,
   setWeapon,

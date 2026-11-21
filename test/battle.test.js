@@ -732,14 +732,14 @@ describe('balasan command memakai embed', () => {
     const body = replies[0].description;
     assert.ok(body.includes('Perintah tidak dikenal.'));
     assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
-    assert.ok(body.includes('`d team list` — daftar tim kamu'), 'baris utuh');
+    assert.ok(body.includes('`d team list` — daftar tim beserta ID'), 'baris utuh');
   });
 
   it('panduan d sim tidak dipecah per huruf', async () => {
     await handleSimCommand(message('d sim help'), ['help'], 'd', { sendEmbed });
     const body = replies[0].description;
     assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
-    assert.ok(body.includes('`d sim <nama-tim>`'), 'baris utuh');
+    assert.ok(body.includes('`d sim <id>`'), 'baris utuh menyebut ID tim');
   });
 });
 
@@ -1680,22 +1680,32 @@ describe('lawan simulasi berupa tim', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('menerima nama tim sebagai lawan', () => {
+  it('menerima nama tim sebagai lawan dan menampilkan ID-nya', () => {
     const enemy = resolveEnemy('u', ['blitz']);
     assert.ok(!enemy.error, enemy.error);
-    assert.strictEqual(enemy.label, 'blitz');
+    // Label memuat ID supaya cocok dengan angka yang tampil di `dtm`.
+    assert.match(enemy.label, /^\[\d+\] blitz$/);
   });
 
   it('menerima bentuk "x vs y"', () => {
     const enemy = resolveEnemy('u', ['1', 'vs', 'blitz']);
     assert.ok(!enemy.error, enemy.error);
-    assert.strictEqual(enemy.label, 'blitz');
+    assert.match(enemy.label, /blitz$/);
   });
 
   it('nama tim berupa angka tetap dikenali sebagai tim', () => {
+    // Tim bernama "1" saat ini menempati ID 1, jadi pemanggilan lewat ID dan
+    // lewat nama sama-sama menunjuk tim yang sama.
     const enemy = resolveEnemy('u', ['1']);
     assert.ok(!enemy.error, enemy.error);
-    assert.strictEqual(enemy.label, '1');
+    assert.match(enemy.label, /^\[1\] 1$/);
+  });
+
+  it('memilih lawan lewat ID tim', () => {
+    const target = store.listTeams('u').find(team => team.name === 'blitz');
+    const enemy = resolveEnemy('u', [String(target.slotId)]);
+    assert.ok(!enemy.error, enemy.error);
+    assert.match(enemy.label, new RegExp(`^\\[${target.slotId}\\] blitz$`));
   });
 
   it('tim kosong dilaporkan, bukan dianggap nama tidak dikenal', () => {

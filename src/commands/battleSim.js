@@ -24,7 +24,8 @@ const SIM_COOLDOWN_ACTION = 'sim';
 function usage(prefix = 'd') {
   return [
     `\`${prefix} sim\` — tim aktif vs tim lain milikmu (atau mirror)`,
-    `\`${prefix} sim <nama-tim>\` — lawan tim kustom lain milikmu`,
+    `\`${prefix} sim <id>\` — lawan tim lain milikmu menurut ID (lihat \`${prefix} tm\`)`,
+    `\`${prefix} sim <nama-tim>\` — sama, tapi memakai nama tim`,
     `\`${prefix} sim hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60\` — lawan stat manual`,
     `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
     '',
@@ -140,7 +141,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // Simulasi besar bisa berjalan lama. Kirim pesan progres lebih dulu, perbarui
   // berkala, lalu timpa dengan hasil akhir di pesan yang sama supaya channel
   // tidak dibanjiri pesan.
-  const labels = { playerLabel: team.name, enemyLabel: enemy.label };
+  const labels = { playerLabel: teamLabel(team), enemyLabel: enemy.label };
   let progressMessage = null;
   let progressDisabled = false;
   let lastEdit = 0;
@@ -228,6 +229,12 @@ function resolveTeamSpecs(team) {
   return sim.toSpecs({ slots });
 }
 
+// Nama tim selalu ditampilkan dengan ID agar cocok dengan angka di `dtm`.
+function teamLabel(team) {
+  if (!team) return '-';
+  return team.slotId != null ? `[${team.slotId}] ${team.name}` : team.name;
+}
+
 // Menentukan lawan: tim lain, hewan dex, atau stat manual.
 function resolveEnemy(userId, args, overrideLevel) {
   const { options, rest } = parseOptions(args);
@@ -242,7 +249,7 @@ function resolveEnemy(userId, args, overrideLevel) {
     if (other) {
       const specs = resolveTeamSpecs(other);
       if (specs.error) return { error: specs.error };
-      return { specs: specs.specs, label: other.name };
+      return { specs: specs.specs, label: teamLabel(other) };
     }
     const own = resolveTeamSpecs(active);
     if (own.error) return { error: own.error };
@@ -256,15 +263,16 @@ function resolveEnemy(userId, args, overrideLevel) {
 
   // `d sim blitz` / `d sim 1 vs blitz` → lawan tim milik user sendiri.
   // Dicek sebelum stat manual karena nama tim bisa berupa angka ("1").
+  // `d sim 3` memilih tim lewat ID; nama tim tetap diterima untuk kompatibilitas.
   const enemyName = raw.includes(' vs ') ? raw.split(/\s+vs\s+/i).pop().trim() : raw;
-  const ownTeam = enemyName ? store.getTeam(userId, enemyName) : null;
+  const ownTeam = enemyName ? store.findTeam(userId, enemyName) : null;
   if (ownTeam) {
     if (!ownTeam.slots.length) {
-      return { error: `Tim **${ownTeam.name}** masih kosong. Isi dulu dengan \`d team add 1 <hewan>\`.` };
+      return { error: `Tim **${teamLabel(ownTeam)}** masih kosong. Isi dulu dengan \`d team add 1 <hewan>\`.` };
     }
     const specs = resolveTeamSpecs(ownTeam);
     if (specs.error) return { error: specs.error };
-    return { specs: specs.specs, label: ownTeam.name };
+    return { specs: specs.specs, label: teamLabel(ownTeam) };
   }
 
   // `level=` eksplisit menang atas flag `lvl`, karena lebih spesifik.

@@ -123,10 +123,11 @@ function slotField(entry, slot, prefix) {
   };
 }
 
-function teamEmbed(team, { prefix = 'd', active = false } = {}) {
+function teamEmbed(team, { prefix = 'd', active = false, slotId = null } = {}) {
+  const id = slotId ?? team.slotId;
   const embed = new EmbedBuilder()
     .setColor(active ? COLOR.ok : COLOR.info)
-    .setTitle(`🐾 ${team.name}`)
+    .setTitle(`🐾 ${id != null ? `[${id}] ` : ''}${team.name}`)
     .setFooter({
       text: `Team ${team.slots.length}/${MAX_SLOTS}${active ? ' · tim aktif' : ''}`
         + ` · Simulasi: ${prefix} sim`,
@@ -145,17 +146,20 @@ function teamListEmbed(teams, active, prefix = 'd') {
       .setTitle('🐾 Tim Battle')
       .setDescription(`Belum ada tim.\nBuat dengan \`${prefix} team new <nama>\`.`);
   }
-  const lines = teams.map(team => {
-    const mark = active && active.id === team.id ? ' ✅' : '';
-    const icons = team.slots.map(slot => slotIcon(slot)).join(' ');
-    const detail = icons ? `\n${icons}` : '';
-    return `**${team.name}**${mark} — ${team.slots.length}/${MAX_SLOTS} slot${detail}`;
-  });
+  const lines = [...teams]
+    .sort((a, b) => (a.slotId ?? 99) - (b.slotId ?? 99))
+    .map(team => {
+      const mark = active && active.id === team.id ? ' ✅' : '';
+      const icons = team.slots.map(slot => slotIcon(slot)).join(' ');
+      const detail = icons ? `\n${icons}` : '';
+      const id = team.slotId != null ? `\`#${team.slotId}\` ` : '';
+      return `${id}**${team.name}**${mark} — ${team.slots.length}/${MAX_SLOTS} slot${detail}`;
+    });
   return new EmbedBuilder()
     .setColor(COLOR.info)
     .setTitle('🐾 Tim Battle')
     .setDescription(lines.join('\n'))
-    .setFooter({ text: `Pilih tim lewat tombol, atau ${prefix} team pick <nama>` });
+    .setFooter({ text: `Pilih lewat ${prefix} tm, atau ${prefix} team pick <id|nama>` });
 }
 
 // Warna mengikuti hasil: menang dominan hijau, kalah dominan merah, seimbang kuning.
