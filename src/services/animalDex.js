@@ -313,6 +313,9 @@ function captureMessage(message) {
   const animal = parseAnimalCard(raw);
   if (!animal || !animal.nameKey) return null;
   store.upsertAnimal(animal, { raw, guildId: message?.guildId || null, sourceMessageId: message?.id, updatedAt: Date.now() });
+  // Jalankan tanpa ditunggu: penangkapan kartu tidak boleh gagal hanya karena
+  // mirror emoji bermasalah, tetapi emoji harus siap sebelum user memakainya.
+  syncAnimalEmoji(animal).catch(e => console.error('[AnimalDex] mirror emoji ' + animal.name + ':', e.message));
   return animal;
 }
 
@@ -349,12 +352,32 @@ function formatListEmbed(query, animals) {
 const STAT_COLUMNS = ['hp', 'attack', 'protection', 'wisdom', 'magic', 'mr'];
 const TABLE_MAX_ROWS = 30;
 
-// Bangun ulang token emoji hewan dari URL gambar (mis. .../emojis/<id>.gif),
-// supaya baris tabel bisa memakai emoji hewan sebagai label.
+// ID emoji hewan diambil dari URL gambarnya (mis. .../emojis/<id>.gif). URL
+// lampiran biasa tidak cocok, dan hewan seperti itu memang tidak punya emoji.
+function animalEmojiId(animal) {
+  const m = /\/emojis\/(\d+)\.(gif|png|webp)/.exec(animal?.imageUrl || '');
+  return m ? { id: m[1], animated: m[2] === 'gif' } : null;
+}
+
+// Bangun ulang token emoji hewan dari URL gambar, supaya baris tabel dan panel
+// tim bisa memakai emoji hewan sebagai label. Nama emoji boleh tidak terbaca
+// dari kartu (judul tanpa emoji); dalam hal itu pakai nama hewannya, karena
+// yang menentukan tampilan adalah ID, bukan nama.
 function animalEmoji(animal) {
-  const m = /\/emojis\/(\d+)\.(gif|png|webp)/.exec(animal.imageUrl || '');
-  if (!m || !animal.emojiName) return null;
-  return '<' + (m[2] === 'gif' ? 'a' : '') + ':' + animal.emojiName + ':' + m[1] + '>';
+  const found = animalEmojiId(animal);
+  if (!found) return null;
+  const name = emojiName(animal.emojiName || animal.name);
+  return '<' + (found.animated ? 'a' : '') + ':' + name + ':' + found.id + '>';
+}
+
+// Emoji hewan milik aplikasi Lucy tidak bisa dirender bot ini. Pet yang baru
+// ditangkap setelah startup belum ada di `emoji_map`, jadi emoji-nya di-mirror
+// saat kartunya masuk — bukan hanya saat bot menyala.
+async function syncAnimalEmoji(animal) {
+  const token = animalEmoji(animal);
+  if (!token) return null;
+  const map = await mirrorEmojiTokens([token]);
+  return map.get(token) || null;
 }
 
 // Penanda kolom pertama tabel (identitas hewan). Tiap baris memakai emoji
@@ -518,5 +541,5 @@ module.exports = {
   parseAnimalCard, isAnimalCard, captureMessage, buildDexResponse,
   formatAnimalEmbed, formatCompactTable, formatListEmbed, extractFlags, toQueries,
   normalizeName, parseStats, STAT_LABELS, STAT_ICONS, setClient, mirrorEmojiTokens, collectEmojiTokens,
-  applyEmojiMap, allEmojiTokens, animalEmoji
+  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, syncAnimalEmoji
 };

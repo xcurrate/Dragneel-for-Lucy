@@ -432,6 +432,12 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
 - **Tim pemain selalu menyerang lebih dulu**, sama seperti OwO yang memanggil `executeTurn` dengan
   tim pemain sebagai `team`. Jangan mengacak sisi pembuka "supaya mirror 50%": keuntungan
   giliran pertama adalah bagian dari hasil yang diukur simulasi.
+- **Emoji hewan di-mirror saat kartunya ditangkap**, bukan hanya saat bot menyala. `emoji_map`
+  adalah cache global, jadi pet yang ditangkap setelah startup tidak akan punya emoji sampai
+  proses berikutnya — dan `d team`/`d sim` hanya menampilkan 🐾. `captureMessage` memanggil
+  `syncAnimalEmoji()` di latar belakang; `battleEmoji.animalEmoji()` mencoba sekali lagi saat
+  render bila mirror sebelumnya gagal. Token hewan juga memakai `emojiName || name` dan dipotong
+  ke 32 karakter, karena nama emoji Discord tidak wajib terbaca dari judul kartu.
 - **Tim kustom bersifat global per user** (`src/utils/battleTeamStorage.js`), bukan per server.
   Kolom `guild_id` dipertahankan hanya demi skema lama (selalu string kosong) dan
   `migrateToGlobal()` menggabungkan baris lama per user+nama saat database pertama dibuka.

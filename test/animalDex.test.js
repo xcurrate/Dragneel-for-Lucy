@@ -267,10 +267,15 @@ describe('dex prefix command', () => {
 
   it('trims compact rows dynamically so the description stays within limits', async () => {
     const { captureMessage, buildDexResponse } = require('../src/services/animalDex');
-    // Nama emoji panjang → setiap baris tabel panjang, tidak mungkin muat semua.
-    const longEmoji = 'e'.repeat(200);
+    // Angka stat panjang → setiap baris tabel panjang, tidak mungkin muat semua.
+    // (Nama emoji tidak bisa dipakai lagi: Discord membatasi 32 karakter dan
+    // token hewan kini dipotong sesuai batas itu.)
+    const big = '12345678901234567890';
+    const longStats = '## <:hp:1541928276165922906> `' + big + '` <:att:1541928417069375498> `' + big + '`' +
+      ' <:pr:1541928475454079077> `' + big + '`\n## <:wp:1523723591194120354> `' + big + '`' +
+      ' <:mg:1523723618016563210> `' + big + '` <:mr:1523723644243804281> `' + big + '`';
     for (let i = 0; i < 30; i++) {
-      captureMessage(makeMessage(card({ name: 'animal' + i, emoji: longEmoji }), { id: 'm' + i }));
+      captureMessage(makeMessage(card({ name: 'animal' + i, stats: longStats }), { id: 'm' + i }));
     }
     const res = await buildDexResponse('animal -c');
     const desc = res.embeds[0].data.description;
@@ -530,5 +535,75 @@ describe('dex prefix command', () => {
     assert.strictEqual(res.embeds.length, 1);
     assert.match(res.embeds[0].data.title, /Hasil Dex/);
     assert.match(res.embeds[0].data.description, /lawliet2/);
+  });
+});
+
+describe('emoji hewan untuk tampilan battle', () => {
+  function fakeClient(overrides = {}) {
+    const dex = require('../src/services/animalDex');
+    const appEmojis = new Map();
+    const created = [];
+    dex.setClient({
+      emojis: { cache: { has: () => false } },
+      application: {
+        emojis: {
+          fetch: async () => appEmojis,
+          create: async ({ name }) => {
+            created.push(name);
+            const emoji = { id: String(9300 + created.length), name, animated: false };
+            appEmojis.set(emoji.id, emoji);
+            return emoji;
+          },
+          ...overrides
+        }
+      }
+    });
+    return { dex, created };
+  }
+
+  afterEach(() => {
+    require('../src/services/animalDex').setClient(null);
+  });
+
+  it('memakai nama hewan bila judul kartu tidak memuat emoji', () => {
+    const { animalEmoji } = require('../src/services/animalDex');
+    const token = animalEmoji({ name: 'snorlax', imageUrl: 'https://cdn.discordapp.com/emojis/111.gif' });
+    assert.strictEqual(token, '<a:snorlax:111>');
+  });
+
+  it('tidak mengarang emoji untuk gambar lampiran biasa', () => {
+    const { animalEmoji } = require('../src/services/animalDex');
+    assert.strictEqual(animalEmoji({ name: 'bulba', imageUrl: 'https://cdn.discordapp.com/attachments/1/2/i.png' }), null);
+    assert.strictEqual(animalEmoji(null), null);
+  });
+
+  it('mem-mirror emoji pet yang ditangkap setelah startup', async () => {
+    const { dex, created } = fakeClient();
+    const store = require('../src/utils/animalDexStorage');
+    dex.captureMessage(makeMessage(card({ name: 'lawliet' })));
+    // captureMessage menjalankan mirror di latar belakang.
+    await new Promise(r => setImmediate(r));
+    assert.ok(created.includes('lawliet'), 'emoji pet diunggah ke aplikasi bot');
+    assert.ok(store.getEmojiToken('1557672128059539466'), 'id sumber terpetakan');
+  });
+
+  it('panel tim memakai emoji pet, bukan 🐾', async () => {
+    const { dex } = fakeClient();
+    const store = require('../src/utils/animalDexStorage');
+    const panel = require('../src/ui/battlePanel');
+    dex.captureMessage(makeMessage(card({ name: 'lawliet' })));
+    await new Promise(r => setImmediate(r));
+
+    const animal = store.getAnimal('lawliet');
+    const team = { id: 1, name: 'T', slots: [{ slot: 1, animalKey: 'lawliet', level: 50, weaponId: null, passives: null }] };
+    const json = panel.teamEmbed(team, {}).toJSON();
+    assert.ok(json.fields[0].name.includes('lawliet:'), 'nama field memuat token emoji');
+    assert.ok(!json.fields[0].name.includes('🐾'), 'tidak jatuh ke ikon netral');
+    assert.ok(animal.imageUrl, 'fixture punya gambar emoji');
+  });
+
+  it('tetap memakai 🐾 bila pet tidak punya emoji sama sekali', () => {
+    const be = require('../src/services/battleEmoji');
+    assert.strictEqual(be.animalEmoji({ name: 'x', imageUrl: 'https://cdn.discordapp.com/attachments/1/2/i.png' }), '🐾');
   });
 });

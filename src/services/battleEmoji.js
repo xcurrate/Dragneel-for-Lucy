@@ -84,10 +84,19 @@ function passiveEmoji(id, quality) {
 }
 
 // Hewan memakai emoji dari dex (hasil tangkapan Lucy), bukan dari data battle.
+// Pet yang baru ditangkap di-mirror saat kartunya masuk; kalau saat itu gagal
+// (mis. koneksi), render berikutnya mencoba sekali lagi di latar belakang.
+const retriedAnimals = new Set();
 function animalEmoji(animal) {
   if (!animal) return FALLBACK.animal;
   const token = dex.animalEmoji(animal);
-  return resolve(token, FALLBACK.animal);
+  const id = /:(\d+)>$/.exec(token || '')?.[1];
+  const mapped = resolve(token, null);
+  if (!mapped && id && !retriedAnimals.has(id)) {
+    retriedAnimals.add(id);
+    dex.syncAnimalEmoji(animal).catch(() => retriedAnimals.delete(id));
+  }
+  return mapped || FALLBACK.animal;
 }
 
 // Data battle memakai kunci pendek (att/pr/wp/mag), dex memakai nama panjang.
