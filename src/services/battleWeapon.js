@@ -155,8 +155,14 @@ const ABILITIES = {
     const pct = weapon.stats[0] + (already && ab.bonusIfBuffed ? weapon.stats[ab.bonusIfBuffed] : 0);
     const raw = e.getDamage(actor.stats[ab.stat], pct / 100, ctx.rng);
     e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
-    // Glacial Axe melewati buff kalau target sudah terkena Freeze.
-    if (!(ab.skipIfBuffed && already)) applyBuff(ctx, buffId, actor, target, ab.duration, buffQuality(weapon.def, weapon.quality));
+    // Glacial Axe memasang 2 stack Freeze sekaligus; Freeze memakai mode
+    // `independent` sehingga tiap stack memblokir satu giliran sendiri.
+    if (!(ab.skipIfBuffed && already)) {
+      const quality = buffQuality(weapon.def, weapon.quality);
+      for (let i = 0; i < (ab.stacks || 1); i++) {
+        applyBuff(ctx, buffId, actor, target, ab.duration, quality);
+      }
+    }
     return true;
   },
 

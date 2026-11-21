@@ -2589,6 +2589,58 @@ describe('update OwO: Wounding Crossbow, Frostbite, Pest, Exposed, Resonance, Li
     }
   });
 
+  it('Glacial Axe memakai 40-60% STR, 260-160 WP, dan 2 stack Freeze', () => {
+    const { buildWeapon, weaponAbility, weaponStats, manaQuality } = weaponModule;
+    const def = data.findWeapon('gaxe');
+    assert.strictEqual(def.id, 15);
+    assert.deepStrictEqual(weaponStats(def, 0), [40]);
+    assert.deepStrictEqual(weaponStats(def, 100), [60]);
+    assert.strictEqual(manaQuality(def, [0, 0, 0]), 0, 'q0 = 260 WP');
+    assert.strictEqual(manaQuality(def, [100, 100, 100]), 100, 'q100 = 160 WP');
+    assert.strictEqual(def.ability.duration, 1, 'satu stack = satu giliran');
+    assert.strictEqual(def.ability.stacks, 2, 'dua stack Freeze');
+
+    for (const [quality, pct, cost] of [[0, 40, 260], [100, 60, 160]]) {
+      const me = [fresh('me')];
+      const them = [fresh('e1')];
+      link(me, them);
+      me[0].weapon = buildWeapon({ id: 15, quality }, rngModule.createRng(1), quality);
+      assert.strictEqual(me[0].weapon.manaCost, cost, `WP quality ${quality}`);
+      me[0].stats.wp[0] = 1000;
+      const str = me[0].stats.att[0] + me[0].stats.att[1];
+      const hpBefore = them[0].stats.hp[0];
+      assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0]), true);
+      const dealt = hpBefore - them[0].stats.hp[0];
+      // getDamage menambah variansi -50..+50 sebelum resistensi, jadi batas
+      // atasnya adalah pct*STR + 50.
+      assert.ok(dealt > 0 && dealt <= Math.ceil(str * (pct / 100) + 50), `${pct}% STR, dapat ${dealt}`);
+      assert.strictEqual(me[0].stats.wp[0], 1000 - cost, 'biaya WP dipakai');
+      const freeze = them[0].buffs.filter(b => b.id === 5);
+      assert.strictEqual(freeze.length, 2, 'dua stack Freeze terpasang');
+      assert.deepStrictEqual(freeze.map(b => b.duration), [1, 1], 'tiap stack satu giliran');
+    }
+  });
+
+  it('dua stack Freeze memblokir dua giliran, satu stack per turn', () => {
+    const attacker = [fresh('a')];
+    const victim = [fresh('b')];
+    link(attacker, victim);
+    for (let i = 0; i < 2; i++) {
+      victim[0].buffs.push(createBuff(5, { quality: [], from: attacker[0], duration: 1, rng: rngModule.createRng(3) }));
+    }
+    const ctx = ctxOf();
+    const hpAfterFirst = (() => {
+      engine.runTurn(ctx, attacker, victim); // turn pembuatan: belum terblokir
+      return attacker[0].stats.hp[0];
+    })();
+    engine.runTurn(ctx, attacker, victim); // giliran 1 terblokir
+    assert.strictEqual(attacker[0].stats.hp[0], hpAfterFirst, 'giliran 1 terblokir');
+    assert.strictEqual(victim[0].buffs.filter(b => b.id === 5).length, 1, 'satu stack terpakai');
+    engine.runTurn(ctx, attacker, victim); // giliran 2 terblokir
+    assert.strictEqual(attacker[0].stats.hp[0], hpAfterFirst, 'giliran 2 terblokir');
+    assert.strictEqual(victim[0].buffs.filter(b => b.id === 5).length, 0, 'stack habis');
+  });
+
   it('Frostbite di bawah 100 stack tidak berubah menjadi Freeze', () => {
     const holder = fresh('holder');
     const source = fresh('source');

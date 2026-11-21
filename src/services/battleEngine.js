@@ -319,9 +319,20 @@ function runTurn(ctx, player, enemy) {
     // melewati serangan pada turn itu.
     if (actor.skippedAttack) continue;
     // OwO memanggil canAttack semua buff (tidak berhenti di yang pertama),
-    // karena Freeze menurunkan durasinya sendiri di sini.
+    // karena buff bisa mengubah durasinya sendiri di sini. Freeze hanya boleh
+    // menghabiskan SATU stack per giliran ("remove a stack after triggering"),
+    // jadi stack lain pada unit yang sama tidak ikut ditembak di giliran ini.
     let blocked = false;
+    let consumedStack = false;
     for (const buff of actor.buffs) {
+      if (buff.id === 5) {
+        if (consumedStack) continue;
+        if (buff.canAttack?.(ctx, actor, allies, foes) === false) {
+          blocked = true;
+          consumedStack = true;
+        }
+        continue;
+      }
       if (buff.canAttack?.(ctx, actor, allies, foes) === false) blocked = true;
     }
     if (blocked) continue;

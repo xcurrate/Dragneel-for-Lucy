@@ -856,13 +856,13 @@
       "type": "PHYSICAL",
       "qualityList": [
         [
-          20,
-          40
+          40,
+          60
         ]
       ],
       "manaRange": [
-        280,
-        180
+        260,
+        160
       ],
       "passiveCount": 1,
       "buffList": [
@@ -871,10 +871,13 @@
       "ability": {
         "kind": "damage_one_buff",
         "stat": "att",
-        "duration": 2,
-        "skipIfBuffed": true
+        "type": "PHYSICAL",
+        "duration": 1,
+        "stacks": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaRange 260-160: biaya TURUN saat quality naik (q0 = 260, q100 = 160).",
+      "sourceText": "Deals **40-60%** of your STR to an enemy and apply 2 stacks of **Freeze**. Freeze: next turn, prevent the target from attacking. Remove a stack after triggering.",
+      "abilityNote": "Damage 40-60% STR lalu 2 stack Freeze terpisah; tiap stack memblokir satu giliran serang. Biaya 260-160 WP."
     },
     {
       "id": 16,
