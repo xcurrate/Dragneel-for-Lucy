@@ -488,3 +488,10 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   hitungannya dari akhir). Jangan pindahkan gerbang ke awal handler: perintah salah ketik akan
   dibalas pesan cooldown, bukan pesan validasinya. `d sim help` sengaja bebas cooldown.
   Tes memakai `store.setCooldown`/`clearCooldown` agar tidak menunggu 5 detik nyata.
+- **Buff Wither (id 14) + Withering Staff (id 132).** Wither memotong `healed` dan
+  `replenished`; sebar dilakukan di `postTurn` ke musuh yang belum terkena, dengan
+  `effectiveness` dibagi `spreadWeakening` (0.5, dibaca dari data). Penumpukan memakai
+  `STACK[14] = 'merge'` — durasi digabung, persen TIDAK dijumlah, supaya dua Wither tidak
+  jadi −80%. Setiap buff baru harus punya factory di `battleBuffs.FACTORIES`, entri
+  `STACK`, dan slot di `qualityList`; slot yang lupa ditambahkan membuat `stats[n]`
+  `undefined` dan peluangnya selalu lolos (bug senyap, bukan error).

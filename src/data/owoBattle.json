@@ -1151,6 +1151,37 @@
       },
       "disabled": true,
       "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+    },
+    {
+      "id": 132,
+      "name": "Withering Staff",
+      "emojis": [],
+      "emojiNote": "Belum ada ID emoji `:wstaff:` dari sumber. Render memakai ikon netral ⚔️ sampai ID diisi di sini (7 token, urut common→fabled).",
+      "aliases": [
+        "witheringstaff",
+        "wstaff"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          55,
+          80
+        ]
+      ],
+      "manaRange": [
+        220,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        14
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "mag",
+        "type": "MAGICAL",
+        "duration": 2
+      }
     }
   ],
   "buffs": [
@@ -1316,6 +1347,29 @@
         ]
       ],
       "note": "Cegah debuff masuk; tiap penolakan menghabiskan 1 stack dan replenish 15-25% MAG."
+    },
+    {
+      "id": 14,
+      "name": "Wither",
+      "debuff": true,
+      "qualityList": [
+        [
+          25,
+          40
+        ],
+        [
+          20,
+          35
+        ],
+        [
+          25,
+          40
+        ]
+      ],
+      "note": "Kurangi heal HP 25-40% dan replenish WP 20-35% selama 2 turn. Tiap giliran berpeluang 25-40% menyebar ke musuh lain yang belum terkena; salinan hasil sebar memakai efektivitas separuh sehingga rantai makin lemah dan berhenti sendiri.",
+      "spreadWeakening": 0.5,
+      "spreadWeakeningNote": "Deskripsi sumber hanya menyebut 'semakin melemah' tanpa angka. Dipakai 0.5 (separuh) per lompatan: efek dan peluang sebar ikut terbagi dua, sehingga rantai berhenti sendiri. Ubah angka ini bila sumber menyebut nilai lain.",
+      "stackingNote": "Menumpuk dengan cara menggabung durasi (seperti Mortality), bukan menjumlah persen, supaya dua Wither di satu unit tidak menjadi -80% heal."
     }
   ],
   "limits": {

@@ -44,6 +44,7 @@ const STACK = {
   11: 'independent', // Leech
   12: 'independent', // Stinky
   13: 'independent', // Sacred Ward: tiap stack instance terpisah
+  14: 'merge', // Wither: durasi digabung, persennya tidak dijumlah
 };
 
 // `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
@@ -165,6 +166,33 @@ const FACTORIES = {
 
   13: (def, stats, from) => ({
     id: 13, name: def.name, debuff: false, stats, duration: 2, from,
+  }),
+
+  // Wither: mengurangi heal HP dan replenish WP, lalu tiap giliran berpeluang
+  // menyebar ke musuh lain yang belum terkena. Salinan hasil sebar memakai
+  // `effectiveness` separuh dari sumbernya, sehingga rantai makin melemah dan
+  // berhenti sendiri ketika semua musuh sudah terkena.
+  14: (def, stats, from) => ({
+    id: 14, name: def.name, debuff: true, stats, duration: 2, from,
+    effectiveness: 1,
+    healed(ctx, unit, healer, bucket) {
+      bucket.bonus -= (bucket.amount * stats[0] * this.effectiveness) / 100;
+    },
+    replenished(ctx, unit, healer, bucket) {
+      bucket.bonus -= (bucket.amount * stats[1] * this.effectiveness) / 100;
+    },
+    postTurn(ctx, unit, team, foes) {
+      if (unit.stats.hp[0] <= 0) return;
+      const e = engine();
+      if (ctx.rng.next() * 100 >= stats[2] * this.effectiveness) return;
+      const targets = e.aliveOf(foes).filter(u => !u.buffs.some(b => b.id === 14));
+      const target = e.pickRandom(targets, ctx.rng);
+      if (!target) return;
+      const spread = createBuff(14, { quality: this.quality, from, rng: ctx.rng });
+      if (!spread) return;
+      spread.effectiveness = this.effectiveness * (def.spreadWeakening ?? 0.5);
+      e.bindBuff(ctx, target, spread);
+    },
   }),
 
   12: (def, stats, from) => ({

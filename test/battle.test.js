@@ -21,8 +21,8 @@ const COEFFS_WEAK = { hp: 4, att: 2, pr: 3, wp: 1, mag: 1, mr: 2 };
 describe('data battle OwO', () => {
   it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
     assert.strictEqual(data.animals().length, 20);
-    assert.strictEqual(data.weapons().length, 22);
-    assert.strictEqual(data.buffs().length, 13);
+    assert.strictEqual(data.weapons().length, 23);
+    assert.strictEqual(data.buffs().length, 14);
   });
 
   it('mencari hewan lewat alias', () => {
@@ -822,6 +822,123 @@ describe('cooldown simulasi', () => {
   });
 });
 
+describe('Withering Staff dan Wither', () => {
+  const buffs = require(path.join(ROOT, 'src/services/battleBuffs'));
+  const engine = require(path.join(ROOT, 'src/services/battleEngine'));
+
+  const unit = name => ({
+    nickname: name,
+    stats: { hp: [500, 500, 500, 0], wp: [0, 500, 500, 0], mag: [1000, 0], att: [10, 0], pr: [0, 0], mr: [0, 0] },
+    buffs: [], weapon: null, team: [], foes: [],
+  });
+  const link = (mine, theirs) => {
+    mine.team = [mine]; mine.foes = theirs;
+    for (const u of theirs) { u.team = theirs; u.foes = [mine]; }
+  };
+
+  it('dikenali lewat alias dan punya stat sesuai deskripsi', () => {
+    const w = data.findWeapon('wstaff');
+    assert.strictEqual(w.id, 132);
+    assert.strictEqual(w.name, 'Withering Staff');
+    assert.strictEqual(data.findWeapon('witheringstaff').id, 132);
+    assert.strictEqual(w.passiveCount, 1);
+    assert.deepStrictEqual(w.buffList, [14]);
+    assert.strictEqual(w.ability.kind, 'damage_one_buff');
+    assert.strictEqual(w.ability.stat, 'mag');
+    assert.strictEqual(w.ability.duration, 2);
+  });
+
+  it('memakai quality 0 = 55% MAG dan 220 WP, quality 100 = 80% dan 150 WP', () => {
+    const { weaponStats, manaQuality, buffQuality } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const w = data.findWeapon('wstaff');
+    assert.deepStrictEqual(weaponStats(w, 0), [55]);
+    assert.deepStrictEqual(weaponStats(w, 100), [80]);
+    // Slot biaya WP ada di ujung: stat → buff → biaya.
+    const q0 = [0, 0, 0, 0, 0];
+    const q100 = [100, 100, 100, 100, 100];
+    assert.deepStrictEqual(buffQuality(w, q0), [0, 0, 0]);
+    assert.deepStrictEqual(buffQuality(w, q100), [100, 100, 100]);
+    assert.strictEqual(manaQuality(w, q0), 0);
+    assert.strictEqual(manaQuality(w, q100), 100);
+  });
+
+  it('mengurangi heal HP dan replenish WP sesuai persen quality', () => {
+    const target = unit('korban');
+    target.stats.hp[0] = 100; // sisakan ruang heal, kalau penuh heal() mengembalikan 0
+    const ctx = { rng: { next: () => 0.5 }, damageDealt: 0 };
+    target.buffs.push(buffs.createBuff(14, { quality: [100, 100, 100], from: target, rng: ctx.rng }));
+    const healed = engine.heal(ctx, target, 200, target);
+    assert.strictEqual(healed, 120, 'heal 200 dipotong 40%');
+    target.stats.wp[0] = 0;
+    const given = engine.replenish(ctx, target, 200, target);
+    assert.strictEqual(given, 130, 'WP 200 dipotong 35%');
+  });
+
+  it('menyebar ke musuh lain dengan efektivitas separuh', () => {
+    const caster = unit('pemakai');
+    const [a, b] = [unit('a'), unit('b')];
+    link(caster, [a, b]);
+    const ctx = { rng: { next: () => 0 }, damageDealt: 0 };
+    caster.buffs.push(buffs.createBuff(14, { quality: [100, 100, 100], from: caster, rng: ctx.rng }));
+    const first = caster.buffs[0];
+    first.postTurn(ctx, caster, caster.team, caster.foes);
+    const spread = a.buffs.find(x => x.id === 14);
+    assert.ok(spread, 'menyebar ke musuh pertama');
+    assert.strictEqual(spread.effectiveness, 0.5);
+    assert.strictEqual(first.effectiveness, 1, 'sumber tidak melemah');
+  });
+
+  it('tidak menyebar saat peluang gagal', () => {
+    const caster = unit('pemakai');
+    const foe = unit('lawan');
+    link(caster, [foe]);
+    const ctx = { rng: { next: () => 0.999 }, damageDealt: 0 };
+    const w = buffs.createBuff(14, { quality: [100, 100, 100], from: caster, rng: ctx.rng });
+    caster.buffs.push(w);
+    w.postTurn(ctx, caster, caster.team, caster.foes);
+    assert.ok(!foe.buffs.some(x => x.id === 14));
+  });
+
+  it('berhenti menyebar ketika semua musuh sudah terkena', () => {
+    const caster = unit('pemakai');
+    const foes = [unit('a'), unit('b')];
+    link(caster, foes);
+    const ctx = { rng: { next: () => 0 }, damageDealt: 0 };
+    caster.buffs.push(buffs.createBuff(14, { quality: [100, 100, 100], from: caster, rng: ctx.rng }));
+    for (let turn = 0; turn < 4; turn++) {
+      for (const u of [caster, ...foes]) for (const b of [...u.buffs]) b.postTurn?.(ctx, u, u.team, u.foes);
+    }
+    const total = [caster, ...foes].reduce((n, u) => n + u.buffs.filter(b => b.id === 14).length, 0);
+    assert.strictEqual(total, 3, 'satu per unit, tidak menumpuk tanpa batas');
+  });
+
+  it('menumpuk dengan menggabung durasi, bukan menjumlah persen', () => {
+    const target = unit('korban');
+    target.stats.hp[0] = 100;
+    const ctx = { rng: { next: () => 0.5 }, damageDealt: 0 };
+    const mk = () => buffs.createBuff(14, { quality: [100, 100, 100], from: target, rng: ctx.rng });
+    engine.bindBuff(ctx, target, mk());
+    engine.bindBuff(ctx, target, mk());
+    assert.strictEqual(target.buffs.filter(b => b.id === 14).length, 1, 'satu instance saja');
+    assert.strictEqual(target.buffs[0].duration, 4, 'durasi 2 + 2');
+    assert.strictEqual(engine.heal(ctx, target, 200, target), 120, 'tetap -40%, bukan -80%');
+  });
+
+  it('faktor pelemahan diambil dari data, bukan ditanam di kode', () => {
+    assert.strictEqual(data.buffById(14).spreadWeakening, 0.5);
+    assert.ok(data.buffById(14).spreadWeakeningNote, 'asal angka dijelaskan');
+  });
+
+  it('tetap menghasilkan simulasi yang valid', async () => {
+    const sim = require(path.join(ROOT, 'src/services/battleSim'));
+    const spec = weapon => ({ coeffs: COEFFS_STRONG, level: 60, weapon });
+    const r = await sim.simulate([spec({ id: 132 })], [spec({ id: 1 })], { runs: 50, seed: 3 });
+    assert.strictEqual(r.runs, 50);
+    assert.strictEqual(r.tally.player + r.tally.enemy + r.tally.tie, 50);
+    assert.ok(r.turns.avg > 0);
+  });
+});
+
 describe('emoji battle', () => {
   const be = require(path.join(ROOT, 'src/services/battleEmoji'));
 
@@ -838,6 +955,12 @@ describe('emoji battle', () => {
     const battle = require(path.join(ROOT, 'src/data/owoBattle'));
     const passives = require(path.join(ROOT, 'src/data/owoPassives.json')).passives;
     for (const weapon of battle.weapons()) {
+      // Senjata yang ID emoji-nya belum diberikan boleh kosong asal menyatakan
+      // itu eksplisit, supaya tampilan jatuh ke ikon netral dan tidak menebak ID.
+      if (!weapon.emojis.length) {
+        assert.ok(weapon.emojiNote, `${weapon.name} tanpa emoji harus punya emojiNote`);
+        continue;
+      }
       assert.strictEqual(weapon.emojis.length, 7, `${weapon.name} punya emoji lengkap`);
     }
     for (const passive of passives) {

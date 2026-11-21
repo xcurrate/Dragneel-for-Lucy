@@ -417,6 +417,26 @@ sama dengan `d sim`, jadi tidak ada selisih antara yang tampil dan yang bertarun
 Pasif yang tidak disimpan di slot diundi dengan seed tetap, supaya tampilan tidak
 berubah setiap kali `d team show` dibuka.
 
+### Withering Staff
+
+`weapon=wstaff` (alias `witheringstaff`), 4 stat, 1 slot pasif. Biaya 220 → 150 WP,
+damage 55-80% MAG ke satu musuh acak, lalu memasang **Wither** 2 turn.
+
+Wither memotong heal HP 25-40% dan replenish WP 20-35%. Tiap giliran berpeluang
+25-40% menyebar ke musuh lain yang belum terkena, dengan efektivitas separuh
+(efek dan peluangnya ikut terbagi dua), sehingga rantai makin lemah dan berhenti
+sendiri. Menumpuk di unit yang sama menggabung durasi, bukan menjumlah persen —
+dua Wither menjadi 4 turn, tetap −40%, bukan −80%.
+
+Dua hal yang tidak ada di deskripsi sumber dan karenanya dicatat eksplisit di
+`owoBattle.json`:
+
+- `spreadWeakening: 0.5` — angka "semakin melemah" tidak disebutkan. Ubah di data
+  bila sumber menyebut nilai lain; kode membacanya dari sana.
+- `emojiNote` — ID emoji `:wstaff:` belum diberikan, jadi `emojis` kosong dan
+  tampilan memakai ikon netral ⚔️. Isi 7 token (common → fabled) saat ID tersedia;
+  tes mengizinkan kosong hanya bila `emojiNote` ada.
+
 ### Tier senjata
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
@@ -441,7 +461,7 @@ memengaruhi hasil pertarungan.
 
 ### Sumber angka
 
-- `src/data/owoBattle.js` — 20 hewan, 22 senjata, 12 buff, plus formula.
+- `src/data/owoBattle.js` — 20 hewan, 23 senjata, 14 buff, plus formula.
   Angkanya dibaca langsung dari tabel OwO, bukan perkiraan.
 - `src/data/owoPassives.json` — 21 pasif (lihat bagian di bawah).
 - `src/data/owoPending.json` — senjata/pasif yang nama dan alias-nya sudah
