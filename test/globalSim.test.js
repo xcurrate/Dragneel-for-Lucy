@@ -418,3 +418,79 @@ describe('antrean simulasi global', () => {
     assert.deepStrictEqual(globalSim.queueInfo(), { active: 0, waiting: 0 });
   });
 });
+
+describe('tampilan hasil simulasi global', () => {
+  let tempDir;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-global-view-'));
+    process.chdir(tempDir);
+    store.getDb();
+  });
+
+  afterEach(() => {
+    process.chdir(ROOT);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  async function runGlobal(args = ['-m', '50']) {
+    let payload = null;
+    await handleSimCommand(message('x'), ['global', ...args], 'd', {
+      sendEmbed: () => null,
+      sendPayload: (m, p) => { payload = p; return null; },
+      isDeveloper: () => true,
+    });
+    return payload ? payload.embeds[0].toJSON() : null;
+  }
+
+  it('memakai warna biru, bukan warna hasil menang/kalah', async () => {
+    seedWorld();
+    const embed = await runGlobal();
+    assert.strictEqual(embed.color, panel.COLOR.blue);
+  });
+
+  it('menampilkan komposisi pet dan level tanpa senjata atau pasif', async () => {
+    store.createTeam('me', 'Milikku');
+    store.setSlot('me', 'Milikku', 1, { custom: COEFFS_STRONG, level: 77 });
+    store.setSlot('me', 'Milikku', 2, { custom: COEFFS_WEAK, level: 42 });
+    store.setActiveTeam('me', 'Milikku');
+    store.createTeam('rival', 'Lawan');
+    store.setSlot('rival', 'Lawan', 1, { custom: COEFFS_WEAK, level: 30 });
+
+    const embed = await runGlobal();
+    const field = embed.fields.find(f => f.name.includes('Komposisi'));
+    assert.ok(field, 'field komposisi harus ada');
+    assert.match(field.value, /L\.77/);
+    assert.match(field.value, /L\.42/);
+    // Nama senjata dan pasif tidak boleh muncul di ringkasan komposisi.
+    const weapons = require(path.join(ROOT, 'src/data/owoBattle')).weapons();
+    for (const weapon of weapons) {
+      assert.ok(!field.value.includes(weapon.name), `nama senjata "${weapon.name}" bocor`);
+    }
+    assert.ok(!/pasif|passive/i.test(field.value));
+  });
+
+  it('menyebut tim kosong dan tim berstat belum lengkap yang tidak diadu', async () => {
+    store.createTeam('me', 'Milikku');
+    store.setSlot('me', 'Milikku', 1, { custom: COEFFS_STRONG, level: 80 });
+    store.setActiveTeam('me', 'Milikku');
+    store.createTeam('rival', 'LawanSah');
+    store.setSlot('rival', 'LawanSah', 1, { custom: COEFFS_WEAK, level: 30 });
+    store.createTeam('rival', 'TimKosong');
+    store.createTeam('rival', 'StatKurang');
+    store.setSlot('rival', 'StatKurang', 1, { animalKey: 'hewan-tidak-ada', level: 50 });
+
+    const embed = await runGlobal();
+    assert.match(embed.description, /1 tim/, 'hanya tim sah yang diadu');
+    const field = embed.fields.find(f => f.name.includes('dilewati'));
+    assert.ok(field, 'field tim dilewati harus ada');
+    assert.match(field.value, /TimKosong \(kosong\)/);
+    assert.match(field.value, /StatKurang \(stat belum lengkap\)/);
+  });
+
+  it('tidak menampilkan field tim dilewati kalau semua tim bisa diadu', async () => {
+    seedWorld();
+    const embed = await runGlobal();
+    assert.ok(!embed.fields.some(f => f.name.includes('dilewati')));
+  });
+});

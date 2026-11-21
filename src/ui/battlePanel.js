@@ -10,7 +10,7 @@ const { createRng } = require('../services/battleRng');
 const dexStore = require('../utils/animalDexStorage');
 const emoji = require('../services/battleEmoji');
 
-const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E };
+const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E, blue: 0x3498DB };
 const TEAM_BUTTON = 'battle_team_pick';
 const ID_SEP = ':';
 const MAX_SLOTS = data.limits.maxSlots;
@@ -178,7 +178,7 @@ function formatDuration(ms) {
   return `${minutes} menit ${seconds % 60} detik`;
 }
 
-function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', title = null } = {}) {
+function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', title = null, mode = null } = {}) {
   const { done, total, tally } = progress;
   const percent = Math.min(100, Math.round((done / total) * 1000) / 10);
   const stats = [
@@ -188,7 +188,7 @@ function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'La
   ].join('\n');
 
   return new EmbedBuilder()
-    .setColor(COLOR.warn)
+    .setColor(mode === 'global' ? COLOR.blue : COLOR.warn)
     .setTitle(title || '⚔️ Simulasi Battle — berjalan')
     .setDescription(`**${playerLabel}** vs **${enemyLabel}**\n\`\`\`\n${stats}\n\`\`\``)
     .addFields(
@@ -322,6 +322,17 @@ function percent(value) {
   return `${Number(value || 0).toLocaleString('id-ID')}%`;
 }
 
+// Komposisi tim pemain pada simulasi global. Senjata dan pasif sengaja tidak
+// ditampilkan: yang dibutuhkan di sini hanya gambaran pet dan levelnya.
+function teamCompLines(specs) {
+  if (!specs || !specs.length) return '*Tim kosong.*';
+  return specs.map((spec, index) => {
+    const slot = spec.slot || index + 1;
+    const label = spec.label || `slot${slot}`;
+    return `\`${slot}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}`;
+  }).join('\n');
+}
+
 // Satu kelompok level pada laporan: jumlah tim, rata-rata level, dan hasil.
 function bucketLines(bucket) {
   if (!bucket.teams) {
@@ -336,13 +347,13 @@ function bucketLines(bucket) {
 
 // Hasil simulasi global. Angka utama ditaruh di description mengikuti gaya
 // laporan yang sudah dipakai bot lain, lalu rincian per kelompok level.
-function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd' } = {}) {
+function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, skipped = [] } = {}) {
   const seconds = (result.durationMs / 1000).toFixed(2);
   const low = result.buckets.low;
   const high = result.buckets.high;
 
   const embed = new EmbedBuilder()
-    .setColor(simColor(result.winRate))
+    .setColor(COLOR.blue)
     .setTitle('🌍 Simulasi Global')
     .setDescription([
       `### Hasil Simulasi Global (${seconds}s)`,
@@ -351,6 +362,11 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd' } = {})
       `-# ${result.workers || 1} worker · ${Math.round(result.battles / Math.max(1, result.durationMs / 1000)).toLocaleString('id-ID')} pertarungan/detik`,
     ].join('\n'))
     .addFields(
+      {
+        name: '🪖 Komposisi tim kamu',
+        value: teamCompLines(playerSpecs),
+        inline: false,
+      },
       {
         name: `🔅 ${low.label}`,
         value: bucketLines(low),
@@ -388,6 +404,18 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd' } = {})
 
   if (!result.tally.enemy) {
     embed.addFields({ name: '🏆 Tanpa kekalahan', value: 'Tidak ada tim lawan yang berhasil mengalahkan tim kamu.' });
+  }
+  // Tim yang tidak bisa diadu tetap disebutkan supaya selisih jumlah dengan
+  // `dtm` bisa dijelaskan, bukan terlihat seperti bug.
+  if (skipped.length) {
+    const describe = item => (typeof item === 'string' ? item : `${item.label} (${item.reason})`);
+    const names = skipped.slice(0, 5).map(describe).join(', ');
+    const more = skipped.length > 5 ? `, +${skipped.length - 5} lain` : '';
+    embed.addFields({
+      name: '⚠️ Tim dilewati',
+      value: `${skipped.length} tim tidak diadu: ${names}${more}.\n`
+        + '-# Isi slot kosong dan lengkapi stat agar tim ikut simulasi.',
+    });
   }
   return embed;
 }
@@ -453,7 +481,7 @@ function parseTeamButton(customId) {
 module.exports = {
   COLOR, TEAM_BUTTON, MAX_SLOTS,
   weaponName, bar, slotField, slotStats, slotIcon,
-  teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
+  teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, teamCompLines, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
   GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
 };

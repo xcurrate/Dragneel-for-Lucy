@@ -156,6 +156,7 @@ function makeProgressPublisher(message, sendEmbed, sendPayload, labels, mode) {
     if (progressDisabled) return;
     const embed = simProgressEmbed(progress, {
       ...labels,
+      mode,
       title: mode === 'global' ? '🌍 Simulasi Global — berjalan' : null,
     });
 
@@ -291,11 +292,21 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
   const opponents = [];
-  for (const other of store.listOpponentTeams(userId)) {
+  // `dtm` menampilkan semua tim, termasuk yang kosong, sedangkan simulasi hanya
+  // bisa memakai tim berisi. Tim yang dilewati tetap dicatat supaya selisih
+  // jumlah dengan `dtm` bisa dijelaskan, bukan terlihat seperti bug.
+  const skipped = [];
+  for (const other of store.listAllTeams()) {
+    if (other.userId === String(userId)) continue;
+    if (!other.slots.length) {
+      skipped.push({ label: teamLabel(other), reason: 'kosong' });
+      continue;
+    }
     const specs = resolveTeamSpecs(other);
-    // Tim lawan yang statnya belum lengkap dilewati, bukan menggagalkan
-    // seluruh simulasi: data lawan bukan milik user yang menjalankan perintah.
-    if (specs.error) continue;
+    if (specs.error) {
+      skipped.push({ label: teamLabel(other), reason: 'stat belum lengkap' });
+      continue;
+    }
     opponents.push({
       teamId: other.id,
       slotId: other.slotId,
@@ -350,7 +361,12 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   const token = resultToken(result.seed);
   rememberGlobalResult(userId, token, { result, playerLabel: labels.playerLabel });
 
-  const finalEmbed = globalSimEmbed(result, { playerLabel: labels.playerLabel, prefix });
+  const finalEmbed = globalSimEmbed(result, {
+    playerLabel: labels.playerLabel,
+    prefix,
+    playerSpecs: player.specs,
+    skipped,
+  });
   const payload = {
     embeds: [finalEmbed],
     // Tombol tetap ditampilkan walau belum ada kekalahan; saat dibuka akan

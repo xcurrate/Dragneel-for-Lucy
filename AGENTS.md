@@ -612,3 +612,14 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
 - **`-m` = per tim, `-total` = total pertarungan** (dibulatkan ke bawah agar tidak
   melebihi permintaan). Keduanya wajib terdaftar di `parseFlags`; flag yang tidak
   terdaftar akan jatuh ke `rest` dan ditolak sebagai "argumen tidak dikenal".
+- **`dtm` menampilkan semua tim, simulasi hanya memakai tim berisi.** `listOpponentTeams`
+  membuang tim tanpa slot, jadi memakainya langsung membuat jumlah lawan di
+  simulasi lebih kecil daripada yang dilihat user di `dtm` tanpa penjelasan.
+  `handleGlobalSim` mengiterasi `listAllTeams()` dan mencatat setiap tim yang
+  dilewati beserta alasannya (`kosong` / `stat belum lengkap`) untuk field
+  "⚠️ Tim dilewati". Kalau menambah alasan baru, tambahkan di situ — jangan
+  kembali memakai `continue` tanpa catatan.
+- **Warna embed simulasi global selalu biru (`COLOR.blue`), bukan `simColor`.**
+  Simulasi duel tetap memakai `simColor` (hijau/kuning/merah mengikuti winrate);
+  untuk global warna itu berubah-ubah dan mengganggu. Embed progres memilih warna
+  dari opsi `mode`, bukan dari ada/tidaknya `title`.
