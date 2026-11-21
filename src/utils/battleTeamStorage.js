@@ -254,11 +254,11 @@ function listAllTeams() {
   return rows.map(row => rowToTeam(row, loadSlots(row.id)));
 }
 
-// Tim yang bisa dipakai sebagai lawan: milik user lain dan punya isi slot.
-// Tim milik sendiri dikecualikan supaya simulasi tidak mengadu tim dengan
-// dirinya sendiri.
-function listOpponentTeams(userId) {
-  return listAllTeams().filter(team => team.userId !== String(userId) && team.slots.length);
+// Tim yang bisa dipakai sebagai lawan: semua tim berisi slot, termasuk tim
+// lain milik user sendiri. Hanya tim yang sedang dipakai bertarung yang
+// dikecualikan supaya tidak mengadu tim dengan dirinya sendiri.
+function listOpponentTeams(userId, activeTeamId = null) {
+  return listAllTeams().filter(team => team.id !== activeTeamId && team.slots.length);
 }
 
 // ID tim 1..MAX_TEAM_ID milik satu user. ID bebas terkecil dipakai lebih dulu,

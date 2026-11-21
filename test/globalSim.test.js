@@ -59,18 +59,23 @@ describe('simulasi global', () => {
   // lewat sendPayload. Ini jalur yang dipakai tes untuk memeriksa payload.
   const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); return null; };
 
-  it('hanya memakai tim milik user lain sebagai lawan', () => {
+  it('memakai semua tim tersimpan sebagai lawan, kecuali tim yang dipilih', () => {
     seedWorld();
-    const opponents = store.listOpponentTeams('me');
-    assert.strictEqual(opponents.length, 2);
-    assert.ok(opponents.every(t => t.userId === 'rival'));
-    assert.ok(!opponents.some(t => t.name === 'Milikku'));
+    store.createTeam('me', 'Cadanganku');
+    store.setSlot('me', 'Cadanganku', 1, { custom: COEFFS_WEAK, level: 40 });
+    const active = store.getActiveTeam('me');
+    const opponents = store.listOpponentTeams('me', active.id);
+    // Tim lain milik user sendiri tetap ikut; hanya tim yang dipilih yang keluar.
+    assert.strictEqual(opponents.length, 3);
+    assert.ok(!opponents.some(t => t.id === active.id));
+    assert.ok(opponents.some(t => t.userId === 'me'), 'tim lain milik sendiri ikut diadu');
+    assert.ok(opponents.some(t => t.userId === 'rival'));
   });
 
   it('membagi hasil menurut level tim lawan pada batas 35', async () => {
     seedWorld();
     const player = require(path.join(ROOT, 'src/commands/battleSim')).resolveTeamSpecs(store.getActiveTeam('me'));
-    const opponents = store.listOpponentTeams('me').map(t => ({
+    const opponents = store.listOpponentTeams('me', store.getActiveTeam('me').id).map(t => ({
       label: t.name,
       specs: require(path.join(ROOT, 'src/commands/battleSim')).resolveTeamSpecs(t).specs,
     }));
@@ -511,21 +516,19 @@ describe('tampilan hasil simulasi global', () => {
     assert.match(field.value, /StatKurang \(stat belum lengkap\)/);
   });
 
-  it('menjelaskan tim milik sendiri yang tidak ikut diadu', async () => {
+  it('mengadu tim lain milik sendiri, hanya tim terpilih yang dikecualikan', async () => {
     store.createTeam('me', 'Milikku');
     store.setSlot('me', 'Milikku', 1, { custom: COEFFS_STRONG, level: 80 });
     store.setActiveTeam('me', 'Milikku');
-    // Tim kedua milik user yang sama: muncul di `dtm`, tapi tidak boleh jadi lawan.
     store.createTeam('me', 'Cadanganku');
     store.setSlot('me', 'Cadanganku', 1, { custom: COEFFS_WEAK, level: 60 });
     store.createTeam('rival', 'LawanSah');
     store.setSlot('rival', 'LawanSah', 1, { custom: COEFFS_WEAK, level: 30 });
 
     const embed = await runGlobal();
-    assert.match(embed.description, /1 tim/, 'hanya tim user lain yang diadu');
-    // Angka `dtm` harus bisa direkonsiliasi dari embed: total, milik sendiri, dilewati.
+    assert.match(embed.description, /2 tim/, 'tim lain milik sendiri ikut diadu');
     assert.match(embed.description, /3 tim di `dtm`/);
-    assert.match(embed.description, /2 milikmu \(tidak diadu\)/);
+    assert.match(embed.description, /1 sedang dipilih \(tidak diadu\)/);
     assert.match(embed.description, /0 dilewati/);
   });
 

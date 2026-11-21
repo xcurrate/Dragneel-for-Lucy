@@ -366,7 +366,7 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
       `**Lawan:** ${result.opponents.toLocaleString('id-ID')} tim · ${result.battles.toLocaleString('id-ID')} pertarungan (${result.runs.toLocaleString('id-ID')}× per tim)`,
       ...(totals
         ? [`-# ${totals.all.toLocaleString('id-ID')} tim di \`${prefix}tm\` · `
-          + `${totals.own.toLocaleString('id-ID')} milikmu (tidak diadu) · `
+          + `1 sedang dipilih (tidak diadu) · `
           + `${(skipped.length).toLocaleString('id-ID')} dilewati`]
         : []),
       `-# ${result.workers || 1} worker · ${Math.round(result.battles / Math.max(1, result.durationMs / 1000)).toLocaleString('id-ID')} pertarungan/detik`,

@@ -206,7 +206,7 @@ function makeProgressPublisher(message, sendEmbed, sendPayload, labels, mode) {
 
 function globalUsage(prefix = 'd') {
   return [
-    `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** milik user lain`,
+    `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** (kecuali tim yang dipilih)`,
     '',
     'Hasil berisi: rata-rata streak, rata-rata kalah, dan rekap menang/seri/kalah',
     'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
@@ -292,14 +292,15 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
   const opponents = [];
-  // `dtm` menampilkan semua tim, termasuk milik sendiri dan yang kosong,
-  // sedangkan simulasi hanya bisa mengadu tim berisi milik orang lain. Semua
-  // yang tidak ikut diadu dicatat supaya angka `dtm` bisa direkonsiliasi.
+  // Simulasi global melawan semua tim tersimpan, termasuk tim lain milik user
+  // sendiri. Hanya tim yang sedang dipilih yang dikecualikan, karena tim itu
+  // yang bertarung. Semua yang tidak ikut diadu dicatat supaya angka `dtm`
+  // bisa direkonsiliasi.
   const skipped = [];
-  let ownTeams = 0;
+  let excluded = 0;
   const allTeams = store.listAllTeams();
   for (const other of allTeams) {
-    if (other.userId === String(userId)) { ownTeams += 1; continue; }
+    if (other.id === team.id) { excluded += 1; continue; }
     if (!other.slots.length) {
       skipped.push({ label: teamLabel(other), reason: 'kosong' });
       continue;
@@ -317,7 +318,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     });
   }
   if (!opponents.length) {
-    return send(message, warnEmbed('Belum ada tim lawan yang bisa dipakai. Simulasi global butuh tim tersimpan dari user lain.'));
+    return send(message, warnEmbed('Belum ada tim lawan yang bisa dipakai. Simulasi global butuh tim tersimpan selain tim yang sedang dipilih.'));
   }
 
   // Jumlah run baru bisa dihitung setelah jumlah lawan diketahui, karena
@@ -383,7 +384,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     prefix,
     playerSpecs: player.specs,
     skipped,
-    totals: { all: allTeams.length, own: ownTeams },
+    totals: { all: allTeams.length, excluded },
   });
   const payload = {
     embeds: [finalEmbed],
