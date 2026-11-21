@@ -10,11 +10,10 @@ const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
-const engine = require('../services/battleEngine');
 const globalSim = require('../services/globalSim');
 const data = require('../data/owoBattle');
 const {
-  simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
+  simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
 } = require('../ui/battlePanel');
@@ -49,6 +48,18 @@ function usage(prefix = 'd') {
     '',
     'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
+}
+
+// `A vs B` → { playerTokens: ['A'], enemyArgs: ['B'] }. Tanpa `vs`, sisi
+// pemain kosong (pakai tim aktif) dan semua token menjadi argumen lawan.
+function splitVs(args) {
+  const tokens = args.map(a => String(a));
+  const at = tokens.findIndex(token => /^vs$/i.test(token));
+  if (at < 0) return { playerTokens: [], enemyArgs: tokens };
+  return {
+    playerTokens: tokens.slice(0, at).filter(t => !/^vs$/i.test(t)),
+    enemyArgs: tokens.slice(at + 1),
+  };
 }
 
 // Semua unit di satu sisi memakai level yang sama saat flag `lvl` dipakai.
@@ -575,25 +586,29 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     return handleGlobalSim(message, rest, prefix, deps);
   }
 
-  const team = store.getActiveTeam(userId);
-  if (!team) {
-    return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
-  }
-  if (!team.slots.length) {
-    return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
-  }
-
   const { flags, rest } = parseFlags(args);
   const levels = parseLevels(flags.lvl);
   if (levels.invalid || flags.lvl?.malformed) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
   }
-  // Tanpa `-m` hasilnya satu pertarungan (sisa HP/WP tiap hewan) sekaligus
-  // tombol 🔁 untuk mengulanginya sebanyak `DEFAULT_RUNS`. Dengan `-m N`
-  // hasilnya statistik dari N pertarungan.
-  // Dicek dari keberadaan flag, bukan nilainya: `-m` tanpa angka tetap berarti
-  // simulasi massal 50 pertarungan, bukan satu pertarungan.
-  const singleBattle = !['-m', '-n', '-runs'].some(key => key in flags);
+
+  // `d sim <tim> vs <lawan>` memilih kedua sisi. Tanpa `vs`, sisi pemain
+  // adalah tim aktif dan sisa argumen menjadi lawan.
+  const sides = splitVs(rest);
+  const team = sides.playerTokens.length
+    ? store.findTeam(userId, sides.playerTokens.join(' '))
+    : store.getActiveTeam(userId);
+  if (!team) {
+    if (sides.playerTokens.length) {
+      return send(message, errorEmbed(`Tim **${sides.playerTokens.join(' ')}** tidak ditemukan. Lihat \`${prefix} tm\`.`));
+    }
+    return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
+  }
+  if (!team.slots.length) {
+    return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
+  }
+  // `d sim` selalu menjalankan N pertarungan lalu menampilkan statistiknya.
+  // Tanpa `-m` berarti `DEFAULT_RUNS` (50); `-m` tanpa angka juga 50.
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? DEFAULT_RUNS;
   const runCount = Number(runs);
   if (!Number.isSafeInteger(runCount) || runCount < 1) {
@@ -622,7 +637,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const player = resolveTeamSpecs(team);
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
-  const enemy = resolveEnemy(userId, rest, levels.enemy);
+  const enemy = resolveEnemy(userId, sides.enemyArgs, levels.enemy);
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
   // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
@@ -648,34 +663,6 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // ditumpuk, dan sesudah selesai supaya cooldown dihitung dari akhir simulasi.
   store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
 
-  if (singleBattle) {
-    const startedAt = Date.now();
-    const battle = engine.runBattle(playerSpecs, enemySpecs, {
-      seed: seed != null ? Number(seed) : undefined,
-      playerQuality,
-      enemyQuality,
-    });
-    store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
-    await animalDex.ensureAnimalEmojis([
-      ...playerSpecs.map(spec => spec.animal),
-      ...enemySpecs.map(spec => spec.animal),
-    ]);
-    const embed = duelEmbed(battle, {
-      ...labels,
-      elapsedMs: Date.now() - startedAt,
-      seed: seed != null ? Number(seed) : null,
-    });
-    // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
-    // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.
-    const token = resultToken(seed != null ? Number(seed) : 1);
-    rememberDuelResult(userId, token, {
-      playerSpecs, enemySpecs, playerQuality, enemyQuality, labels,
-    });
-    const payload = { embeds: [embed], components: [repeatButton(userId, token, DEFAULT_RUNS)] };
-    if (deps.sendPayload) return deps.sendPayload(message, payload);
-    return send(message, embed);
-  }
-
   const result = await sim.simulate(playerSpecs, enemySpecs, {
     runs: runCount,
     seed: seed != null ? Number(seed) : undefined,
@@ -696,7 +683,17 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     matchup: renderMatchup(playerSpecs, enemySpecs, labels),
   });
 
-  return publishProgress.finish({ embeds: [finalEmbed] });
+  // Tombol 🔁 mengulang matchup yang sama sebanyak `DEFAULT_RUNS`. Spec
+  // disimpan, bukan hasilnya, supaya penekanan tombol menjalankan simulasi baru.
+  const token = resultToken(seed != null ? Number(seed) : 1);
+  rememberDuelResult(userId, token, {
+    playerSpecs, enemySpecs, playerQuality, enemyQuality, labels,
+  });
+
+  return publishProgress.finish({
+    embeds: [finalEmbed],
+    components: [repeatButton(userId, token, DEFAULT_RUNS)],
+  });
 }
 
 // Tim aktif → spec engine, dengan stat diambil dari dex bila perlu.
@@ -740,11 +737,10 @@ function resolveEnemy(userId, args, overrideLevel) {
     };
   }
 
-  // `d sim blitz` / `d sim 1 vs blitz` → lawan tim milik user sendiri.
-  // Dicek sebelum stat manual karena nama tim bisa berupa angka ("1").
-  // `d sim 3` memilih tim lewat ID; nama tim tetap diterima untuk kompatibilitas.
-  const enemyName = raw.includes(' vs ') ? raw.split(/\s+vs\s+/i).pop().trim() : raw;
-  const ownTeam = enemyName ? store.findTeam(userId, enemyName) : null;
+  // `d sim blitz` → lawan tim milik user sendiri. Dicek sebelum stat manual
+  // karena nama tim bisa berupa angka ("1"). `d sim 3` memilih tim lewat ID;
+  // nama tim tetap diterima untuk kompatibilitas.
+  const ownTeam = raw ? store.findTeam(userId, raw) : null;
   if (ownTeam) {
     if (!ownTeam.slots.length) {
       return { error: `Tim **${teamLabel(ownTeam)}** masih kosong. Isi dulu dengan \`d team add 1 <hewan>\`.` };
@@ -771,7 +767,8 @@ function resolveEnemy(userId, args, overrideLevel) {
 }
 
 module.exports = {
-  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleRepeatButton, handleLimitCommand, DEFAULT_RUNS,
+  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleRepeatButton, handleLimitCommand,
+  DEFAULT_RUNS, splitVs,
   parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
 };

@@ -251,51 +251,6 @@ function renderMatchup(playerSpecs, enemySpecs, { playerLabel = 'Tim kamu', enem
   return [sideBlock(playerLabel, playerSpecs), sideBlock(enemyLabel, enemySpecs)].join('\n');
 }
 
-// Satu unit versi ringkas untuk hasil satu pertarungan: baris pertama kondisi
-// akhir HP/WP, baris kedua senjata bila ada.
-function duelUnitLines(unit) {
-  const maxHpValue = Math.ceil(engine.maxHp(unit));
-  const maxWpValue = Math.ceil(engine.maxWp(unit));
-  const hp = Math.max(0, Math.ceil(unit.stats.hp[0]));
-  const wp = Math.max(0, Math.ceil(unit.stats.wp[0]));
-  const head = `> ${emoji.statIcon('hp')} \`${hp}/${maxHpValue}\` ${emoji.statIcon('wp')} \`${wp}/${maxWpValue}\``;
-  const body = `> **L.${unit.level}** ${emoji.animalEmoji(unit.animal)} ${unit.nickname}`;
-  if (!unit.weapon) return `${body}\n${head}`;
-  const quality = unit.weapon.quality ?? data.DEFAULT_QUALITY;
-  const icons = [emoji.rankEmoji(quality), emoji.weaponEmoji(unit.weapon.id, quality)];
-  return `${body}\n${head}\n> ${icons.join('')} ${quality}%`;
-}
-
-// Satu field per tim. Nama tim dipakai sebagai pemisah supaya jelas sisi mana
-// yang menang dan mana yang kalah.
-function duelTeamField(label, units) {
-  return {
-    name: `**${label}**`,
-    value: units.map(duelUnitLines).join('\n'),
-    inline: false,
-  };
-}
-
-// Hasil satu pertarungan: kondisi akhir tiap unit, bukan statistik agregat.
-function duelEmbed(battle, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null } = {}) {
-  const { units, winner, turns, timeout } = battle;
-  const color = winner === 'player' ? COLOR.ok : winner === 'enemy' ? COLOR.error : COLOR.tie;
-  const verdict = winner === 'player' ? 'Menang' : winner === 'enemy' ? 'Kalah' : 'Seri';
-  const icon = winner === 'player' ? '🏆' : winner === 'enemy' ? '💀' : '⚖️';
-
-  return new EmbedBuilder()
-    .setColor(color)
-    .setTitle(`${playerLabel} vs. ${enemyLabel}`)
-    .setDescription(`${icon} **${verdict}** dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`)
-    .addFields([
-      duelTeamField(playerLabel, units.player),
-      duelTeamField(enemyLabel, units.enemy),
-    ])
-    .setFooter({
-      text: `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`,
-    });
-}
-
 function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null } = {}) {
   const { tally, runs } = result;
   const color = simColor(result.winRate, result.lossRate, result.tieRate);
@@ -601,7 +556,7 @@ module.exports = {
   COLOR, TEAM_BUTTON, MAX_SLOTS,
   weaponName, bar, slotField, slotStats, slotIcon,
   teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, teamCompLines, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
-  turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
+  turnDistribution, sideLine, shortDuration,
   teamButtons, isTeamButton, parseTeamButton,
   GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
   REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,

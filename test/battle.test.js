@@ -623,32 +623,6 @@ describe('embed UI', () => {
     assert.ok(text.endsWith('+15 lain'), text);
   });
 
-  it('duelEmbed menampilkan sisa HP/WP tiap unit', async () => {
-    const battle = engine.runBattle(
-      [{ slot: 1, coeffs: COEFFS_STRONG, level: 60, label: 'kuat' }],
-      [{ slot: 1, coeffs: COEFFS_WEAK, level: 60, label: 'lemah' }],
-      { seed: 11 }
-    );
-    assert.strictEqual(battle.winner, 'player');
-    const json = panel.duelEmbed(battle, { playerLabel: 'A', enemyLabel: 'B', seed: 11 }).toJSON();
-    assert.strictEqual(json.color, panel.COLOR.ok, 'menang hijau');
-    assert.deepStrictEqual(json.fields.map(f => f.name), ['**A**', '**B**'], 'satu field per tim');
-    assert.ok(json.fields[0].value.includes('kuat'), 'pet tim pemain');
-    assert.ok(json.fields[0].value.includes('/'), 'format hp/max');
-    assert.ok(json.fields[1].value.includes('`0/'), 'yang kalah HP 0');
-    assert.ok(json.description.includes('Menang'));
-  });
-
-  it('duelEmbed memakai warna kalah dan seri', () => {
-    const base = { turns: 5, timeout: false, units: { player: [], enemy: [] } };
-    const lose = panel.duelEmbed({ ...base, winner: 'enemy' }, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
-    assert.strictEqual(lose.color, panel.COLOR.error);
-    assert.ok(lose.description.includes('Kalah'));
-    const tie = panel.duelEmbed({ ...base, winner: 'tie' }, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
-    assert.strictEqual(tie.color, panel.COLOR.tie);
-    assert.ok(tie.description.includes('Seri'));
-  });
-
   it('warna embed mengikuti dominasi hasil', () => {
     assert.strictEqual(panel.simColor(60, 40, 0), panel.COLOR.ok);
     assert.strictEqual(panel.simColor(40, 60, 0), panel.COLOR.error);
@@ -1855,7 +1829,7 @@ describe('level default dan flag lvl', () => {
 });
 
 describe('lawan simulasi berupa tim', () => {
-  const { resolveEnemy } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const { resolveEnemy, splitVs } = require(path.join(ROOT, 'src/commands/battleSim'));
   const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
 
   let tempDir;
@@ -1880,10 +1854,19 @@ describe('lawan simulasi berupa tim', () => {
     assert.match(enemy.label, /^\[\d+\] blitz$/);
   });
 
-  it('menerima bentuk "x vs y"', () => {
-    const enemy = resolveEnemy('u', ['1', 'vs', 'blitz']);
+  it('memecah "tim1 vs tim2" menjadi dua sisi', () => {
+    const sides = splitVs(['1', 'vs', 'blitz']);
+    assert.deepStrictEqual(sides.playerTokens, ['1']);
+    assert.deepStrictEqual(sides.enemyArgs, ['blitz']);
+    const enemy = resolveEnemy('u', sides.enemyArgs);
     assert.ok(!enemy.error, enemy.error);
     assert.match(enemy.label, /blitz$/);
+  });
+
+  it('tanpa "vs" sisi pemain memakai tim aktif', () => {
+    const sides = splitVs(['blitz']);
+    assert.deepStrictEqual(sides.playerTokens, []);
+    assert.deepStrictEqual(sides.enemyArgs, ['blitz']);
   });
 
   it('nama tim berupa angka tetap dikenali sebagai tim', () => {
@@ -2914,12 +2897,12 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     assert.strictEqual(tooBig.color, 0xED4245);
   });
 
-  it('hasil satu pertarungan menyertakan tombol 🔁 berlabel 50', async () => {
+  it('`d sim` tanpa `-m` menjalankan 50 pertarungan dan memasang tombol 🔁', async () => {
     lastPayload = null;
     replies = [];
     await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
-    assert.ok(replies[0].fields.length >= 2, 'detail per unit');
+    assert.ok(replies[0].footer.text.includes('50 simulasi'), replies[0].footer.text);
     const button = lastPayload.components[0].toJSON().components[0];
     assert.strictEqual(button.label, '50', 'label jumlah pertarungan');
     assert.ok(button.emoji.name === '🔁', 'emoji ulang');
@@ -2995,5 +2978,153 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     };
     await handleRepeatButton(stale);
     assert.ok(stale.out.content.includes('kedaluwarsa'), stale.out.content);
+  });
+});
+
+describe('panel tim: tombol hapus', () => {
+  const { handleTeamPanelNav } = require(path.join(ROOT, 'src/commands/battleTeam'));
+  const teamPanel = require(path.join(ROOT, 'src/ui/teamPanel'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+
+  // Interaction tiruan: `reply` untuk konfirmasi ephemeral, `update` untuk
+  // menimpa panel, dan `followUp` untuk pesan tambahan.
+  function interaction(customId, userId = 'u') {
+    const i = {
+      customId,
+      user: { id: userId },
+      out: null,
+      updated: null,
+      isStringSelectMenu: () => false,
+    };
+    i.reply = async payload => { i.out = payload; };
+    i.update = async payload => { i.updated = payload; };
+    i.followUp = async payload => { i.out = payload; };
+    return i;
+  }
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-team-del-'));
+    process.chdir(tempDir);
+    store.getDb();
+    store.createTeam('u', 'Alpha');
+    store.createTeam('u', 'Beta');
+    store.setActiveTeam('u', 'Alpha');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('tekan pertama hanya meminta konfirmasi, tim belum hilang', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 0));
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.listTeams('u').length, 2, 'belum ada yang dihapus');
+    const json = i.out.embeds[0].toJSON();
+    assert.ok(json.description.includes('Hapus tim'), json.description);
+    assert.deepStrictEqual(
+      i.out.components[0].toJSON().components.map(b => b.label),
+      ['Hapus Alpha', 'Batal']
+    );
+  });
+
+  it('Batal tidak menghapus apa pun', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 0) + ':no');
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.listTeams('u').length, 2);
+  });
+
+  it('konfirmasi menghapus tim yang ditampilkan dan memperbarui panel', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 0) + ':yes');
+    await handleTeamPanelNav(i);
+    const left = store.listTeams('u');
+    assert.deepStrictEqual(left.map(t => t.name), ['Beta'], 'hanya Alpha terhapus');
+    assert.ok(i.updated, 'panel ditimpa di tempat');
+    assert.ok(i.updated.embeds[0].toJSON().title.includes('Beta'), 'menampilkan tim tersisa');
+    assert.ok(i.updated.embeds[1].toJSON().description.includes('Alpha'), 'ada catatan terhapus');
+  });
+
+  it('menghapus tim terakhir menyisakan panel kosong, bukan error', async () => {
+    store.deleteTeam('u', 'Beta');
+    const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 0) + ':yes');
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.listTeams('u').length, 0);
+    assert.ok(i.updated.embeds[0].toJSON().description.includes('Belum ada tim'));
+  });
+
+  it('tombol hapus milik orang lain ditolak', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 0) + ':yes', 'orang-lain');
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.listTeams('u').length, 2, 'tidak ada yang terhapus');
+    assert.ok(i.out.embeds[0].toJSON().description.includes('milik orang lain'));
+  });
+
+  it('indeks tim yang sudah tidak ada tidak menghapus tim lain', async () => {
+    store.deleteTeam('u', 'Beta');
+    const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 1) + ':yes');
+    await handleTeamPanelNav(i);
+    assert.deepStrictEqual(store.listTeams('u').map(t => t.name), ['Alpha'], 'Alpha aman');
+    assert.ok(i.out.embeds[0].toJSON().description.includes('tidak ditemukan'));
+  });
+});
+
+describe('d sim A vs B', () => {
+  const { handleSimCommand } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+  let replies;
+
+  const COEFFS = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-sim-vs-'));
+    process.chdir(tempDir);
+    store.getDb();
+    // Tiga tim supaya `1 vs 3` benar-benar menunjuk ID yang ada.
+    for (const name of ['Satu', 'Dua', 'Tiga']) {
+      store.createTeam('u', name);
+      store.setSlot('u', name, 1, { custom: COEFFS, level: 60 });
+    }
+    store.setActiveTeam('u', 'Satu');
+    replies = [];
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  async function run(args) {
+    replies = [];
+    await handleSimCommand({ guildId: 'g', author: { id: 'u' } }, args, 'd', {
+      sendEmbed: (m, embed) => { replies.push(embed.toJSON()); },
+      sendPayload: (m, payload) => { replies.push(payload.embeds[0].toJSON()); },
+    });
+    store.clearCooldown('u', 'sim');
+    return replies[0];
+  }
+
+  it('memilih kedua sisi lewat `tim1 vs tim3`', async () => {
+    const embed = await run(['1', 'vs', '3', '-m', '1']);
+    assert.ok(embed.title.includes('Satu'), embed.title);
+    assert.ok(embed.title.includes('Tiga'), embed.title);
+  });
+
+  it('memakai nama tim, bukan hanya ID', async () => {
+    const embed = await run(['Satu', 'vs', 'Tiga', '-m', '1']);
+    assert.ok(embed.title.includes('Satu'), embed.title);
+    assert.ok(embed.title.includes('Tiga'), embed.title);
+  });
+
+  it('tanpa `vs` tetap memakai tim aktif sebagai sisi pemain', async () => {
+    const embed = await run(['3', '-m', '1']);
+    assert.ok(embed.title.includes('Satu'), 'sisi pemain = tim aktif');
+    assert.ok(embed.title.includes('Tiga'), 'sisi lawan = argumen');
+  });
+
+  it('nama tim yang tidak ada memberi pesan jelas', async () => {
+    const embed = await run(['TidakAda', 'vs', 'Tiga', '-m', '1']);
+    assert.ok(embed.description.includes('tidak ditemukan'), embed.description);
   });
 });

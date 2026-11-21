@@ -13,6 +13,7 @@ const { teamEmbed, COLOR } = require('./battlePanel');
 const NAV_PREV = 'battle_tm_prev';
 const NAV_NEXT = 'battle_tm_next';
 const NAV_PICK = 'battle_tm_pick';
+const NAV_DELETE = 'battle_tm_del';
 const SEP = ':';
 
 // `dtm:<userId>:<index>` — index adalah posisi di daftar tim terurut ID.
@@ -25,18 +26,25 @@ function isTeamPanelNav(customId) {
     && (customId.startsWith(`${NAV_PREV}${SEP}`)
       || customId.startsWith(`${NAV_NEXT}${SEP}`)
       || customId === NAV_PICK
-      || customId.startsWith(`${NAV_PICK}${SEP}`));
+      || customId.startsWith(`${NAV_PICK}${SEP}`)
+      || customId.startsWith(`${NAV_DELETE}${SEP}`));
 }
 
 function parsePanelNav(customId) {
   const parts = String(customId || '').split(SEP);
   if (parts[0] === NAV_PICK) return { ok: true, kind: 'pick', userId: parts[1] || null, index: null };
-  if (parts.length !== 3) return { ok: false };
+  // Tombol konfirmasi hapus membawa bagian keempat: 'yes' atau 'no'.
+  if (parts.length !== 3 && parts.length !== 4) return { ok: false };
   const index = Number(parts[2]);
   if (!Number.isInteger(index) || index < 0) return { ok: false };
-  const kind = parts[0] === NAV_PREV ? 'prev' : parts[0] === NAV_NEXT ? 'next' : null;
+  const kind = parts[0] === NAV_PREV ? 'prev'
+    : parts[0] === NAV_NEXT ? 'next'
+      : parts[0] === NAV_DELETE ? 'delete'
+        : null;
   if (!kind) return { ok: false };
-  return { ok: true, kind, userId: parts[1], index };
+  const confirm = parts.length === 4 ? parts[3] : null;
+  if (confirm != null && !['yes', 'no'].includes(confirm)) return { ok: false };
+  return { ok: true, kind, userId: parts[1], index, confirm };
 }
 
 // Tim diurutkan menurut ID supaya urutan panah stabil walau nama berubah.
@@ -67,29 +75,55 @@ function panelComponents(teams, index, userId) {
   }
   rows.push(new ActionRowBuilder().addComponents(menu));
 
-  if (total > 1) {
-    rows.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(navId(NAV_PREV, userId, (index - 1 + total) % total))
-        .setLabel('◀')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(navId(NAV_PICK, userId, index))
-        .setLabel(total ? `Tim ${index + 1}/${total}` : '0/0')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId(navId(NAV_NEXT, userId, (index + 1) % total))
-        .setLabel('▶')
-        .setStyle(ButtonStyle.Secondary),
-    ));
-  }
+  // Baris navigasi selalu tampil: tombol hapus harus tersedia bahkan ketika
+  // user hanya punya satu tim. Panah dinonaktifkan bila tidak ada tujuan.
+  const single = total <= 1;
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(navId(NAV_PREV, userId, (index - 1 + total) % Math.max(1, total)))
+      .setLabel('◀')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(single),
+    new ButtonBuilder()
+      .setCustomId(navId(NAV_PICK, userId, index))
+      .setLabel(`Tim ${index + 1}/${total}`)
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(navId(NAV_NEXT, userId, (index + 1) % Math.max(1, total)))
+      .setLabel('▶')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(single),
+    // Hapus tim yang sedang ditampilkan. `index` dibawa agar konfirmasi dan
+    // penghapusan menyasar tim yang sama walau daftar berubah di antaranya.
+    new ButtonBuilder()
+      .setCustomId(navId(NAV_DELETE, userId, index))
+      .setLabel('Hapus')
+      .setEmoji('🗑️')
+      .setStyle(ButtonStyle.Danger),
+  ));
 
   return { rows, team };
 }
 
 // Embed komposisi memakai `teamEmbed` supaya isinya persis sama dengan
 // `d team show`, ditambah penanda ID dan posisi di daftar.
+// Balasan konfirmasi sebelum menghapus. Dua tombol membawa index yang sama
+// dengan panel, jadi yang dihapus pasti tim yang sedang dilihat.
+function deleteConfirmComponents(userId, index, name) {
+  return [new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${NAV_DELETE}${SEP}${userId}${SEP}${index}${SEP}yes`)
+      .setLabel(`Hapus ${name}`.slice(0, 80))
+      .setEmoji('🗑️')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`${NAV_DELETE}${SEP}${userId}${SEP}${index}${SEP}no`)
+      .setLabel('Batal')
+      .setStyle(ButtonStyle.Secondary),
+  )];
+}
+
 function panelEmbed(team, { prefix = 'd', index = 0, total = 1, active = false } = {}) {
   const embed = teamEmbed(team, { prefix, active });
   const id = team.slotId != null ? `[${team.slotId}]` : '[?]';
@@ -137,7 +171,7 @@ function indexOfActive(teams, active) {
 }
 
 module.exports = {
-  NAV_PREV, NAV_NEXT, NAV_PICK,
+  NAV_PREV, NAV_NEXT, NAV_PICK, NAV_DELETE, deleteConfirmComponents,
   navId, isTeamPanelNav, parsePanelNav,
   orderedTeams, panelComponents, panelEmbed, panelPayload, indexOfActive,
 };

@@ -416,6 +416,12 @@ async function handleTeamPanelNav(i) {
   const teams = store.listTeams(i.user.id);
   if (!teams.length) return i.reply({ embeds: [errorEmbed('Belum ada tim. Buat dengan `d team new <nama>`.')], flags: MessageFlags.Ephemeral });
 
+  // Tombol hapus: tekan pertama meminta konfirmasi, `yes` menghapus tim yang
+  // sedang ditampilkan, `no` hanya menutup konfirmasi.
+  if (parsed.kind === 'delete') {
+    return handleDeleteNav(i, parsed);
+  }
+
   let index = parsed.index;
   if (parsed.kind === 'pick') {
     // Select menu mengirim nilai berupa indeks, bukan nama tim.
@@ -438,6 +444,48 @@ async function handleTeamPanelNav(i) {
   return i.update(payload).catch(async () => {
     await i.reply({ embeds: [errorEmbed('Panel tidak bisa diperbarui. Jalankan `dtm` lagi.')], flags: MessageFlags.Ephemeral });
   });
+}
+
+// `🗑️` di panel tim. Konfirmasi dua langkah supaya satu salah tekan tidak
+// membuang tim beserta senjata dan levelnya.
+async function handleDeleteNav(i, parsed) {
+  const teams = teamPanel.orderedTeams(store.listTeams(i.user.id));
+  const target = teams[parsed.index];
+  if (!target) {
+    return i.reply({ embeds: [errorEmbed('Tim tidak ditemukan. Jalankan `dtm` lagi.')], flags: MessageFlags.Ephemeral });
+  }
+
+  if (parsed.confirm === 'no') {
+    return i.update({ components: [] }).catch(() => i.reply({
+      embeds: [okEmbed('Dibatalkan. Tim tidak dihapus.')], flags: MessageFlags.Ephemeral,
+    }));
+  }
+
+  if (parsed.confirm !== 'yes') {
+    return i.reply({
+      embeds: [warnEmbed(`Hapus tim **${labelOf(target)}**? Tindakan ini tidak bisa dibatalkan.`)],
+      components: teamPanel.deleteConfirmComponents(i.user.id, parsed.index, target.name),
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const result = store.deleteTeam(i.user.id, String(target.slotId ?? target.name));
+  if (result.error) {
+    return i.update({ embeds: [errorEmbed(result.error)], components: [] }).catch(() => null);
+  }
+  // Panel diperbarui di tempat: tim aktif boleh hilang, jadi pakai tim pertama
+  // yang tersisa (kalau ada) agar panel tidak kosong tanpa isi.
+  const fresh = store.listTeams(i.user.id);
+  const active = store.getActiveTeam(i.user.id);
+  await animalDex.ensureAnimalEmojis(fresh.flatMap(animalsOf));
+  const payload = teamPanel.panelPayload(fresh, teamPanel.indexOfActive(fresh, active), i.user.id, { prefix: 'd', active });
+  delete payload.team;
+  delete payload.index;
+  delete payload.total;
+  payload.embeds.push(errorEmbed(`🗑️ Tim **${labelOf(result.team)}** dihapus.`));
+  return i.update(payload).catch(() => i.reply({
+    embeds: [okEmbed(`🗑️ Tim **${labelOf(result.team)}** dihapus.`)], flags: MessageFlags.Ephemeral,
+  }));
 }
 
 async function handleTeamButton(i) {

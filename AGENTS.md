@@ -488,10 +488,14 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   hitungannya dari akhir). Jangan pindahkan gerbang ke awal handler: perintah salah ketik akan
   dibalas pesan cooldown, bukan pesan validasinya. `d sim help` sengaja bebas cooldown.
   Tes memakai `store.setCooldown`/`clearCooldown` agar tidak menunggu 5 detik nyata.
-- **Dua mode `d sim`.** Tanpa `-m` = SATU pertarungan (`duelEmbed`): sisa HP/WP tiap hewan
-  plus tombol 🔁. Dengan `-m` = statistik (`simEmbed`). Keberadaan flag yang menentukan, bukan
-  nilainya: `-m` tanpa angka tetap 50 pertarungan, jadi jangan pakai `flags['-m'] == null`
-  untuk mendeteksi mode. `DEFAULT_RUNS = 50`.
+- **`d sim` SELALU simulasi massal.** Tanpa `-m` berarti `DEFAULT_RUNS = 50`, bukan satu
+  pertarungan; `-m` tanpa angka juga 50, `-m 5` berarti 5. Tidak ada mode duel terpisah —
+  pernah ada dan sudah dihapus karena user tidak memintanya. Jangan menambahkan cabang
+  "satu pertarungan" lagi.
+- **`d sim <tim> vs <lawan>` memilih kedua sisi.** `splitVs(rest)` memecah argumen pada token
+  `vs`; tanpa `vs`, sisi pemain adalah tim aktif dan seluruh argumen menjadi lawan. Karena itu
+  `resolveEnemy` TIDAK boleh lagi memecah ` vs ` sendiri (dulu begitu, dan hasilnya sisi pemain
+  diabaikan). Keduanya menerima ID (`1`) maupun nama tim.
 - **Batas pertarungan per perintah.** User biasa maksimum `store.getMaxRuns()` (default 200,
   tabel `battle_settings`); developer (`deps.isDeveloper`) tak dibatasi. Developer mengubahnya
   dengan `d sim limit <jumlah>`; tanpa argumen hanya menampilkan nilai sekarang. Nilai tersimpan
@@ -500,6 +504,12 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   Tanpa itu tombol selalu ditolak karena `d sim` baru saja memasang cooldown `sim`. Hasilnya
   dikirim ephemeral (`deferReply` + `editReply`) supaya tidak membanjiri channel. Cache
   `duelResults` menyimpan SPEC, bukan hasil: tombol menjalankan simulasi baru.
+- **Panel `dtm` punya tombol 🗑️ hapus.** Baris navigasi selalu dirender (dulu hanya saat tim
+  >1), supaya tombol hapus tetap ada ketika user cuma punya satu tim; panah dinonaktifkan bila
+  tidak ada tujuan. Penghapusan dua langkah: tekan pertama membalas konfirmasi ephemeral dengan
+  `yes`/`no` (bagian keempat customId), dan `parsePanelNav` menerima 3 ATAU 4 bagian. `index`
+  dibawa di customId supaya yang dihapus tetap tim yang ditampilkan; kalau indeksnya sudah tidak
+  ada, handler menolak alih-alih menghapus tim lain.
 - **Pemisah komposisi memakai nama tim.** `renderMatchup(..., { playerLabel, enemyLabel })`
   dan `duelEmbed` menaruh `**<nama tim>**` sebagai judul tiap blok; jangan kembali ke label
   `Player:`/`Enemy:` — user meminta keduanya dibedakan dengan nama tim.

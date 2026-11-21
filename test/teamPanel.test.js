@@ -85,15 +85,52 @@ describe('panel tim', () => {
     assert.equal(payload.total, 2);
   });
 
-  it('menyediakan tombol panah dan select menu, tanpa tombol per tim', () => {
+  it('menyediakan tombol panah, select menu, dan tombol hapus', () => {
     store.createTeam('u', 'Alpha');
     store.createTeam('u', 'Beta');
     const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', {});
     const rows = payload.components.map(row => row.toJSON());
-    assert.equal(rows.length, 2, 'satu baris select + satu baris panah');
+    assert.equal(rows.length, 2, 'satu baris select + satu baris tombol');
     assert.equal(rows[0].components[0].type, 3, 'select menu');
-    assert.equal(rows[1].components.length, 3, '◀ label ▶');
-    assert.deepEqual(rows[1].components.map(b => b.label), ['◀', 'Tim 1/2', '▶']);
+    assert.equal(rows[1].components.length, 4, '◀ label ▶ hapus');
+    assert.deepEqual(rows[1].components.map(b => b.label), ['◀', 'Tim 1/2', '▶', 'Hapus']);
+    assert.equal(rows[1].components[3].style, 4, 'tombol hapus merah');
+    assert.equal(rows[1].components[3].emoji.name, '🗑️');
+  });
+
+  it('tombol hapus tetap ada saat user hanya punya satu tim', () => {
+    store.createTeam('u', 'Solo');
+    const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', {});
+    const nav = payload.components[1].toJSON().components;
+    assert.deepEqual(nav.map(b => b.label), ['◀', 'Tim 1/1', '▶', 'Hapus']);
+    assert.equal(nav[0].disabled, true, 'panah mundur mati');
+    assert.equal(nav[2].disabled, true, 'panah maju mati');
+    assert.ok(!nav[3].disabled, 'hapus tetap bisa dipakai');
+    const parsed = teamPanel.parsePanelNav(nav[3].custom_id);
+    assert.equal(parsed.kind, 'delete');
+    assert.equal(parsed.index, 0);
+  });
+
+  it('tombol hapus membawa indeks tim yang sedang ditampilkan', () => {
+    store.createTeam('u', 'Alpha');
+    store.createTeam('u', 'Beta');
+    store.createTeam('u', 'Gamma');
+    const payload = teamPanel.panelPayload(store.listTeams('u'), 2, 'u', {});
+    const hapus = payload.components[1].toJSON().components[3];
+    assert.equal(teamPanel.parsePanelNav(hapus.custom_id).index, 2, 'tim ketiga');
+  });
+
+  it('tombol konfirmasi hapus membawa pilihan yes/no', () => {
+    const [row] = teamPanel.deleteConfirmComponents('u', 1, 'Beta');
+    const buttons = row.toJSON().components;
+    assert.deepEqual(buttons.map(b => b.label), ['Hapus Beta', 'Batal']);
+    const yes = teamPanel.parsePanelNav(buttons[0].custom_id);
+    const no = teamPanel.parsePanelNav(buttons[1].custom_id);
+    assert.equal(yes.confirm, 'yes');
+    assert.equal(yes.kind, 'delete');
+    assert.equal(yes.index, 1);
+    assert.equal(no.confirm, 'no');
+    assert.equal(teamPanel.parsePanelNav('battle_tm_del:u:1:xx').ok, false);
   });
 
   it('panah membungkus daftar dan select menu memakai indeks', () => {
@@ -119,6 +156,8 @@ describe('panel tim', () => {
 
   it('menolak customId yang bukan milik panel', () => {
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_prev:u:0'), true);
+    assert.equal(teamPanel.isTeamPanelNav('battle_tm_del:u:0'), true);
+    assert.equal(teamPanel.isTeamPanelNav('battle_tm_del:u:0:yes'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_team_pick:u:0'), false);
     assert.equal(teamPanel.parsePanelNav('battle_tm_prev').ok, false);
     assert.equal(teamPanel.parsePanelNav('battle_tm_next:u:abc').ok, false);
