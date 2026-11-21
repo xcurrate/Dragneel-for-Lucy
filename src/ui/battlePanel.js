@@ -33,7 +33,7 @@ function bar(value, max, size = 12) {
 
 // Ringkasan ikon satu slot: hewan, rank senjata, senjata, lalu pasif.
 function slotIcon(entry) {
-  const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
+  const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
   const parts = [emoji.animalEmoji(animal)];
   if (entry.weaponId) {
     parts.push(emoji.rankEmoji(entry.weaponQuality ?? data.DEFAULT_QUALITY));
@@ -48,7 +48,7 @@ function slotIcon(entry) {
 function slotStats(entry) {
   if (!entry) return null;
   // Slot hanya menyimpan `animalKey`; objek dex-nya diambil dari storage.
-  const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
+  const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
   const spec = {
     slot: entry.slot,
     label: entry.label || entry.animalKey || `slot${entry.slot}`,
@@ -100,7 +100,7 @@ function addHint(prefix, slot) {
 function slotField(entry, slot, prefix) {
   if (!entry) return { name: BLANK, value: addHint(prefix, slot), inline: false };
 
-  const animal = entry.animalKey ? dexStore.getAnimal(entry.animalKey) : null;
+  const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
   const name = entry.label || animal?.name || entry.animalKey || 'custom';
   const level = entry.level || data.DEFAULT_LEVEL;
   const stats = slotStats(entry);

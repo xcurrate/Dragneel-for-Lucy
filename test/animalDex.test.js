@@ -659,6 +659,38 @@ describe('emoji hewan untuk tampilan battle', () => {
     assert.ok(!komposisi.includes('🐾'), 'tidak jatuh ke ikon netral');
   });
 
+  it('slot dengan animal_key lama (nama emoji) tetap dapat emoji pet', async () => {
+    fakeClient();
+    const dexStore = require('../src/utils/animalDexStorage');
+    const store = require('../src/utils/battleTeamStorage');
+    delete require.cache[require.resolve('../src/commands/battleTeam')];
+    const { handleTeamCommand } = require('../src/commands/battleTeam');
+
+    // `d dex` menemukan hewan lewat pencarian longgar, jadi slot yang menyimpan
+    // nama emoji/alias tetap tampil benar di dex — panel harus sama.
+    dexStore.upsertAnimal({
+      nameKey: 'pidgeotto', name: 'pidgeotto', alias: 'pidgey', nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 2, attack: 13, protection: 2, wisdom: 1, magic: 1, mr: 2 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1522265093155590318.gif', emojiName: 'feagle'
+    });
+
+    for (const key of ['feagle', 'PIDGEOTTO', 'pidgey']) {
+      assert.ok(dexStore.resolveAnimal(key), 'kunci lama tetap ketemu: ' + key);
+    }
+
+    store.createTeam('u', 'Blitz');
+    store.setSlot('u', 'Blitz', 1, { animalKey: 'feagle', level: 50 });
+    store.setActiveTeam('u', 'Blitz');
+
+    let out = null;
+    await handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['show'], 'd', {
+      sendEmbed: (m, e) => { out = e.toJSON(); },
+    });
+    assert.ok(out.fields[0].name.includes('feagle:'), 'emoji pet terpasang dari kunci lama');
+    assert.ok(!out.fields[0].name.includes('🐾'), 'tidak jatuh ke ikon netral');
+  });
+
   it('tetap memakai 🐾 bila pet tidak punya emoji sama sekali', () => {
     const be = require('../src/services/battleEmoji');
     assert.strictEqual(be.animalEmoji({ name: 'x', imageUrl: 'https://cdn.discordapp.com/attachments/1/2/i.png' }), '🐾');

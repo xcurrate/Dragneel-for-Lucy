@@ -151,7 +151,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 function resolveTeamSpecs(team) {
   const slots = team.slots.map(slot => ({
     ...slot,
-    dexAnimal: slot.animalKey ? dexStore.getAnimal(slot.animalKey) : null,
+    dexAnimal: slot.animalKey ? dexStore.resolveAnimal(slot.animalKey) : null,
   }));
   return sim.toSpecs({ slots });
 }
@@ -204,7 +204,7 @@ function resolveEnemy(userId, args, overrideLevel) {
     return { specs: [{ slot: 1, coeffs: parsed.custom, level, label: 'lawan' }], label: 'stat manual' };
   }
 
-  const animal = dexStore.getAnimal(raw.toLowerCase()) || dexStore.searchAnimals(raw)[0];
+  const animal = dexStore.resolveAnimal(raw) || dexStore.searchAnimals(raw)[0];
   if (!animal) return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim (lihat \`d team list\`), hewan dex, atau stat manual.` };
   const coeffs = sim.dexStatsToCustom(animal);
   if (!coeffs) return { error: `Stat \`${animal.name}\` tidak lengkap di dex.` };

@@ -185,6 +185,31 @@ function getAnimal(nameKey) {
   return row ? rowToAnimal(row) : null;
 }
 
+// `animal_key` pada slot tim bisa berasal dari versi dex sebelumnya: nama emoji,
+// alias, atau nama dengan kapitalisasi berbeda. `d dex` tetap menemukan hewannya
+// karena memakai pencarian longgar, jadi pencarian slot disamakan di sini —
+// kalau tidak, panel menampilkan 🐾 untuk hewan yang ada di dex.
+function resolveAnimal(key) {
+  const q = String(key == null ? '' : key).trim();
+  if (!q) return null;
+  const exact = getAnimal(q);
+  if (exact) return exact;
+  const row = getDb().prepare(`
+    SELECT * FROM dex_animals
+    WHERE name_key = ? COLLATE NOCASE
+       OR name = ? COLLATE NOCASE
+       OR emoji_name = ? COLLATE NOCASE
+       OR alias = ? COLLATE NOCASE
+    ORDER BY CASE
+      WHEN name_key = ? COLLATE NOCASE THEN 0
+      WHEN name = ? COLLATE NOCASE THEN 1
+      WHEN emoji_name = ? COLLATE NOCASE THEN 2
+      ELSE 3 END
+    LIMIT 1
+  `).get(q, q, q, q, q, q, q);
+  return row ? rowToAnimal(row) : null;
+}
+
 function listAnimals() {
   return getDb().prepare('SELECT * FROM dex_animals ORDER BY name COLLATE NOCASE').all().map(rowToAnimal);
 }
@@ -217,6 +242,6 @@ function setEmojiToken(sourceId, appToken) {
 }
 
 module.exports = {
-  getDb, upsertAnimal, getAnimal, listAnimals, searchAnimals, countAnimals,
+  getDb, upsertAnimal, getAnimal, resolveAnimal, listAnimals, searchAnimals, countAnimals,
   getEmojiToken, setEmojiToken
 };

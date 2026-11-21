@@ -441,6 +441,14 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   Token hewan memakai `emojiName || name` yang dipotong ke 32 karakter, karena nama emoji
   Discord tidak wajib terbaca dari judul kartu. Konsekuensinya handler tersebut `async`, jadi
   pemanggil dan tesnya harus `await` (tanpa itu asersi jalan sebelum balasan terkirim).
+- **Jangan pakai `getAnimal()` untuk membaca `animal_key` slot.** Kunci slot bisa berasal dari
+  versi dex sebelumnya — nama emoji (`feagle`), alias, atau kapitalisasi berbeda — sedangkan
+  `d dex` tetap menemukannya karena memakai pencarian longgar. `getAnimal()` menuntut cocok
+  persis, jadi slot seperti itu menghasilkan `animal: null` → 🐾 padahal hewannya ada di dex.
+  Semua jalur render (`battlePanel`, `battleSim`, `battleTeam`) memakai
+  `dexStore.resolveAnimal()` yang mencocokkan `name_key`, `name`, `emoji_name`, dan `alias`
+  tanpa peduli kapitalisasi. Gejala khasnya: sebagian pet tampil, sebagian 🐾, dan pet yang
+  🐾 selalu yang nama aslinya berbeda dari nama emoji.
 - **Tim kustom bersifat global per user** (`src/utils/battleTeamStorage.js`), bukan per server.
   Kolom `guild_id` dipertahankan hanya demi skema lama (selalu string kosong) dan
   `migrateToGlobal()` menggabungkan baris lama per user+nama saat database pertama dibuka.

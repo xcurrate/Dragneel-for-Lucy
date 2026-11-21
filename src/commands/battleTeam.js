@@ -165,7 +165,7 @@ function say(send, message, text) {
 // kalau tidak render pertama selalu menampilkan ikon netral 🐾.
 function animalsOf(team) {
   if (!team) return [];
-  return (team.slots || []).map(slot => (slot.animalKey ? dexStore.getAnimal(slot.animalKey) : null));
+  return (team.slots || []).map(slot => (slot.animalKey ? dexStore.resolveAnimal(slot.animalKey) : null));
 }
 
 async function handleTeamCommand(message, args, prefix, deps = {}) {
