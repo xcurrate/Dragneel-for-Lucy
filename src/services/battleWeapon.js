@@ -100,6 +100,9 @@ function buildWeapon(spec, rng, globalQuality) {
   if (def.ability?.kind === 'attack_up_chain') {
     weapon.preTurn = (ctx, unit) => ABILITIES.attack_up_chain(ctx, weapon, unit);
   }
+  if (def.ability?.kind === 'curse_all') {
+    weapon.preTurn = (ctx, unit, team, foe) => ABILITIES.curse_all(ctx, weapon, unit, foe);
+  }
   return weapon;
 }
 
@@ -257,6 +260,27 @@ const ABILITIES = {
     return true;
   },
 
+  // Witching Hour: kutuk SEMUA musuh di awal turn. Biaya WP dibayar tiap
+  // giliran (bukan sekali), jadi unit yang kehabisan WP berhenti mengutuk.
+  curse_all(ctx, weapon, actor, foes) {
+    const e = require('./battleEngine');
+    const ab = weapon.ability;
+    const buffId = weapon.def.buffList[0];
+    // Hanya musuh yang belum terkutuk: memasang ulang tiap turn akan
+    // menggabungkan durasi dan membuat kutukan bertahan jauh lebih lama dari
+    // 2 turn yang disebut sumber.
+    const enemies = e.aliveOf(foes || actor.foes || []).filter(u => !u.buffs.some(b => b.id === buffId));
+    if (!enemies.length) return false;
+    if (actor.stats.wp[0] < weapon.manaCost) return false;
+    e.useMana(actor, weapon.manaCost);
+    // Tanpa +1: mesin menurunkan durasi di akhir turn pemasangan, jadi durasi 2
+    // menghasilkan tepat 2 kali damage akhir turn.
+    for (const target of enemies) {
+      applyBuff(ctx, buffId, actor, target, ab.duration, buffQuality(weapon.def, weapon.quality));
+    }
+    return true;
+  },
+
   celebration(ctx, weapon, actor) {
     const e = require('./battleEngine');
     const target = e.lowestHp(actor.team, 10);
@@ -310,7 +334,7 @@ function weaponAbility(ctx, weapon, actor) {
   const ab = weapon.ability;
   if (!ab || ab.kind === 'none') return false;
   // Dipasang di awal turn (preTurn), bukan sebagai ability aktif.
-  if (ab.kind === 'taunt' || ab.kind === 'attack_up_chain') return false;
+  if (ab.kind === 'taunt' || ab.kind === 'attack_up_chain' || ab.kind === 'curse_all') return false;
   const handler = ABILITIES[ab.kind];
   if (!handler) return false;
   return handler(ctx, weapon, actor) === true;

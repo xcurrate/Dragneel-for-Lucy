@@ -1182,6 +1182,38 @@
         "type": "MAGICAL",
         "duration": 2
       }
+    },
+    {
+      "id": 133,
+      "name": "Witching Hour",
+      "emojis": [],
+      "defaultEmoji": "<:witching:1559090602732159046>",
+      "aliases": [
+        "witchinghour",
+        "witching",
+        "whour"
+      ],
+      "type": "DEBUFF",
+      "qualityList": [],
+      "manaRange": [
+        140,
+        140
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        15
+      ],
+      "ability": {
+        "kind": "curse_all",
+        "stat": "mag",
+        "duration": 2,
+        "costPerTurn": true
+      },
+      "abilityNote": "preTurn: mengutuk semua musuh 2 turn. Biaya 140 WP dibayar tiap giliran selama WP cukup; bila WP kurang, kutukan tidak dipasang dan unit menyerang biasa.",
+      "assumptionNotes": [
+        "Sumber tidak menyebut slot pasif; dipakai 1 mengikuti mayoritas senjata dan aturan rentang pasif global (1-2).",
+        "Sumber tidak menyebut senjata ini menyerang; karena itu tidak ada damage langsung dan unit tetap melakukan serangan fisik biasa setelah kutukan terpasang."
+      ]
     }
   ],
   "buffs": [
@@ -1370,6 +1402,25 @@
       "spreadWeakening": 0.5,
       "spreadWeakeningNote": "Deskripsi sumber hanya menyebut 'semakin melemah' tanpa angka. Dipakai 0.5 (separuh) per lompatan: efek dan peluang sebar ikut terbagi dua, sehingga rantai berhenti sendiri. Ubah angka ini bila sumber menyebut nilai lain.",
       "stackingNote": "Menumpuk dengan cara menggabung durasi (seperti Mortality), bukan menjumlah persen, supaya dua Wither di satu unit tidak menjadi -80% heal."
+    },
+    {
+      "id": 15,
+      "name": "Midnight Curse",
+      "debuff": true,
+      "qualityList": [
+        [
+          30,
+          30
+        ]
+      ],
+      "damageReduction": 20,
+      "healReduction": 40,
+      "wpDrain": 20,
+      "note": "Damage MAG 30% di akhir tiap turn, damage keluar -20%, heal diterima -40%, dan kehilangan 20% Max WP tiap turn selama 2 turn.",
+      "percentNotes": [
+        "qualityList hanya memuat damage MAG (30%); sumber tidak menyebut quality untuk -20% damage, -40% heal, dan -20% Max WP, jadi ketiganya tetap di semua tier.",
+        "Damage dari kutukan ini mengurangi angka damage, bukan peluang terkena; tidak ada roll RNG tambahan."
+      ]
     }
   ],
   "limits": {

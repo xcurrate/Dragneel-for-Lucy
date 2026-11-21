@@ -71,7 +71,11 @@ function emojiFor(list, quality, fallback) {
 }
 
 function weaponToken(id, quality) {
-  return pick(data.weapons().find(w => w.id === Number(id))?.emojis, quality);
+  const def = data.weapons().find(w => w.id === Number(id));
+  // Sebagian senjata hanya punya satu emoji (tanpa varian per rank); emoji itu
+  // dipakai untuk semua tier.
+  if (def && !def.emojis?.length && def.defaultEmoji) return def.defaultEmoji;
+  return pick(def?.emojis, quality);
 }
 
 function passiveToken(id, quality) {
@@ -112,7 +116,10 @@ function statIcon(key) {
 // Semua token yang perlu di-mirror agar battle tampil penuh.
 function allTokens() {
   const tokens = [];
-  for (const weapon of data.weapons()) tokens.push(...(weapon.emojis || []));
+  for (const weapon of data.weapons()) {
+    tokens.push(...(weapon.emojis || []));
+    if (weapon.defaultEmoji) tokens.push(weapon.defaultEmoji);
+  }
   for (const passive of passiveData.passives) tokens.push(...(passive.emojis || []));
   tokens.push(...RANK_TOKENS);
   tokens.push(...Object.values(dex.STAT_ICONS));

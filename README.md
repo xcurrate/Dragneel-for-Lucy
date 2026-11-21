@@ -437,6 +437,26 @@ Dua hal yang tidak ada di deskripsi sumber dan karenanya dicatat eksplisit di
   tampilan memakai ikon netral ⚔️. Isi 7 token (common → fabled) saat ID tersedia;
   tes mengizinkan kosong hanya bila `emojiNote` ada.
 
+### Witching Hour
+
+`weapon=witching` (alias `witchinghour`, `whour`), biaya 140 WP, 1 slot pasif.
+Tidak punya damage langsung: di **awal tiap giliran** ia mengutuk semua musuh
+dengan **Midnight Curse** 2 turn selama WP cukup, lalu unit tetap menyerang biasa.
+
+Midnight Curse punya empat efek sekaligus: damage 30% MAG di akhir tiap turn,
+damage keluar -20%, heal diterima -40%, dan kehilangan 20% Max WP tiap turn.
+Hanya damage 30% yang punya slot quality; tiga persen lainnya tidak disebut
+sumber sebagai quality, jadi tetap di semua tier dan disimpan sebagai
+`damageReduction`/`healReduction`/`wpDrain` di `owoBattle.json`.
+
+Asumsi yang dicatat di data (`assumptionNotes`): slot pasif 1 (sumber tidak
+menyebut), dan tidak ada damage langsung karena sumber juga tidak menyebut
+senjata ini menyerang.
+
+Kutukan tidak dipasang ulang pada musuh yang sudah terkena. Kalau dipasang tiap
+giliran, aturan `merge` akan menggabung durasi dan kutukan bertahan jauh lebih
+lama dari 2 turn yang disebut sumber — sekaligus membuang 140 WP tanpa hasil.
+
 ### Tier senjata
 
 Quality menentukan tier (common → fabled) sekaligus stat senjata. Urutan
@@ -461,7 +481,7 @@ memengaruhi hasil pertarungan.
 
 ### Sumber angka
 
-- `src/data/owoBattle.js` — 20 hewan, 23 senjata, 14 buff, plus formula.
+- `src/data/owoBattle.js` — 20 hewan, 24 senjata, 15 buff, plus formula.
   Angkanya dibaca langsung dari tabel OwO, bukan perkiraan.
 - `src/data/owoPassives.json` — 21 pasif (lihat bagian di bawah).
 - `src/data/owoPending.json` — senjata/pasif yang nama dan alias-nya sudah

@@ -495,3 +495,14 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   jadi −80%. Setiap buff baru harus punya factory di `battleBuffs.FACTORIES`, entri
   `STACK`, dan slot di `qualityList`; slot yang lupa ditambahkan membuat `stats[n]`
   `undefined` dan peluangnya selalu lolos (bug senyap, bukan error).
+- **Buff Midnight Curse (id 15) + Witching Hour (id 133).** Beda dari senjata lain:
+  efeknya `preTurn` (`curse_all`), bukan ability aktif, jadi tidak ada damage langsung
+  dan WP dibayar tiap giliran. Jangan pasang ulang ke musuh yang sudah terkena —
+  `STACK[15]='merge'` akan menggabung durasi sehingga kutukan melebihi 2 turn.
+  Tiga persen tetapnya (`damageReduction`/`healReduction`/`wpDrain`) dibaca dari data,
+  bukan ditanam di kode. `qualityList` satu nilai HARUS ditulis `[x, x]`: `statAt`
+  lama menghasilkan `NaN` untuk `[x]` dan damage dibatalkan diam-diam.
+- **Emoji senjata satu-varian.** `defaultEmoji` dipakai untuk semua tier bila `emojis`
+  kosong; tes menerima `defaultEmoji` ATAU `emojiNote`. `resolve()` di `battleEmoji`
+  tetap jatuh ke ikon netral kalau client Discord belum punya emoji itu di cache —
+  itu wajar di tes, bukan bug.

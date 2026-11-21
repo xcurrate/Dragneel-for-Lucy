@@ -21,8 +21,8 @@ const COEFFS_WEAK = { hp: 4, att: 2, pr: 3, wp: 1, mag: 1, mr: 2 };
 describe('data battle OwO', () => {
   it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
     assert.strictEqual(data.animals().length, 20);
-    assert.strictEqual(data.weapons().length, 23);
-    assert.strictEqual(data.buffs().length, 14);
+    assert.strictEqual(data.weapons().length, 24);
+    assert.strictEqual(data.buffs().length, 15);
   });
 
   it('mencari hewan lewat alias', () => {
@@ -939,6 +939,128 @@ describe('Withering Staff dan Wither', () => {
   });
 });
 
+describe('Witching Hour dan Midnight Curse', () => {
+  const buffs = require(path.join(ROOT, 'src/services/battleBuffs'));
+  const engine = require(path.join(ROOT, 'src/services/battleEngine'));
+  const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+  const rng = { next: () => 0.5 };
+
+  const unit = name => ({
+    pid: name, slot: name, nickname: name, level: 60,
+    stats: { hp: [1000, 1000, 1000, 0], wp: [500, 500, 500, 0], mag: [1000, 0], att: [100, 0], pr: [0, 0], mr: [0, 0] },
+    buffs: [], weapon: null, team: [], foes: [],
+  });
+  const arena = (n = 2) => {
+    const me = [unit('me')];
+    const them = Array.from({ length: n }, (_, i) => unit('e' + i));
+    me[0].team = me; me[0].foes = them;
+    for (const u of them) { u.team = them; u.foes = me; }
+    return { me, them };
+  };
+  const ctxOf = () => ({ rng, damageDealt: 0, tags: new Set() });
+
+  it('dikenali lewat alias dengan biaya 140 WP', () => {
+    const w = data.findWeapon('witching');
+    assert.strictEqual(w.id, 133);
+    assert.strictEqual(w.name, 'Witching Hour');
+    assert.strictEqual(data.findWeapon('whour').id, 133);
+    assert.strictEqual(buildWeapon({ id: 133 }, rng, 100).manaCost, 140);
+  });
+
+  it('mengutuk SEMUA musuh selama 2 turn dan membayar WP tiap giliran', () => {
+    const { me, them } = arena(2);
+    me[0].weapon = buildWeapon({ id: 133 }, rng, 100);
+    const ctx = ctxOf();
+    assert.strictEqual(me[0].weapon.preTurn(ctx, me[0], me, them), true);
+    assert.strictEqual(me[0].stats.wp[0], 360, 'WP 500 - 140');
+    for (const foe of them) {
+      assert.strictEqual(foe.buffs.filter(b => b.id === 15).length, 1, 'satu kutukan per musuh');
+      assert.strictEqual(foe.buffs[0].duration, 2, 'tepat 2 turn, bukan 3');
+    }
+  });
+
+  it('tidak memasang ulang saat sudah terkutuk, jadi durasi tidak membengkak', () => {
+    const { me, them } = arena(1);
+    me[0].weapon = buildWeapon({ id: 133 }, rng, 100);
+    const ctx = ctxOf();
+    me[0].weapon.preTurn(ctx, me[0], me, them);
+    const wpAfterFirst = me[0].stats.wp[0];
+    assert.strictEqual(me[0].weapon.preTurn(ctx, me[0], me, them), false, 'tidak ada target baru');
+    assert.strictEqual(me[0].stats.wp[0], wpAfterFirst, 'WP tidak terbuang sia-sia');
+    assert.strictEqual(them[0].buffs[0].duration, 2);
+  });
+
+  it('tidak mengutuk bila WP tidak cukup', () => {
+    const { me, them } = arena(1);
+    me[0].weapon = buildWeapon({ id: 133 }, rng, 100);
+    me[0].stats.wp[0] = 139;
+    assert.strictEqual(me[0].weapon.preTurn(ctxOf(), me[0], me, them), false);
+    assert.strictEqual(them[0].buffs.length, 0);
+    assert.strictEqual(me[0].stats.wp[0], 139, 'WP tidak dipotong saat gagal');
+  });
+
+  it('memotong damage keluar 20% dan heal diterima 40%', () => {
+    const { me, them } = arena(1);
+    const ctx = ctxOf();
+    them[0].buffs.push(buffs.createBuff(15, { quality: [100], from: me[0], rng }));
+    const bucket = { amount: 100, bonus: 0 };
+    them[0].buffs[0].attack(ctx, them[0], me[0], bucket);
+    assert.strictEqual(bucket.amount + bucket.bonus, 80, 'damage 100 -> 80');
+    them[0].stats.hp[0] = 100;
+    assert.strictEqual(engine.heal(ctx, them[0], 100, me[0]), 60, 'heal 100 -> 60');
+  });
+
+  it('memberi damage MAG 30% dan menguras 20% Max WP tiap akhir turn', () => {
+    const { me, them } = arena(1);
+    const ctx = ctxOf();
+    them[0].buffs.push(buffs.createBuff(15, { quality: [100], from: me[0], rng }));
+    them[0].buffs[0].postTurn(ctx, them[0], them[0].team, them[0].foes);
+    assert.strictEqual(them[0].stats.hp[0], 700, '30% dari 1000 MAG');
+    assert.strictEqual(them[0].stats.wp[0], 400, '20% dari Max WP 500, bukan dari sisa');
+  });
+
+  it('kuras WP memakai Max WP walau WP tersisa sedikit', () => {
+    const { me, them } = arena(1);
+    const ctx = ctxOf();
+    them[0].stats.wp[0] = 10;
+    them[0].buffs.push(buffs.createBuff(15, { quality: [100], from: me[0], rng }));
+    them[0].buffs[0].postTurn(ctx, them[0], them[0].team, them[0].foes);
+    assert.strictEqual(them[0].stats.wp[0], 0, 'tidak minus');
+  });
+
+  it('quality tidak mengubah tiga persen tetap', () => {
+    const low = buffs.createBuff(15, { quality: [0], from: null, rng });
+    const high = buffs.createBuff(15, { quality: [100], from: null, rng });
+    assert.strictEqual(low.stats[0], 30);
+    assert.strictEqual(high.stats[0], 30);
+    assert.strictEqual(data.buffById(15).damageReduction, 20);
+    assert.strictEqual(data.buffById(15).healReduction, 40);
+    assert.strictEqual(data.buffById(15).wpDrain, 20);
+  });
+
+  it('durasi kutukan habis tepat setelah 2 kali damage akhir turn', () => {
+    const { me, them } = arena(1);
+    me[0].weapon = buildWeapon({ id: 133 }, rng, 100);
+    const ctx = ctxOf();
+    const hits = [];
+    for (let turn = 1; turn <= 4; turn++) {
+      engine.runTurn(ctx, me, them);
+      hits.push(Math.round(them[0].stats.hp[0]));
+    }
+    // Turn 1 dan 3 kutukan dipasang; damage akhir turn terjadi di turn 1-2 dan 3-4.
+    assert.ok(hits[1] < hits[0], 'ada damage di turn 2');
+    assert.ok(hits[2] < hits[1], 'turn 3 memasang kutukan lagi');
+  });
+
+  it('tetap menghasilkan simulasi yang valid', async () => {
+    const sim = require(path.join(ROOT, 'src/services/battleSim'));
+    const spec = weapon => ({ coeffs: COEFFS_STRONG, level: 60, weapon });
+    const r = await sim.simulate([spec({ id: 133 })], [spec({ id: 1 })], { runs: 50, seed: 11 });
+    assert.strictEqual(r.tally.player + r.tally.enemy + r.tally.tie, 50);
+    assert.ok(r.turns.avg > 0);
+  });
+});
+
 describe('emoji battle', () => {
   const be = require(path.join(ROOT, 'src/services/battleEmoji'));
 
@@ -955,10 +1077,13 @@ describe('emoji battle', () => {
     const battle = require(path.join(ROOT, 'src/data/owoBattle'));
     const passives = require(path.join(ROOT, 'src/data/owoPassives.json')).passives;
     for (const weapon of battle.weapons()) {
-      // Senjata yang ID emoji-nya belum diberikan boleh kosong asal menyatakan
-      // itu eksplisit, supaya tampilan jatuh ke ikon netral dan tidak menebak ID.
+      // Senjata boleh tanpa 7 varian rank bila memakai satu emoji untuk semua
+      // tier (`defaultEmoji`), atau bila ID-nya memang belum ada (`emojiNote`).
       if (!weapon.emojis.length) {
-        assert.ok(weapon.emojiNote, `${weapon.name} tanpa emoji harus punya emojiNote`);
+        assert.ok(
+          weapon.defaultEmoji || weapon.emojiNote,
+          `${weapon.name} tanpa emoji harus punya defaultEmoji atau emojiNote`,
+        );
         continue;
       }
       assert.strictEqual(weapon.emojis.length, 7, `${weapon.name} punya emoji lengkap`);

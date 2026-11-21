@@ -14,7 +14,7 @@ function engine() {
 
 function statAt(range, quality) {
   const q = Math.min(100, Math.max(0, Number(quality) || 0));
-  const [min, max] = range;
+  const [min, max = min] = range; // rentang satu nilai = angka tetap
   return Math.round((min + (max - min) * (q / 100)) * 100) / 100;
 }
 
@@ -45,6 +45,7 @@ const STACK = {
   12: 'independent', // Stinky
   13: 'independent', // Sacred Ward: tiap stack instance terpisah
   14: 'merge', // Wither: durasi digabung, persennya tidak dijumlah
+  15: 'merge', // Midnight Curse: idem, satu kutukan per unit
 };
 
 // `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
@@ -192,6 +193,28 @@ const FACTORIES = {
       if (!spread) return;
       spread.effectiveness = this.effectiveness * (def.spreadWeakening ?? 0.5);
       e.bindBuff(ctx, target, spread);
+    },
+  }),
+
+  // Midnight Curse: damage MAG di akhir turn, damage keluar -20%, heal -40%,
+  // dan kehilangan 20% Max WP tiap turn. Tiga persen terakhir tidak punya slot
+  // quality di sumber, jadi dibaca dari data dan tidak diskalakan.
+  15: (def, stats, from) => ({
+    id: 15, name: def.name, debuff: true, stats, duration: 2, from,
+    attack(ctx, unit, target, bucket) {
+      bucket.bonus -= (bucket.amount * (def.damageReduction ?? 20)) / 100;
+    },
+    healed(ctx, unit, healer, bucket) {
+      bucket.bonus -= (bucket.amount * (def.healReduction ?? 40)) / 100;
+    },
+    postTurn(ctx, unit) {
+      if (unit.stats.hp[0] <= 0) return;
+      const e = engine();
+      const amount = e.getDamage(from.stats.mag, stats[0] / 100, ctx.rng);
+      if (amount > 0) e.inflictDamage(ctx, from, unit, amount, 'm');
+      // Kehilangan WP dihitung dari Max WP, bukan dari WP yang tersisa.
+      const drain = (e.maxWp(unit) * (def.wpDrain ?? 20)) / 100;
+      if (drain > 0) unit.stats.wp[0] = Math.max(0, unit.stats.wp[0] - drain);
     },
   }),
 
