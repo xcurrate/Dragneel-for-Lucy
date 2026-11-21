@@ -232,6 +232,15 @@ function bindBuff(ctx, target, buff) {
   const stinky = target.buffs.find(b => b.id === 12);
   if (stinky) { stinky.preBind?.(ctx, target, buff); return; }
 
+  // Sacred Ward menolak debuff: satu stack habis, lalu replenish MAG pemasang.
+  const ward = buff.debuff && target.buffs.find(b => b.id === 13);
+  if (ward) {
+    target.buffs = target.buffs.filter(b => b !== ward);
+    const amount = getDamage(ward.from.stats.mag, ward.stats[0] / 100, ctx.rng);
+    if (amount > 0) replenish(ctx, target, amount, ward.from);
+    return;
+  }
+
   const rule = stackOf(buff);
   const same = b => b.id === buff.id && (!rule.sameFrom || b.from === buff.from);
 

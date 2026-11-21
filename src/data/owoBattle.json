@@ -769,8 +769,8 @@
       "type": "MANA",
       "qualityList": [
         [
-          40,
-          70
+          65,
+          95
         ]
       ],
       "manaRange": [
@@ -883,8 +883,8 @@
       "type": "BUFF",
       "qualityList": [],
       "manaRange": [
-        300,
-        250
+        290,
+        235
       ],
       "passiveCount": 1,
       "buffList": [
@@ -893,7 +893,8 @@
         8
       ],
       "ability": {
-        "kind": "attack_up_chain"
+        "kind": "attack_up_chain",
+        "duration": 2
       },
       "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
     },
@@ -994,24 +995,23 @@
         [
           50,
           100
-        ],
-        [
-          50,
-          100
         ]
       ],
       "manaRange": [
-        200,
-        125
+        250,
+        150
       ],
       "passiveCount": 1,
-      "buffList": [],
+      "buffList": [
+        13
+      ],
       "ability": {
         "kind": "purify",
         "stat": "mag",
-        "healStat": "att"
+        "duration": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "note": "Hapus debuff dari rekan acak, heal 50-100% MAG, pasang Sacred Ward 2 turn."
     },
     {
       "id": 20,
@@ -1301,6 +1301,18 @@
         ]
       ],
       "note": "Cegah buff/debuff baru, beri MAG damage."
+    },
+    {
+      "id": 13,
+      "name": "Sacred Ward",
+      "debuff": false,
+      "qualityList": [
+        [
+          15,
+          25
+        ]
+      ],
+      "note": "Cegah debuff masuk; tiap penolakan menghabiskan 1 stack dan replenish 15-25% MAG."
     }
   ],
   "limits": {

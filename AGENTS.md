@@ -427,3 +427,8 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   melewati serangan di turn itu (`skippedAttack`). Arcane Scepter boleh `overreplenish` 150%.
 - **Angka mengikuti `qualityList` di kode OwO, bukan deskripsi `?%`.** Deskripsi sengaja
   menyembunyikan nilainya; Sacrifice misalnya `[[50,75],[50,75]]` — jangan "menebak" dari teks.
+- **Deskripsi live bot menang atas repo OwO publik.** Repo `9aec92b` sudah tertinggal (Sacred
+  Ward belum ada di sana). Bila pengguna memberi teks deskripsi terbaru, pakai itu sebagai
+  sumber dan perbarui data + mekanik, bukan mencari pembenaran di repo lama.
+- **Sacred Ward (buff 13)** memblokir debuff di `bindBuff`: satu stack instance dibuang lalu
+  pemasangnya me-replenish target sebesar 15-25% MAG. Buff positif tetap masuk.

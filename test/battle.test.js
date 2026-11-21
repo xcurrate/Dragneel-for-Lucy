@@ -21,7 +21,7 @@ describe('data battle OwO', () => {
   it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
     assert.strictEqual(data.animals().length, 20);
     assert.strictEqual(data.weapons().length, 22);
-    assert.strictEqual(data.buffs().length, 12);
+    assert.strictEqual(data.buffs().length, 13);
   });
 
   it('mencari hewan lewat alias', () => {
@@ -1500,7 +1500,7 @@ describe("Vanguard's Banner", () => {
     for (const member of [unit, ally]) {
       const buff = member.buffs.find(b => b.id === 6);
       assert.ok(buff, `${member.label} mendapat Attack Up`);
-      assert.strictEqual(buff.duration, 3, 'durasi 3 turn seperti OwO');
+      assert.strictEqual(buff.duration, 2, 'durasi 2 turn sesuai deskripsi');
     }
   });
 
@@ -1524,6 +1524,77 @@ describe("Vanguard's Banner", () => {
     poor.unit.stats.wp[0] = poor.unit.weapon.manaCost - 1;
     poor.unit.weapon.preTurn(poor.ctx, poor.unit, poor.unit.team, poor.unit.foes);
     assert.strictEqual(poor.unit.buffs.length, 0, 'WP kurang tidak memasang buff');
+  });
+});
+
+describe('Staff of Purity', () => {
+  function setup() {
+    const rng = rngModule.createRng(13);
+    const unit = engine.buildUnit({ label: 'purity', level: 50, coeffs: COEFFS_STRONG, weapon: { id: 19, quality: 100 } }, rng);
+    const ally = engine.buildUnit({ label: 'ally', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const foe = engine.buildUnit({ label: 'foe', level: 50, coeffs: COEFFS_STRONG }, rng);
+    unit.team = [unit, ally]; unit.foes = [foe];
+    ally.team = unit.team; ally.foes = unit.foes;
+    foe.team = [foe]; foe.foes = unit.team;
+    return { rng, unit, ally, foe, ctx: { rng, tags: new Set(), damageDealt: 0 } };
+  }
+
+  it('memakai biaya 250-150 WP dan heal 50-100% MAG', () => {
+    const def = data.weapons().find(w => w.id === 19);
+    assert.deepStrictEqual(def.manaRange, [250, 150]);
+    assert.deepStrictEqual(def.qualityList[0], [50, 100]);
+    assert.strictEqual(def.ability.stat, 'mag', 'heal memakai MAG, bukan STR');
+  });
+
+  it('melepas debuff rekan, menyembuhkan, lalu memasang Sacred Ward', () => {
+    const { unit, ally, ctx } = setup();
+    ally.buffs.push(createBuff(2, { quality: 100, from: ally, rng: ctx.rng }));
+    ally.stats.hp[0] = engine.maxHp(ally) * 0.4;
+    const before = ally.stats.hp[0];
+
+    assert.strictEqual(weaponModule.weaponAbility(ctx, unit.weapon, unit), true);
+    assert.ok(!ally.buffs.some(b => b.id === 2), 'debuff dilepas');
+    assert.ok(ally.stats.hp[0] > before, 'rekan disembuhkan');
+    const ward = ally.buffs.find(b => b.id === 13);
+    assert.ok(ward, 'Sacred Ward terpasang');
+    assert.strictEqual(ward.duration, 2);
+  });
+
+  it('mundur ke serangan fisik bila tidak ada rekan ber-debuff', () => {
+    const { unit, ctx } = setup();
+    assert.strictEqual(weaponModule.weaponAbility(ctx, unit.weapon, unit), false);
+  });
+});
+
+describe('Sacred Ward', () => {
+  function setup() {
+    const rng = rngModule.createRng(17);
+    const caster = engine.buildUnit({ label: 'caster', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const ally = engine.buildUnit({ label: 'ally', level: 50, coeffs: COEFFS_STRONG }, rng);
+    ally.team = [ally, caster]; caster.team = ally.team;
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    ally.stats.wp[0] = 0;
+    engine.bindBuff(ctx, ally, createBuff(13, { quality: 100, from: caster, rng }));
+    return { rng, caster, ally, ctx };
+  }
+
+  it('menolak debuff, menghabiskan satu stack, dan replenish 15-25% MAG', () => {
+    const { rng, caster, ally, ctx } = setup();
+    assert.strictEqual(ally.buffs.filter(b => b.id === 13).length, 1);
+    engine.bindBuff(ctx, ally, createBuff(2, { quality: 100, from: caster, rng }));
+
+    assert.ok(!ally.buffs.some(b => b.id === 2), 'Poison ditolak');
+    assert.strictEqual(ally.buffs.filter(b => b.id === 13).length, 0, 'stack habis');
+    const refill = ally.stats.wp[0];
+    const maxWp = engine.maxWp(ally);
+    assert.ok(refill >= maxWp * 0.15 - 60 && refill <= maxWp * 0.25 + 60, `replenish ${refill} di luar 15-25% dari ${maxWp}`);
+  });
+
+  it('tidak menghalangi buff positif', () => {
+    const { rng, caster, ally, ctx } = setup();
+    engine.bindBuff(ctx, ally, createBuff(4, { quality: 50, from: caster, rng }));
+    assert.ok(ally.buffs.some(b => b.id === 4), 'Defense Up tetap masuk');
+    assert.strictEqual(ally.buffs.filter(b => b.id === 13).length, 1, 'stack tidak terpakai');
   });
 });
 

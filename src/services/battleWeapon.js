@@ -232,10 +232,11 @@ const ABILITIES = {
     return true;
   },
 
-  // OwO VanguardsBanner.preTurn: tiap 3 turn pasang Attack Up ke SEMUA rekan,
-  // lalu naikkan tier (Attack Up → + → ++) pada pemasangan berikutnya.
+  // Vanguard's Banner memasang Attack Up ke SEMUA rekan di awal turn. Saat buff
+  // tinggal 1 turn, pemasangan berikutnya menaikkan tier (Attack Up → + → ++).
   attack_up_chain(ctx, weapon, actor) {
     const e = require('./battleEngine');
+    const ab = weapon.ability;
     const tiers = weapon.def.buffList;
     if (actor.stats.wp[0] < weapon.manaCost) return false;
     const current = actor.buffs.find(b => tiers.includes(b.id));
@@ -244,7 +245,7 @@ const ABILITIES = {
     e.useMana(actor, weapon.manaCost);
     for (const unit of e.aliveOf(actor.team)) {
       if (current) unit.buffs = unit.buffs.filter(b => !(b.id === current.id && b.from === actor));
-      applyBuff(ctx, nextId, actor, unit, 3, buffQuality(weapon.def, weapon.quality));
+      applyBuff(ctx, nextId, actor, unit, ab.duration, buffQuality(weapon.def, weapon.quality));
     }
     actor.skippedAttack = true;
     return true;
@@ -260,25 +261,19 @@ const ABILITIES = {
     return true;
   },
 
+  // Staff of Purity: buang debuff dari rekan acak, heal 50-100% MAG, lalu
+  // pasang 1 stack Sacred Ward 2 turn.
   purify(ctx, weapon, actor) {
     const e = require('./battleEngine');
     const ab = weapon.ability;
-    const buffed = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng, { hasBuff: true });
     const debuffed = e.pickRandom(e.aliveOf(actor.team).filter(u => u.buffs.some(b => b.debuff)), ctx.rng);
-    if (!buffed && !debuffed) return false;
+    if (!debuffed) return false;
     e.useMana(actor, weapon.manaCost);
-    if (buffed) {
-      const idx = buffed.buffs.findIndex(b => !b.debuff);
-      if (idx >= 0) buffed.buffs.splice(idx, 1);
-      const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
-      e.inflictDamage(ctx, actor, buffed, raw, e.MAGICAL);
-    }
-    if (debuffed) {
-      const idx = debuffed.buffs.findIndex(b => b.debuff);
-      if (idx >= 0) debuffed.buffs.splice(idx, 1);
-      const raw = e.getDamage(actor.stats[ab.healStat], weapon.stats[1] / 100, ctx.rng);
-      e.heal(ctx, debuffed, raw, actor);
-    }
+    const idx = debuffed.buffs.findIndex(b => b.debuff);
+    if (idx >= 0) debuffed.buffs.splice(idx, 1);
+    const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
+    e.heal(ctx, debuffed, raw, actor);
+    applyBuff(ctx, 13, actor, debuffed, ab.duration, buffQuality(weapon.def, weapon.quality));
     return true;
   },
 

@@ -43,6 +43,7 @@ const STACK = {
   10: 'independent', // Celebration
   11: 'independent', // Leech
   12: 'independent', // Stinky
+  13: 'independent', // Sacred Ward: tiap stack instance terpisah
 };
 
 // `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
@@ -160,6 +161,10 @@ const FACTORIES = {
       bucket.bonus -= stolen;
       if (stolen > 0) e.replenish(ctx, from, stolen, from);
     },
+  }),
+
+  13: (def, stats, from) => ({
+    id: 13, name: def.name, debuff: false, stats, duration: 2, from,
   }),
 
   12: (def, stats, from) => ({
