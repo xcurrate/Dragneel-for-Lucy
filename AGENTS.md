@@ -470,3 +470,8 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   tanpa jeda itu seluruh bot berhenti melayani perintah lain. Statistik turn dihitung dari
   histogram `Uint32Array` (satu sel per jumlah turn, maksimal `MAX_TURNS`), bukan array `turns`,
   supaya memori tetap kecil. Tes memakai `yieldEvery: 0` agar cepat.
+- **Simulasi panjang mengirim progres, bukan diam lalu menjawab.** `simulate()` menerima
+  `onProgress` yang dipanggil tiap `yieldEvery` run; handler `d sim` mengirim satu pesan
+  "berjalan", memperbaruinya maksimal sekali per detik (`PROGRESS_EDIT_MS`) karena Discord
+  membatasi edit, lalu **mengedit pesan yang sama** menjadi hasil akhir. Bila pengirim tidak
+  mengembalikan objek Message (tes) atau edit gagal, hasil akhir dikirim sebagai pesan baru.

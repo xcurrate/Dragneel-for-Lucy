@@ -163,6 +163,29 @@ function simColor(winRate) {
   return COLOR.warn;
 }
 
+// Hasil sementara selama simulasi panjang masih berjalan. Angkanya dari tally
+// yang sama dengan hasil akhir, jadi tidak ada hitungan ulang.
+function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan' } = {}) {
+  const { done, total, tally } = progress;
+  const percent = Math.min(100, Math.round((done / total) * 1000) / 10);
+  const stats = [
+    `Menang ${bar(tally.player, done)} ${tally.player} (${progress.winRate}%)`,
+    `Kalah  ${bar(tally.enemy, done)} ${tally.enemy} (${progress.lossRate}%)`,
+    `Seri   ${bar(tally.tie, done)} ${tally.tie} (${progress.tieRate}%)`,
+  ].join('\n');
+
+  return new EmbedBuilder()
+    .setColor(COLOR.warn)
+    .setTitle('⚔️ Simulasi Battle — berjalan')
+    .setDescription(`**${playerLabel}** vs **${enemyLabel}**\n\`\`\`\n${stats}\n\`\`\``)
+    .addFields(
+      { name: '⏳ Progres', value: `${bar(done, total)} ${percent}%`, inline: true },
+      { name: '📊 Selesai', value: `**${done.toLocaleString('id-ID')}** / ${total.toLocaleString('id-ID')}`, inline: true },
+      { name: '⏱️ Durasi', value: `Rata-rata **${progress.avgTurns}** turn`, inline: true }
+    )
+    .setFooter({ text: 'Hasil akhir menyusul.' });
+}
+
 function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null } = {}) {
   const stats = [
     `Menang ${bar(result.tally.player, result.runs)} ${result.tally.player} (${result.winRate}%)`,
@@ -263,6 +286,6 @@ function parseTeamButton(customId) {
 module.exports = {
   COLOR, TEAM_BUTTON, MAX_SLOTS,
   weaponName, bar, slotField, slotStats, slotIcon,
-  teamEmbed, teamListEmbed, simEmbed, simColor, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
+  teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
 };

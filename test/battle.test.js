@@ -693,6 +693,32 @@ describe('balasan command memakai embed', () => {
     assert.ok(replies[0].fields.some(f => f.name.includes('Total')));
   });
 
+  it('d sim panjang mengirim progres lalu menimpa dengan hasil akhir', async () => {
+    store.createTeam('u', 'Solo');
+    store.setSlot('u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.setActiveTeam('u', 'Solo');
+
+    const sent = [];
+    const edits = [];
+    const sendProgress = async (m, embed) => {
+      const json = embed.toJSON();
+      sent.push(json);
+      const msg = { edit: async ({ embeds }) => { edits.push(embeds[0].toJSON()); return msg; } };
+      return msg;
+    };
+
+    // Run cukup besar agar melewati ambang progres, seed tetap agar cepat stabil.
+    await handleSimCommand(message('d sim -m 3000 -s 3'), ['-m', '3000', '-s', '3'], 'd', { sendEmbed: sendProgress });
+
+    assert.strictEqual(sent.length, 1, 'hanya satu pesan dibuat, sisanya edit');
+    assert.ok(sent[0].title.includes('berjalan'), 'pesan pertama menandai simulasi berjalan');
+    assert.ok(sent[0].fields.some(f => f.name.includes('Progres')));
+    assert.ok(edits.length >= 1, 'ada pembaruan progres');
+    const last = edits[edits.length - 1];
+    assert.ok(!last.title.includes('berjalan'), 'edit terakhir bukan lagi status berjalan');
+    assert.ok(last.fields.some(f => f.name.includes('Total')), 'hasil akhir memuat total');
+  });
+
   it('error d sim tetap berupa embed', async () => {
     await handleSimCommand(message('d sim -m 0'), ['-m', '0'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);

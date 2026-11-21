@@ -10,8 +10,11 @@ const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
 const data = require('../data/owoBattle');
-const { simEmbed, renderMatchup, usageEmbed, errorEmbed } = require('../ui/battlePanel');
+const { simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
+
+// Jeda minimum antar-edit pesan progres; Discord membatasi edit pesan.
+const PROGRESS_EDIT_MS = 1000;
 
 function usage(prefix = 'd') {
   return [
@@ -128,11 +131,50 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const playerSpecs = withLevel(player.specs, levels.player);
   const enemySpecs = withLevel(enemy.specs, levels.enemy);
 
+  // Simulasi besar bisa berjalan lama. Kirim pesan progres lebih dulu, perbarui
+  // berkala, lalu timpa dengan hasil akhir di pesan yang sama supaya channel
+  // tidak dibanjiri pesan.
+  const labels = { playerLabel: team.name, enemyLabel: enemy.label };
+  let progressMessage = null;
+  let progressDisabled = false;
+  let lastEdit = 0;
+  let editing = false;
+
+  const publishProgress = async progress => {
+    if (progressDisabled) return;
+    const embed = simProgressEmbed(progress, labels);
+
+    if (!progressMessage) {
+      const sent = await send(message, embed);
+      // Pengirim tanpa objek Message (mis. tes) tidak bisa diedit: cukup satu
+      // pesan, sisanya dilewati supaya channel tidak dibanjiri.
+      if (!sent?.edit) { progressDisabled = true; return; }
+      progressMessage = sent;
+      lastEdit = Date.now();
+      return;
+    }
+
+    // Discord membatasi edit pesan; satu edit per detik cukup untuk menunjukkan
+    // progres tanpa kena rate limit.
+    if (editing || Date.now() - lastEdit < PROGRESS_EDIT_MS) return;
+    editing = true;
+    try {
+      await progressMessage.edit({ embeds: [embed] });
+      lastEdit = Date.now();
+    } catch {
+      progressDisabled = true;
+      progressMessage = null;
+    } finally {
+      editing = false;
+    }
+  };
+
   const result = await sim.simulate(playerSpecs, enemySpecs, {
     runs: runCount,
     seed: seed != null ? Number(seed) : undefined,
     playerQuality,
     enemyQuality,
+    onProgress: publishProgress,
   });
 
   // Ringkasan matchup memuat emoji hewan; siapkan dulu seperti `d dex`.
@@ -141,11 +183,20 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     ...enemySpecs.map(spec => spec.animal),
   ]);
 
-  return send(message, simEmbed(result, {
-    playerLabel: team.name,
-    enemyLabel: enemy.label,
+  const finalEmbed = simEmbed(result, {
+    ...labels,
     matchup: renderMatchup(playerSpecs, enemySpecs),
-  }));
+  });
+
+  if (progressMessage) {
+    try {
+      await progressMessage.edit({ embeds: [finalEmbed] });
+      return progressMessage;
+    } catch {
+      // Gagal mengedit (pesan dihapus / rate limit): kirim hasil sebagai pesan baru.
+    }
+  }
+  return send(message, finalEmbed);
 }
 
 // Tim aktif → spec engine, dengan stat diambil dari dex bila perlu.

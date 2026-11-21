@@ -99,8 +99,27 @@ function yieldToEventLoop() {
   return new Promise(resolve => setImmediate(resolve));
 }
 
+function rates(tally, total) {
+  return {
+    winRate: Math.round((tally.player / total) * 1000) / 10,
+    lossRate: Math.round((tally.enemy / total) * 1000) / 10,
+    tieRate: Math.round((tally.tie / total) * 1000) / 10,
+  };
+}
+
+function snapshot(done, total, tally, turnSum, timeouts) {
+  return {
+    done,
+    total,
+    tally: { ...tally },
+    timeouts,
+    avgTurns: done ? Math.round((turnSum / done) * 10) / 10 : 0,
+    ...rates(tally, done || 1),
+  };
+}
+
 async function simulate(playerSpecs, enemySpecs, {
-  runs = 1, seed = randomSeed(), playerQuality, enemyQuality, yieldEvery = YIELD_EVERY,
+  runs = 1, seed = randomSeed(), playerQuality, enemyQuality, yieldEvery = YIELD_EVERY, onProgress,
 } = {}) {
   const total = Math.max(1, Math.floor(Number(runs) || 1));
   const tally = { player: 0, enemy: 0, tie: 0 };
@@ -119,7 +138,12 @@ async function simulate(playerSpecs, enemySpecs, {
     histogram[Math.min(result.turns, MAX_TURNS + 1)] += 1;
     turnSum += result.turns;
     if (result.timeout) timeouts += 1;
-    if (yieldEvery > 0 && (i + 1) % yieldEvery === 0) await yieldToEventLoop();
+    if (yieldEvery > 0 && (i + 1) % yieldEvery === 0) {
+      await yieldToEventLoop();
+      // Laporan sementara supaya pemanggil bisa memperbarui pesan selama run
+      // panjang; hasil akhir tetap dihitung dari state yang sama.
+      if (onProgress) await onProgress(snapshot(i + 1, total, tally, turnSum, timeouts));
+    }
   }
 
   let min = 0;
