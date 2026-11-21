@@ -352,7 +352,7 @@ function bucketLines(bucket) {
 
 // Hasil simulasi global. Angka utama ditaruh di description mengikuti gaya
 // laporan yang sudah dipakai bot lain, lalu rincian per kelompok level.
-function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, skipped = [] } = {}) {
+function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, skipped = [], totals = null } = {}) {
   const seconds = (result.durationMs / 1000).toFixed(2);
   const low = result.buckets.low;
   const high = result.buckets.high;
@@ -364,6 +364,11 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
       `### Hasil Simulasi Global (${seconds}s)`,
       `**Tim kamu:** ${playerLabel}`,
       `**Lawan:** ${result.opponents.toLocaleString('id-ID')} tim · ${result.battles.toLocaleString('id-ID')} pertarungan (${result.runs.toLocaleString('id-ID')}× per tim)`,
+      ...(totals
+        ? [`-# ${totals.all.toLocaleString('id-ID')} tim di \`${prefix}tm\` · `
+          + `${totals.own.toLocaleString('id-ID')} milikmu (tidak diadu) · `
+          + `${(skipped.length).toLocaleString('id-ID')} dilewati`]
+        : []),
       `-# ${result.workers || 1} worker · ${Math.round(result.battles / Math.max(1, result.durationMs / 1000)).toLocaleString('id-ID')} pertarungan/detik`,
     ].join('\n'))
     .addFields(

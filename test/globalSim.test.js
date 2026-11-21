@@ -488,6 +488,24 @@ describe('tampilan hasil simulasi global', () => {
     assert.match(field.value, /StatKurang \(stat belum lengkap\)/);
   });
 
+  it('menjelaskan tim milik sendiri yang tidak ikut diadu', async () => {
+    store.createTeam('me', 'Milikku');
+    store.setSlot('me', 'Milikku', 1, { custom: COEFFS_STRONG, level: 80 });
+    store.setActiveTeam('me', 'Milikku');
+    // Tim kedua milik user yang sama: muncul di `dtm`, tapi tidak boleh jadi lawan.
+    store.createTeam('me', 'Cadanganku');
+    store.setSlot('me', 'Cadanganku', 1, { custom: COEFFS_WEAK, level: 60 });
+    store.createTeam('rival', 'LawanSah');
+    store.setSlot('rival', 'LawanSah', 1, { custom: COEFFS_WEAK, level: 30 });
+
+    const embed = await runGlobal();
+    assert.match(embed.description, /1 tim/, 'hanya tim user lain yang diadu');
+    // Angka `dtm` harus bisa direkonsiliasi dari embed: total, milik sendiri, dilewati.
+    assert.match(embed.description, /3 tim di `dtm`/);
+    assert.match(embed.description, /2 milikmu \(tidak diadu\)/);
+    assert.match(embed.description, /0 dilewati/);
+  });
+
   it('tidak menampilkan field tim dilewati kalau semua tim bisa diadu', async () => {
     seedWorld();
     const embed = await runGlobal();

@@ -292,12 +292,14 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
   const opponents = [];
-  // `dtm` menampilkan semua tim, termasuk yang kosong, sedangkan simulasi hanya
-  // bisa memakai tim berisi. Tim yang dilewati tetap dicatat supaya selisih
-  // jumlah dengan `dtm` bisa dijelaskan, bukan terlihat seperti bug.
+  // `dtm` menampilkan semua tim, termasuk milik sendiri dan yang kosong,
+  // sedangkan simulasi hanya bisa mengadu tim berisi milik orang lain. Semua
+  // yang tidak ikut diadu dicatat supaya angka `dtm` bisa direkonsiliasi.
   const skipped = [];
-  for (const other of store.listAllTeams()) {
-    if (other.userId === String(userId)) continue;
+  let ownTeams = 0;
+  const allTeams = store.listAllTeams();
+  for (const other of allTeams) {
+    if (other.userId === String(userId)) { ownTeams += 1; continue; }
     if (!other.slots.length) {
       skipped.push({ label: teamLabel(other), reason: 'kosong' });
       continue;
@@ -381,6 +383,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     prefix,
     playerSpecs: player.specs,
     skipped,
+    totals: { all: allTeams.length, own: ownTeams },
   });
   const payload = {
     embeds: [finalEmbed],
