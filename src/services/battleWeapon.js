@@ -245,7 +245,10 @@ const ABILITIES = {
     e.useMana(actor, weapon.manaCost);
     for (const unit of e.aliveOf(actor.team)) {
       if (current) unit.buffs = unit.buffs.filter(b => !(b.id === current.id && b.from === actor));
-      applyBuff(ctx, nextId, actor, unit, ab.duration, buffQuality(weapon.def, weapon.quality));
+      // Durasi +1 karena mesin menurunkan durasi di akhir turn pemasangan juga.
+      // Tanpa ini buff tinggal 1 turn saat preTurn berikutnya, sehingga recast
+      // dan eskalasi terjadi tiap turn dan unit tidak pernah menyerang.
+      applyBuff(ctx, nextId, actor, unit, ab.duration + 1, buffQuality(weapon.def, weapon.quality));
     }
     actor.skippedAttack = true;
     return true;

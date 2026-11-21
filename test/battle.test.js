@@ -1500,30 +1500,44 @@ describe("Vanguard's Banner", () => {
     for (const member of [unit, ally]) {
       const buff = member.buffs.find(b => b.id === 6);
       assert.ok(buff, `${member.label} mendapat Attack Up`);
-      assert.strictEqual(buff.duration, 2, 'durasi 2 turn sesuai deskripsi');
     }
   });
 
-  it('menaikkan tier ke Attack Up+ setelah buff lama hampir habis', () => {
+  it('buff bertahan tepat 2 turn dan pemasangan melewatkan serangan', () => {
+    const { unit, ally, ctx } = setup();
+    engine.runTurn(ctx, unit.team, unit.foes);
+    for (const member of [unit, ally]) {
+      const buff = member.buffs.find(b => b.id === 6);
+      assert.strictEqual(buff.duration, 2, 'tersisa 2 turn setelah turn pemasangan');
+    }
+    // Unit pemasang melewati serangan, jadi hanya rekannya yang menyerang.
+    const { unit: solo, foe, ctx: c2 } = setup();
+    solo.team = [solo];
+    solo.foes = [foe];
+    foe.foes = [solo];
+    const hpBefore = foe.stats.hp[0];
+    engine.runTurn(c2, solo.team, solo.foes);
+    assert.strictEqual(foe.stats.hp[0], hpBefore, 'turn pemasangan tanpa serangan');
+  });
+
+  it('tidak recast selama buff masih berjalan, lalu naik tier saat habis', () => {
     const { unit, ctx } = setup();
-    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
-    unit.buffs.find(b => b.id === 6).duration = 1;
-    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
+    const wpAfterFirst = (engine.runTurn(ctx, unit.team, unit.foes), unit.stats.wp[0]);
+    engine.runTurn(ctx, unit.team, unit.foes);
+    assert.strictEqual(unit.buffs.find(b => b.id === 6).duration, 1, 'turn kedua masih Attack Up');
+    assert.strictEqual(unit.stats.wp[0], wpAfterFirst, 'WP tidak terpakai saat buff masih berjalan');
+
+    engine.runTurn(ctx, unit.team, unit.foes);
     assert.ok(unit.buffs.some(b => b.id === 7), 'tier naik ke Attack Up+');
     assert.ok(!unit.buffs.some(b => b.id === 6), 'Attack Up lama dilepas');
   });
 
-  it('tidak memasang apa pun bila buff masih berjalan atau WP kurang', () => {
+  it('berhenti recast bila WP tidak cukup', () => {
     const { unit, ctx } = setup();
-    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
-    const before = unit.buffs.filter(b => b.id === 6).length;
-    unit.weapon.preTurn(ctx, unit, unit.team, unit.foes);
-    assert.strictEqual(unit.buffs.filter(b => b.id === 6).length, before, 'tidak menumpuk');
-
-    const poor = setup();
-    poor.unit.stats.wp[0] = poor.unit.weapon.manaCost - 1;
-    poor.unit.weapon.preTurn(poor.ctx, poor.unit, poor.unit.team, poor.unit.foes);
-    assert.strictEqual(poor.unit.buffs.length, 0, 'WP kurang tidak memasang buff');
+    engine.runTurn(ctx, unit.team, unit.foes);
+    unit.stats.wp[0] = unit.weapon.manaCost - 1;
+    engine.runTurn(ctx, unit.team, unit.foes);
+    assert.ok(!unit.buffs.some(b => b.id === 7), 'tidak ada eskalasi tanpa WP');
   });
 });
 
