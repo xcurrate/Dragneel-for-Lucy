@@ -50,12 +50,27 @@ function getDb() {
       animal_key TEXT,
       custom_hp INTEGER, custom_att INTEGER, custom_pr INTEGER,
       custom_wp INTEGER, custom_mag INTEGER, custom_mr INTEGER,
+      final_hp INTEGER, final_att INTEGER, final_pr INTEGER,
+      final_wp INTEGER, final_mag INTEGER, final_mr INTEGER,
       level INTEGER NOT NULL DEFAULT 1,
       weapon_id INTEGER,
       weapon_quality INTEGER,
       passives TEXT,
       PRIMARY KEY (team_id, slot),
       FOREIGN KEY (team_id) REFERENCES teams (id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS team_import_messages (
+      source_message_id TEXT PRIMARY KEY,
+      guild_id TEXT,
+      channel_id TEXT,
+      discovered_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS team_imports (
+      user_id TEXT NOT NULL,
+      source_message_id TEXT NOT NULL,
+      team_name TEXT NOT NULL,
+      imported_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, source_message_id)
     );
     CREATE TABLE IF NOT EXISTS active_team (
       guild_id TEXT NOT NULL,
@@ -72,6 +87,12 @@ function getDb() {
       PRIMARY KEY (user_id, action)
     );
   `);
+  for (const column of [
+    'final_hp INTEGER', 'final_att INTEGER', 'final_pr INTEGER',
+    'final_wp INTEGER', 'final_mag INTEGER', 'final_mr INTEGER',
+  ]) {
+    try { db.exec(`ALTER TABLE team_slots ADD COLUMN ${column}`); } catch {}
+  }
   migrateToGlobal(db);
   return db;
 }
@@ -132,9 +153,13 @@ function rowToSlot(row) {
     : null;
   let passives = null;
   if (row.passives) { try { passives = JSON.parse(row.passives); } catch {} }
+  const finalStats = row.final_hp != null
+    ? { hp: row.final_hp, att: row.final_att, pr: row.final_pr, wp: row.final_wp, mag: row.final_mag, mr: row.final_mr }
+    : null;
   return {
     slot: row.slot,
     label: row.label,
+    finalStats,
     animalKey: row.animal_key,
     custom,
     level: row.level || 1,
@@ -231,26 +256,33 @@ function setSlot(userId, teamName, slot, data) {
     return { error: `Slot harus 1-${MAX_SLOTS}.` };
   }
   const custom = data.custom || null;
-  if (!data.animalKey && !custom) return { error: 'Isi nama hewan dex atau stat manual.' };
-  if (data.animalKey && custom) return { error: 'Pilih salah satu: hewan dex atau stat manual.' };
+  if (!data.animalKey && !custom && !data.finalStats) return { error: 'Isi nama hewan dex atau stat manual.' };
+  if ((data.animalKey && custom) || (data.finalStats && (data.animalKey || custom))) {
+    return { error: 'Pilih satu format stat: hewan, stat manual, atau stat import.' };
+  }
 
   const level = Math.max(1, Math.min(1000, Number(data.level) || 1));
   const passives = Array.isArray(data.passives) ? JSON.stringify(data.passives) : null;
   getDb().prepare(`
     INSERT INTO team_slots
       (team_id, slot, label, animal_key, custom_hp, custom_att, custom_pr, custom_wp, custom_mag, custom_mr,
+       final_hp, final_att, final_pr, final_wp, final_mag, final_mr,
        level, weapon_id, weapon_quality, passives)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(team_id, slot) DO UPDATE SET
       label = excluded.label, animal_key = excluded.animal_key,
       custom_hp = excluded.custom_hp, custom_att = excluded.custom_att, custom_pr = excluded.custom_pr,
       custom_wp = excluded.custom_wp, custom_mag = excluded.custom_mag, custom_mr = excluded.custom_mr,
+      final_hp = excluded.final_hp, final_att = excluded.final_att, final_pr = excluded.final_pr,
+      final_wp = excluded.final_wp, final_mag = excluded.final_mag, final_mr = excluded.final_mr,
       level = excluded.level, weapon_id = excluded.weapon_id,
       weapon_quality = excluded.weapon_quality, passives = excluded.passives
   `).run(
     team.id, index, data.label || null, data.animalKey || null,
     custom ? custom.hp : null, custom ? custom.att : null, custom ? custom.pr : null,
     custom ? custom.wp : null, custom ? custom.mag : null, custom ? custom.mr : null,
+    data.finalStats?.hp ?? null, data.finalStats?.att ?? null, data.finalStats?.pr ?? null,
+    data.finalStats?.wp ?? null, data.finalStats?.mag ?? null, data.finalStats?.mr ?? null,
     level, data.weaponId ?? null, data.weaponQuality ?? null, passives
   );
   touch(team.id);
@@ -329,6 +361,29 @@ function clearCooldown(userId, action) {
     .run(String(userId), String(action));
 }
 
+function markTeamImportMessage(messageId, guildId, channelId) {
+  getDb().prepare(
+    'INSERT OR IGNORE INTO team_import_messages (source_message_id, guild_id, channel_id, discovered_at) VALUES (?, ?, ?, ?)'
+  ).run(String(messageId), guildId == null ? null : String(guildId), channelId == null ? null : String(channelId), Date.now());
+}
+function isTeamImportMessage(messageId) {
+  return Boolean(getDb().prepare(
+    'SELECT 1 FROM team_import_messages WHERE source_message_id = ?'
+  ).get(String(messageId)));
+}
+
+function hasTeamImport(userId, sourceMessageId) {
+  return Boolean(getDb().prepare(
+    'SELECT 1 FROM team_imports WHERE user_id = ? AND source_message_id = ?'
+  ).get(String(userId), String(sourceMessageId)));
+}
+
+function markTeamImport(userId, sourceMessageId, teamName) {
+  getDb().prepare(
+    'INSERT OR IGNORE INTO team_imports (user_id, source_message_id, team_name, imported_at) VALUES (?, ?, ?, ?)'
+  ).run(String(userId), String(sourceMessageId), String(teamName), Date.now());
+}
+
 module.exports = {
   MAX_SLOTS,
   MAX_TEAMS,
@@ -348,4 +403,8 @@ module.exports = {
   clearSlot,
   setActiveTeam,
   getActiveTeam,
+  hasTeamImport,
+  markTeamImport,
+  markTeamImportMessage,
+  isTeamImportMessage,
 };

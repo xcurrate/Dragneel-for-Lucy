@@ -69,11 +69,12 @@ function toSpecs(team) {
       label: slot.label || slot.animalKey || `slot${slot.slot}`,
       level: slot.level || 1,
       weapon: slot.weaponId ? { id: slot.weaponId, quality: slot.weaponQuality, passives: slot.passives } : null,
+      finalStats: slot.finalStats || null,
     };
     // Stat manual menang atas lookup dex, supaya user bisa mengoreksi hewan
     // yang belum pernah tertangkap bot.
     const coeffs = slot.custom || (slot.animalKey ? dexStatsToCustom(slot.dexAnimal) : null);
-    if (!coeffs) {
+    if (!coeffs && !slot.finalStats) {
       return { error: `Slot ${slot.slot}: isi stat manual atau tangkap hewan \`${slot.animalKey}\` dulu.` };
     }
     spec.coeffs = coeffs;

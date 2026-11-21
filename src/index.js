@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, Events, MessageFlags, Partials } = require('discord.js');
 const command = require('./commands/boss');
 const { handlePrefixCommand } = require('./commands/prefix');
 const battleTeam = require('./commands/battleTeam');
@@ -15,13 +15,17 @@ const bossRewards = require('./services/bossRewardNotifications');
 const animalDex = require('./services/animalDex');
 const battleEmoji = require('./services/battleEmoji');
 const reminders = require('./services/reminders');
+const lucyTeamImport = require('./services/lucyTeamImport');
 
 logBuffer.install();
 if (!process.env.DISCORD_TOKEN || !process.env.LUCY_BOT_ID) {
   console.error('Set DISCORD_TOKEN and LUCY_BOT_ID in .env');
   process.exit(1);
 }
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.MessageContent],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+});
 const tracker = new BossTracker(client);
 animalDex.setClient(client);
 
@@ -99,11 +103,25 @@ client.on(Events.MessageCreate, async message => {
   tracker.handleMessage(message).catch(console.error);
   bossRewards.enqueue(message);
   captureAnimalDex(message);
+  lucyTeamImport.prepareLucyTeamMessage(message).catch(e => console.error('[LucyTeamImport] prepare:', e));
   handlePrefixMessage(message).catch(e => {
     console.error('[PrefixCommand]', e);
     message.reply({ content: 'Terjadi kesalahan saat menjalankan perintah.' }).catch(() => {});
   });
   handleAutoThreadRep(message).catch(e => console.error('[AutoThreadRep]', e));
+});
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  try {
+    const result = await lucyTeamImport.handleReaction(reaction, user);
+    if (result?.team && reaction.message?.channel?.send) {
+      await reaction.message.channel.send({
+        content: `✅ Tim **${result.team.name}** berhasil diimpor (${result.imported} slot). Gunakan \`d team show ${result.team.name}\` untuk melihatnya.`,
+        allowedMentions: { parse: [] },
+      });
+    } else if (result?.error && reaction.message?.channel?.send) {
+      await reaction.message.channel.send({ content: `ℹ️ ${result.error}`, allowedMentions: { parse: [] } });
+    }
+  } catch (e) { console.error('[LucyTeamImport] reaction:', e); }
 });
 client.on(Events.MessageUpdate, async (_old, message) => {
   try {

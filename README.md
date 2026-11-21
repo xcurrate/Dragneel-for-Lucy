@@ -534,6 +534,26 @@ memengaruhi hasil pertarungan.
 Resistensi memakai `(res / (100 + res)) × 0.8`, jadi damage tidak pernah nol
 total tetapi juga tidak pernah kebal.
 
+## Import tim dari Lucy
+
+Dragneel dapat mengenali kartu tim Lucy Components V2 dari bot Lucy resmi
+(`1438615298012872817`). Jika kartu valid, Dragneel memberi reaksi **📊**.
+User yang menekan reaksi tersebut mendapat tim baru `Lucy Import - <nama tim>`;
+tim aktif tidak ditimpa. Pesan yang sama hanya bisa diimpor sekali per user.
+
+Parser membaca nama slot, level, HP, WP, ATT, MG, PR, MR, senjata, dan pasif
+dari emoji. Semua senjata yang terdeteksi dianggap **Fabled** (`quality=100`).
+Kode seperti `2PI` dan `1F1C` adalah ID internal Lucy dan sengaja diabaikan.
+
+Stat pada kartu Lucy adalah stat final, bukan koefisien. Karena itu stat import
+disimpan terpisah dan tidak ditambah lagi dengan stat senjata saat simulasi.
+PR/MR juga dipertahankan sebagai nilai final dari Lucy.
+
+Bot membutuhkan intent dan izin Discord berikut untuk fitur ini:
+
+- `GuildMessageReactions` dan partial `Message`/`Channel`/`Reaction`.
+- View Channel, Read Message History, Add Reactions, dan Send Messages.
+
 ## Data pasif battle (referensi simulasi)
 
 `src/data/owoPassives.json` berisi 21 pasif battle dari

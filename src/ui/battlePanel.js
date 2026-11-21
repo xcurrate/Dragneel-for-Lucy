@@ -54,15 +54,17 @@ function slotStats(entry) {
     label: entry.label || entry.animalKey || `slot${entry.slot}`,
     level: entry.level || data.DEFAULT_LEVEL,
     coeffs: entry.custom || (animal ? sim.dexStatsToCustom(animal) : null),
+    finalStats: entry.finalStats || null,
     customStats: Boolean(entry.custom),
     animal,
     weapon: entry.weaponId
       ? { id: entry.weaponId, quality: entry.weaponQuality, passives: entry.passives }
       : null,
   };
-  if (!spec.coeffs) return null;
+  if (!spec.coeffs && !spec.finalStats) return null;
   try {
     const unit = engine.buildUnit(spec, createRng(DISPLAY_SEED), entry.weaponQuality);
+    if (entry.finalStats) return { ...entry.finalStats };
     return {
       hp: Math.ceil(engine.maxHp(unit)),
       wp: Math.ceil(engine.maxWp(unit)),

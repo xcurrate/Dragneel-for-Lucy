@@ -25,6 +25,11 @@ const MAX_ADAPT_STACKS = 5;
 
 let pidCounter = 0;
 
+function resistanceFromDisplayedPercent(percent) {
+  const value = Math.max(0, Math.min(79.999, Number(percent) || 0));
+  return (value * 100) / (80 - value);
+}
+
 function maxHp(unit) { return unit.stats.hp[1] + unit.stats.hp[3]; }
 function maxWp(unit) { return unit.stats.wp[1] + unit.stats.wp[3]; }
 function isAlive(unit) { return unit.stats.hp[0] > 0; }
@@ -206,7 +211,7 @@ function buildStats(base) {
 function buildUnit(spec, rng, quality) {
   // `coeffs` adalah stat skala kecil (0-8 untuk hewan OwO, 0-14 untuk dex Lucy).
   // Keduanya koefisien, bukan HP final — kekuatan berasal dari level.
-  const base = data.baseStats(spec.coeffs, spec.level);
+  const base = spec.finalStats ? null : data.baseStats(spec.coeffs, spec.level);
   const unit = {
     pid: ++pidCounter,
     slot: spec.slot,
@@ -218,11 +223,20 @@ function buildUnit(spec, rng, quality) {
     weapon: null,
     team: null,
     foes: null,
-    stats: buildStats(base),
+    stats: spec.finalStats ? {
+      hp: [spec.finalStats.hp, spec.finalStats.hp, spec.finalStats.hp, 0],
+      wp: [spec.finalStats.wp, spec.finalStats.wp, spec.finalStats.wp, 0],
+      att: [spec.finalStats.att, 0],
+      mag: [spec.finalStats.mag, 0],
+      pr: [resistanceFromDisplayedPercent(spec.finalStats.pr), 0],
+      mr: [resistanceFromDisplayedPercent(spec.finalStats.mr), 0],
+    } : buildStats(base),
   };
   if (spec.weapon) {
     unit.weapon = buildWeapon(spec.weapon, rng, quality);
-    unit.weapon.alterStats(unit.stats);
+    // Lucy mengirim stat final yang sudah termasuk equipment; jangan tambahkan
+    // stat senjata untuk kedua kalinya pada slot hasil import.
+    if (!spec.finalStats) unit.weapon.alterStats(unit.stats);
   }
   unit.stats.hp[0] = maxHp(unit);
   unit.stats.wp[0] = maxWp(unit);
@@ -420,6 +434,7 @@ module.exports = {
   isAlive,
   maxHp,
   maxWp,
+  resistanceFromDisplayedPercent,
   tagged,
   withTag,
   PHYSICAL,
