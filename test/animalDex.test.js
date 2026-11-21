@@ -536,6 +536,36 @@ describe('dex prefix command', () => {
     assert.match(res.embeds[0].data.title, /Hasil Dex/);
     assert.match(res.embeds[0].data.description, /lawliet2/);
   });
+
+  // Hewan yang gambarnya bukan emoji (mis. lampiran biasa) tidak punya token
+  // hewan, sehingga label baris jatuh ke `animalEmoji()` -> null.
+  it('menampilkan nama hewan, bukan "null", saat hewan tidak punya emoji', async () => {
+    const { captureMessage, buildDexResponse } = require('../src/services/animalDex');
+    // Kartu tanpa token emoji hewan: judulnya teks biasa, gambarnya lampiran.
+    const plainCard = {
+      components: [{
+        type: 17,
+        components: [{
+          type: 9,
+          components: [{ type: 10, content: '## kudanil\n*Requested by <@1>*' }],
+          accessory: {
+            type: 11,
+            media: { url: 'https://cdn.discordapp.com/attachments/1/2/kudanil.png' },
+            description: 'kudanil',
+            spoiler: false
+          }
+        },
+        { type: 10, content: '- **Informasi animal:**\n  - **Nickname:** \'-\'\n  - **Jumlah:** 0/1\n  - **Rank:** <:rare:1521986845213458482> rare\n  - **Alias:** kudanil' },
+        { type: 10, content: '## <:hp:1541928276165922906> `5` <:att:1541928417069375498> `1`' }]
+      }]
+    };
+    captureMessage(makeMessage(plainCard));
+
+    const res = await buildDexResponse('kudanil -c');
+    const desc = res.embeds[0].data.description;
+    assert.match(desc, /\*\*kudanil\*\*/, 'nama hewan dipakai sebagai label');
+    assert.doesNotMatch(desc, /null/);
+  });
 });
 
 describe('emoji hewan untuk tampilan battle', () => {

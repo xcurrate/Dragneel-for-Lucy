@@ -179,6 +179,7 @@ function allEmojiTokens() {
 
 // Ganti semua token emoji pada teks memakai peta hasil mirror.
 function applyEmojiMap(text, map) {
+  if (!text) return text;
   if (!map || !map.size) return text;
   return String(text).replace(/<a?:\w+:\d+>/g, token => map.get(token) || token);
 }

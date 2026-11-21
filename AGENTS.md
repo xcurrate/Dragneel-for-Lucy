@@ -519,6 +519,13 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   Aturan ini berlaku untuk emoji battle **dan** emoji dex hewan: `resolve()` di
   `battleEmoji` serta `ensureAnimalEmoji()`/`ensureAnimalEmojis()` di `animalDex`
   semuanya memverifikasi sebelum memakai hasil cache.
+- **`applyEmojiMap()` jangan sampai mengubah `null` jadi `"null"`.** Fungsi ini
+  mengembalikan teks apa adanya kalau input kosong. Tanpa penjagaan itu,
+  `String(null)` menghasilkan string `"null"` sehingga fallback
+  `animalEmoji(a) || '**nama**'` tidak pernah jalan dan tabel dex menampilkan
+  `null` sebagai label baris. Ini kena ke **11 dari 169** hewan — justru yang
+  paling umum (`bee`, `bug`, `sheep`, `dragon`, `whale`), yaitu hewan yang
+  gambarnya lampiran biasa sehingga tidak punya token emoji.
 - **`id` internal ≠ `owoId`.** Senjata lama memakai id 1-22 (urutan internal), sedangkan
   OwO punya id resmi sendiri (Flame Staff 10 vs 110, Glacial Axe 15 vs 115). JANGAN
   renumber `id`: dipakai tes, penyimpanan tim, dan alias. Id resmi disimpan di `owoId`.
