@@ -625,8 +625,8 @@
       "emojis": [],
       "emojiNote": "ID emoji `:fadapt:` belum diberikan (teks sumber tanpa ID). Render memakai ikon netral ✨.",
       "category": "defense",
-      "summary": "Tiap kali menerima damage, dapat stack resistensi terhadap tipe damage terakhir (Physical: Stoneskin, Magical: Spellskin).",
-      "sourceText": "Gain **?%** resistance per stack against the last damage type received.",
+      "summary": "Resistensi terhadap tipe damage terakhir: Physical memberi Stoneskin, Magical memberi Spellskin, 5-10% per stack, maksimal 5 stack. Menerima tipe lain menghapus semua stack.",
+      "sourceText": "Gains resistance against the last damage type received. Physical hits grant **Stoneskin**, while Magical hits grant **Spellskin**. Reduces incoming damage of that type by **5-10%** per stack. Remove all stacks upon taking damage of other types. Stack Limit: cannot exceed 5 stacks.",
       "qualityList": [
         [
           5,
@@ -639,7 +639,9 @@
       "aliases": [
         "adapt",
         "adaptation"
-      ]
+      ],
+      "stackLimit": 5,
+      "stackRule": "Satu pool stack (bukan dua). Diamage tipe lain menghapus SEMUA stack; damage TRUE juga menghapus karena bukan Physical/Magical."
     }
   ]
 }

@@ -487,9 +487,12 @@ dan angkanya dikalikan langsung di tiap hook.
 ### Adaptation (pasif 27)
 
 Tiap menerima damage, dapat satu stack resistensi 5-10% terhadap tipe damage
-terakhir. Stack Physical dan Magical dihitung terpisah (sumber menyebut dua
-ikon berbeda: Stoneskin dan Spellskin). Stack baru berlaku setelah damage yang
-memicunya, dan totalnya dibatasi 80% agar damage tidak pernah nol.
+terakhir: Physical memberi **Stoneskin**, Magical memberi **Spellskin**.
+Stack-nya satu pool saja (maksimal **5 stack**, jadi reduksi berhenti di
+50%), dan menerima tipe lain **menghapus semua stack** — Spellskin tidak
+mewarisi stack Stoneskin. Damage TRUE menghapus stack juga, karena bukan
+Physical maupun Magical. Stack baru berlaku setelah damage yang memicunya,
+jadi hit pertama selalu penuh.
 
 ### Tier senjata
 

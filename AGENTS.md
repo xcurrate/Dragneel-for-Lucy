@@ -523,3 +523,8 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   manual di tiap hook; `eff()` sudah menangani `undefined` (default 1).
 - **`d team add` hanya menerima pasif numerik (`passive=27`).** Alias pasif (`adapt`,
   `sg`) hanya berlaku di `dtm s`/`dtm w`. Ini perilaku lama, bukan bug baru.
+- **Adaptation (27): SATU pool stack, bukan dua.** Sumber menyebut Stoneskin
+  (Physical) dan Spellskin (Magical), tapi keduanya berbagi satu pool: maksimal
+  5 stack (`MAX_ADAPT_STACKS` di engine), dan menerima tipe lain menghapus SEMUA
+  stack. Jangan simpan `stacks: {p, m}` terpisah — itu salah baca sumber.
+  Damage TRUE menghapus stack tanpa menambah (bukan Physical/Magical).

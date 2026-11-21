@@ -77,19 +77,33 @@ const PASSIVES = {
   // Adaptation: tiap kali menerima damage, dapat stack resistensi terhadap tipe
   // damage terakhir. Stack dihitung terpisah untuk PHYSICAL dan MAGICAL karena
   // sumber menyebut dua ikon berbeda (Stoneskin / Spellskin).
+  // Adaptation: resistensi terhadap tipe damage TERAKHIR. Physical memberi
+  // Stoneskin, Magical memberi Spellskin; menerima tipe lain menghapus semua
+  // stack. Satu pool stack saja (bukan dua), maksimal 5.
   27: (stats) => ({
     id: 27, name: 'Adaptation', stats,
-    stacks: { p: 0, m: 0 },
+    stackType: null, // 'p' (Stoneskin) | 'm' (Spellskin) | null
+    stacks: 0,
     attacked(ctx, unit, attacker, bucket, type) {
-      const { PHYSICAL } = engine();
+      const { PHYSICAL, MAGICAL: MAGICAL_KEY, MAX_ADAPT_STACKS } = engine();
       if (unit.stats.hp[0] <= 0) return;
-      const key = type === PHYSICAL ? 'p' : 'm';
-      // Stack baru berlaku setelah damage ini, supaya hit pertama tidak
-      // mengurangi damage yang memicunya.
-      // Dibatasi 80% supaya damage tidak pernah nol walau stack menumpuk.
-      const pct = Math.min(80, stats[0] * this.stacks[key]);
-      if (pct > 0) bucket.bonus -= (bucket.amount + bucket.bonus) * (pct / 100);
-      this.stacks[key] += 1;
+      // Damage TRUE tidak termasuk Physical maupun Magical: sumber hanya
+      // menyebut dua tipe itu, jadi TRUE menghapus stack tanpa memberi stack.
+      const key = type === PHYSICAL ? 'p' : type === MAGICAL_KEY ? 'm' : null;
+      if (!key) {
+        this.stackType = null;
+        this.stacks = 0;
+        return;
+      }
+      if (this.stackType !== key) {
+        // Tipe lain: buang semua stack. Hit ini belum memakai stack baru.
+        this.stackType = key;
+        this.stacks = 0;
+      } else if (this.stacks > 0) {
+        // Stack yang sudah ada berlaku untuk hit ini, baru setelah itu bertambah.
+        bucket.bonus -= (bucket.amount + bucket.bonus) * ((stats[0] * this.stacks) / 100);
+      }
+      if (this.stacks < MAX_ADAPT_STACKS) this.stacks += 1;
     },
   }),
 

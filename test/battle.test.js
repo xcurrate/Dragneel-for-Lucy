@@ -1085,7 +1085,21 @@ describe('batch senjata baru: Bleeding Gaze, Conduit Claw, Corruption, Scepter',
     assert.deepStrictEqual(turns, [true, false, false, false, true, false, false, false, true]);
   });
 
-  it('Adaptation menumpuk resistensi per tipe damage', () => {
+  it('Adaptation: stack Stoneskin tumbuh sampai 5 lalu berhenti', () => {
+    const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
+    const me = unit('me', { hp: [100000, 100000, 100000, 0] });
+    const foe = unit('f');
+    link([me], [foe]);
+    const adapt = createPassive(27, [100], rng); // quality 100 = 10% per stack
+    me.weapon = { id: 0, name: 'x', passives: [adapt], stats: [0], manaCost: 0, def: {}, quality: 100 };
+    const ctx = ctxOf();
+    const hits = [];
+    for (let i = 0; i < 7; i++) hits.push(engine.inflictDamage(ctx, foe, me, 1000, engine.PHYSICAL));
+    // Hit 1 tanpa stack; maksimal 5 stack => reduksi berhenti di 50%.
+    assert.deepStrictEqual(hits, [1000, 900, 800, 700, 600, 500, 500]);
+  });
+
+  it('Adaptation: menerima tipe lain menghapus SEMUA stack', () => {
     const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
     const me = unit('me', { hp: [100000, 100000, 100000, 0] });
     const foe = unit('f');
@@ -1093,11 +1107,15 @@ describe('batch senjata baru: Bleeding Gaze, Conduit Claw, Corruption, Scepter',
     const adapt = createPassive(27, [100], rng);
     me.weapon = { id: 0, name: 'x', passives: [adapt], stats: [0], manaCost: 0, def: {}, quality: 100 };
     const ctx = ctxOf();
-    const hits = [];
-    for (let i = 0; i < 3; i++) hits.push(engine.inflictDamage(ctx, foe, me, 1000, engine.PHYSICAL));
-    assert.deepStrictEqual(hits, [1000, 900, 800], 'stack pertama belum berlaku');
-    const magic = engine.inflictDamage(ctx, foe, me, 1000, engine.MAGICAL);
-    assert.strictEqual(magic, 1000, 'stack MAGICAL terpisah');
+    for (let i = 0; i < 5; i++) engine.inflictDamage(ctx, foe, me, 1000, engine.PHYSICAL);
+    assert.strictEqual(adapt.stacks, 5, 'Stoneskin penuh');
+    // Spellskin mulai dari nol, bukan melanjutkan stack Stoneskin.
+    assert.strictEqual(engine.inflictDamage(ctx, foe, me, 1000, engine.MAGICAL), 1000);
+    assert.strictEqual(engine.inflictDamage(ctx, foe, me, 1000, engine.MAGICAL), 900);
+    // Damage TRUE bukan Physical maupun Magical: hapus stack tanpa menambah.
+    assert.strictEqual(engine.inflictDamage(ctx, foe, me, 1000, engine.TRUE), 1000);
+    assert.strictEqual(adapt.stacks, 0, 'TRUE menghapus stack');
+    assert.strictEqual(engine.inflictDamage(ctx, foe, me, 1000, engine.PHYSICAL), 1000);
   });
 
   it('semua senjata baru bisa dipakai simulasi tanpa error', async () => {

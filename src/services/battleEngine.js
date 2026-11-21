@@ -20,6 +20,9 @@ const PHYSICAL = 'p';
 const MAGICAL = 'm';
 const TRUE = 't';
 
+// Batas stack pasif Adaptation (Stoneskin/Spellskin), dari deskripsi sumber.
+const MAX_ADAPT_STACKS = 5;
+
 let pidCounter = 0;
 
 function maxHp(unit) { return unit.stats.hp[1] + unit.stats.hp[3]; }
@@ -422,6 +425,7 @@ module.exports = {
   PHYSICAL,
   MAGICAL,
   TRUE,
+  MAX_ADAPT_STACKS,
   MAX_TURNS,
   MAX_SLOTS,
   runTurn,
