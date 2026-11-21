@@ -405,15 +405,28 @@ describe('simulasi battle', () => {
     assert.ok(reverse.winRate < 20);
   });
 
-  it('pertarungan cermin mendekati 50% (tidak bias sisi)', () => {
-    const mirror = sim.simulate(strong, strong.map(s => ({ ...s, label: 'mirror' })), { runs: 300, seed: 11 });
-    assert.ok(mirror.winRate > 35 && mirror.winRate < 65, `mirror win rate ${mirror.winRate}% bias`);
+  it('tim pemain selalu menyerang lebih dulu seperti battle OwO', () => {
+    // OwO memanggil executeTurn dengan tim pemain sebagai `team`, jadi pemain
+    // selalu dapat giliran pertama. Simulasi tidak menetralkan keuntungan itu:
+    // pada duel di mana kedua sisi bisa saling membunuh dalam satu pukulan,
+    // sisi pemain yang menang.
+    const glass = { hp: 1, att: 10000, pr: 0, wp: 1, mag: 0, mr: 0 };
+    const result = engine.runBattle(
+      [{ label: 'p', level: 1, coeffs: glass }],
+      [{ label: 'e', level: 1, coeffs: glass }],
+      { seed: 9 }
+    );
+    assert.strictEqual(result.winner, 'player', 'pemain menyerang lebih dulu');
+    assert.strictEqual(result.turns, 1);
   });
 
-  it('cermin dengan senjata tetap mendekati 50%', () => {
+  it('cermin memberi keunggulan ke sisi pemain karena giliran pertama', () => {
     const withWeapon = [{ slot: 1, coeffs: COEFFS_STRONG, level: 60, weapon: { id: 1, quality: 90 } }];
     const result = sim.simulate(withWeapon, withWeapon.map(s => ({ ...s, label: 'mirror' })), { runs: 300, seed: 5 });
-    assert.ok(result.winRate > 35 && result.winRate < 65, `mirror senjata ${result.winRate}% bias`);
+    assert.ok(
+      result.winRate > result.lossRate,
+      `pemain ${result.winRate}% vs lawan ${result.lossRate}%: giliran pertama harus menguntungkan`
+    );
   });
 
   it('jumlah pertarungan dihitung tepat', () => {

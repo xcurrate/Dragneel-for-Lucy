@@ -275,9 +275,10 @@ function runTurn(ctx, player, enemy) {
     }
   }
 
-  // OwO selalu memberi giliran pertama ke tim pemain. Untuk simulasi itu bias
-  // besar (cermin pun jadi ~75% menang), jadi sisi pembuka diacak per battle
-  // lewat seed. Di dalam satu sisi urutannya tetap per slot seperti OwO.
+  // OwO selalu memberi giliran pertama ke tim pemain (`executeTurn` dipanggil
+  // dengan tim pemain sebagai `team`). Simulasi mengikuti itu apa adanya: yang
+  // diukur adalah peluang menang tim ini di battle sungguhan, jadi keuntungan
+  // giliran pertama memang bagian dari hasil, bukan noise yang perlu dibuang.
   const playerFirst = ctx.playerFirst;
   const first = playerFirst ? player : enemy;
   const second = playerFirst ? enemy : player;
@@ -368,7 +369,7 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
     rng,
     tags: new Set(),
     damageDealt: 0,
-    playerFirst: options.playerFirst ?? rng.next() < 0.5,
+    playerFirst: options.playerFirst ?? true,
   };
 
   let turns = 0;
