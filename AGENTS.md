@@ -465,3 +465,8 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   sumber dan perbarui data + mekanik, bukan mencari pembenaran di repo lama.
 - **Sacred Ward (buff 13)** memblokir debuff di `bindBuff`: satu stack instance dibuang lalu
   pemasangnya me-replenish target sebesar 15-25% MAG. Buff positif tetap masuk.
+- **`d sim -m` tidak punya batas atas**, tetapi `simulate()` tetap wajib `await` dan memakai
+  `yieldEvery` (default 2000 run). Node hanya satu thread: loop 1 juta run butuh ~12 detik, dan
+  tanpa jeda itu seluruh bot berhenti melayani perintah lain. Statistik turn dihitung dari
+  histogram `Uint32Array` (satu sel per jumlah turn, maksimal `MAX_TURNS`), bukan array `turns`,
+  supaya memori tetap kecil. Tes memakai `yieldEvery: 0` agar cepat.

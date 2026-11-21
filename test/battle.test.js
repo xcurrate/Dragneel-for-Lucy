@@ -387,21 +387,21 @@ describe('simulasi battle', () => {
   const strong = [{ slot: 1, coeffs: COEFFS_STRONG, level: 40, label: 'kuat' }];
   const weak = [{ slot: 1, coeffs: COEFFS_WEAK, level: 40, label: 'lemah' }];
 
-  it('deterministik untuk seed yang sama', () => {
-    const a = sim.simulate(strong, weak, { runs: 20, seed: 1234 });
-    const b = sim.simulate(strong, weak, { runs: 20, seed: 1234 });
+  it('deterministik untuk seed yang sama', async () => {
+    const a = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 20, seed: 1234 });
+    const b = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 20, seed: 1234 });
     assert.deepStrictEqual(a.tally, b.tally);
     assert.strictEqual(a.turns.avg, b.turns.avg);
   });
 
-  it('tim lebih kuat menang jauh lebih sering', () => {
-    const result = sim.simulate(strong, weak, { runs: 100, seed: 3 });
+  it('tim lebih kuat menang jauh lebih sering', async () => {
+    const result = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 100, seed: 3 });
     assert.ok(result.winRate > 80, `win rate ${result.winRate}% terlalu rendah`);
   });
 
-  it('hasil terbalik saat posisi ditukar', () => {
-    const forward = sim.simulate(strong, weak, { runs: 100, seed: 3 });
-    const reverse = sim.simulate(weak, strong, { runs: 100, seed: 3 });
+  it('hasil terbalik saat posisi ditukar', async () => {
+    const forward = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 100, seed: 3 });
+    const reverse = await sim.simulate(weak, strong, { yieldEvery: 0, runs: 100, seed: 3 });
     assert.ok(forward.winRate > 80);
     assert.ok(reverse.winRate < 20);
   });
@@ -421,24 +421,36 @@ describe('simulasi battle', () => {
     assert.strictEqual(result.turns, 1);
   });
 
-  it('cermin memberi keunggulan ke sisi pemain karena giliran pertama', () => {
+  it('cermin memberi keunggulan ke sisi pemain karena giliran pertama', async () => {
     const withWeapon = [{ slot: 1, coeffs: COEFFS_STRONG, level: 60, weapon: { id: 1, quality: 90 } }];
-    const result = sim.simulate(withWeapon, withWeapon.map(s => ({ ...s, label: 'mirror' })), { runs: 300, seed: 5 });
+    const result = await sim.simulate(withWeapon, withWeapon.map(s => ({ ...s, label: 'mirror' })), { yieldEvery: 0, runs: 300, seed: 5 });
     assert.ok(
       result.winRate > result.lossRate,
       `pemain ${result.winRate}% vs lawan ${result.lossRate}%: giliran pertama harus menguntungkan`
     );
   });
 
-  it('jumlah pertarungan dihitung tepat', () => {
-    const result = sim.simulate(strong, weak, { runs: 37, seed: 1 });
+  it('jumlah pertarungan dihitung tepat', async () => {
+    const result = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 37, seed: 1 });
     assert.strictEqual(result.runs, 37);
     assert.strictEqual(result.tally.player + result.tally.enemy + result.tally.tie, 37);
   });
 
-  it('membatasi jumlah pertarungan ke 1..1000', () => {
-    assert.strictEqual(sim.simulate(strong, weak, { runs: 0, seed: 1 }).runs, 1);
-    assert.strictEqual(sim.simulate(strong, weak, { runs: 99999, seed: 1 }).runs, 1000);
+  it('menjalankan jumlah pertarungan sesuai permintaan tanpa batas atas', async () => {
+    assert.strictEqual((await sim.simulate(strong, weak, { yieldEvery: 0, runs: 0, seed: 1 })).runs, 1);
+    assert.strictEqual((await sim.simulate(strong, weak, { yieldEvery: 0, runs: 5000, seed: 1 })).runs, 5000);
+    const big = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 20000, seed: 1 });
+    assert.strictEqual(big.runs, 20000);
+    assert.strictEqual(big.tally.player + big.tally.enemy + big.tally.tie, 20000);
+  });
+
+  it('statistik turn tetap benar untuk run besar', async () => {
+    // Histogram menggantikan array `turns`; median harus jatuh di tengah.
+    const many = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 4001, seed: 7 });
+    assert.ok(many.turns.min >= 1 && many.turns.max <= engine.MAX_TURNS);
+    assert.ok(many.turns.min <= many.turns.median && many.turns.median <= many.turns.max);
+    const small = await sim.simulate(strong, weak, { yieldEvery: 0, runs: 4001, seed: 7 });
+    assert.deepStrictEqual(many.turns, small.turns, 'seed sama menghasilkan statistik sama');
   });
 
   it('battle selalu selesai dalam batas turn', () => {
@@ -577,8 +589,8 @@ describe('embed UI', () => {
     assert.ok(json.description.includes('d team new'));
   });
 
-  it('simEmbed memuat tally, durasi, dan seed', () => {
-    const result = sim.simulate(
+  it('simEmbed memuat tally, durasi, dan seed', async () => {
+    const result = await sim.simulate(
       [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
       [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
       { runs: 20, seed: 7 }
@@ -682,7 +694,7 @@ describe('balasan command memakai embed', () => {
   });
 
   it('error d sim tetap berupa embed', async () => {
-    await handleSimCommand(message('d sim -m 5000'), ['-m', '5000'], 'd', { sendEmbed });
+    await handleSimCommand(message('d sim -m 0'), ['-m', '0'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);
     assert.strictEqual(replies[0].color, 0xED4245);
   });

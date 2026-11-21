@@ -1,7 +1,7 @@
 // Perintah simulasi battle.
 //
 //   dsim [lawan] [opsi]      simulasi tim aktif vs tim lain / stat manual
-//   dsim -m 500              jumlah pertarungan (default 100)
+//   dsim -m 500              jumlah pertarungan (default 100, tanpa batas atas)
 //   dsim -s 1234             seed (default acak)
 //   dsim -qp 80 -qe 50       quality senjata pemain / lawan
 //   dsim -lawan hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60
@@ -20,7 +20,7 @@ function usage(prefix = 'd') {
     `\`${prefix} sim hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60\` — lawan stat manual`,
     `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
     '',
-    'Opsi: `-m <jumlah>` (default 100, maks 1000), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+    'Opsi: `-m <jumlah>` (default 100, tanpa batas atas), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
     '',
     'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
@@ -103,8 +103,9 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
   }
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 100;
-  if (!Number.isFinite(Number(runs)) || Number(runs) < 1 || Number(runs) > 1000) {
-    return send(message, errorEmbed('Jumlah simulasi harus 1-1000. Contoh: `d sim -m 500`.'));
+  const runCount = Number(runs);
+  if (!Number.isSafeInteger(runCount) || runCount < 1) {
+    return send(message, errorEmbed('Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim -m 500`.'));
   }
   const seed = flags['-s'] ?? flags['-seed'];
   if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
@@ -127,8 +128,8 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const playerSpecs = withLevel(player.specs, levels.player);
   const enemySpecs = withLevel(enemy.specs, levels.enemy);
 
-  const result = sim.simulate(playerSpecs, enemySpecs, {
-    runs: Number(runs),
+  const result = await sim.simulate(playerSpecs, enemySpecs, {
+    runs: runCount,
     seed: seed != null ? Number(seed) : undefined,
     playerQuality,
     enemyQuality,

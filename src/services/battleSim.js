@@ -3,7 +3,7 @@
 // Tim menyimpan `animalKey` (nama hewan di dex) atau stat manual. Di sini
 // keduanya diterjemahkan menjadi spec yang dimengerti battleEngine, termasuk
 // pemetaan nama stat dex (hp/attack/protection/wisdom/magic/mr) ke urutan OwO.
-const { runBattle } = require('./battleEngine');
+const { runBattle, MAX_TURNS } = require('./battleEngine');
 const { createRng, randomSeed } = require('./battleRng');
 
 // Urutan argumen stat manual: hp,att,pr,wp,mag,mr.
@@ -86,10 +86,26 @@ function toSpecs(team) {
 }
 
 // Jalankan N simulasi dengan seed berurutan agar bisa direproduksi.
-function simulate(playerSpecs, enemySpecs, { runs = 1, seed = randomSeed(), playerQuality, enemyQuality } = {}) {
-  const total = Math.max(1, Math.min(1000, Number(runs) || 1));
+// Jumlah run tidak dibatasi; durasi turn dihitung lewat histogram (satu sel per
+// jumlah turn, maksimal `MAX_TURNS`) supaya memori tetap kecil walau run jutaan.
+//
+// Run besar bisa memakan detik-an, dan Node hanya punya satu thread: tanpa jeda,
+// seluruh bot berhenti melayani perintah lain selama loop berjalan. Setiap
+// `YIELD_EVERY` run, giliran diserahkan ke event loop. Bila pemanggil tidak butuh
+// itu (tes, CLI), lewati dengan `yieldEvery: 0`.
+const YIELD_EVERY = 2000;
+
+function yieldToEventLoop() {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
+async function simulate(playerSpecs, enemySpecs, {
+  runs = 1, seed = randomSeed(), playerQuality, enemyQuality, yieldEvery = YIELD_EVERY,
+} = {}) {
+  const total = Math.max(1, Math.floor(Number(runs) || 1));
   const tally = { player: 0, enemy: 0, tie: 0 };
-  const turns = [];
+  const histogram = new Uint32Array(MAX_TURNS + 2);
+  let turnSum = 0;
   let timeouts = 0;
   const base = createRng(seed);
 
@@ -100,21 +116,37 @@ function simulate(playerSpecs, enemySpecs, { runs = 1, seed = randomSeed(), play
       enemyQuality,
     });
     tally[result.winner] += 1;
-    turns.push(result.turns);
+    histogram[Math.min(result.turns, MAX_TURNS + 1)] += 1;
+    turnSum += result.turns;
     if (result.timeout) timeouts += 1;
+    if (yieldEvery > 0 && (i + 1) % yieldEvery === 0) await yieldToEventLoop();
   }
 
-  const sorted = [...turns].sort((a, b) => a - b);
+  let min = 0;
+  let max = 0;
+  for (let t = 0; t < histogram.length; t++) {
+    if (!histogram[t]) continue;
+    if (!min) min = t;
+    max = t;
+  }
+  // Median dari histogram: cari turn tempat kumulatif melewati separuh run.
+  let seen = 0;
+  let median = min;
+  for (let t = 0; t < histogram.length; t++) {
+    seen += histogram[t];
+    if (seen * 2 >= total) { median = t; break; }
+  }
+
   return {
     runs: total,
     seed,
     tally,
     timeouts,
     turns: {
-      min: sorted[0],
-      max: sorted[sorted.length - 1],
-      avg: Math.round((turns.reduce((a, b) => a + b, 0) / total) * 10) / 10,
-      median: sorted[Math.floor(sorted.length / 2)],
+      min,
+      max,
+      avg: Math.round((turnSum / total) * 10) / 10,
+      median,
     },
     winRate: Math.round((tally.player / total) * 1000) / 10,
     lossRate: Math.round((tally.enemy / total) * 1000) / 10,
