@@ -423,8 +423,18 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   `hp[0] = 0` lalu memanggil `heal`; tanpa flag itu rekan tidak pernah benar-benar hidup dan
   hanya WP yang terbuang. Target revive mengikuti `WeaponInterface.getDead()` (slot pertama).
 - **Vanguard's Banner juga `preTurn`, bukan ability aktif.** OwO memasang Attack Up ke *semua*
-  rekan selama 3 turn dan menaikkan tier (6 → 7 → 8) saat buff lama tinggal ≤1 turn; unit lalu
-  melewati serangan di turn itu (`skippedAttack`). Arcane Scepter boleh `overreplenish` 150%.
+  rekan dan menaikkan tier (6 → 7 → 8) saat buff lama tinggal ≤1 turn; unit lalu melewati
+  serangan di turn itu (`skippedAttack`). Durasi yang dipasang **`ability.duration + 1`**: mesin
+  menurunkan durasi di akhir turn pemasangan juga, jadi OwO memanggil `attemptBind(ally, 3)` untuk
+  buff yang di deskripsi disebut "2 turns". Tanpa +1, buff tinggal 1 turn saat `preTurn`
+  berikutnya, Banner recast tiap turn, dan unit pemakainya tidak pernah menyerang.
+  Arcane Scepter boleh `overreplenish` 150%.
+- **Tim pemain selalu menyerang lebih dulu**, sama seperti OwO yang memanggil `executeTurn` dengan
+  tim pemain sebagai `team`. Jangan mengacak sisi pembuka "supaya mirror 50%": keuntungan
+  giliran pertama adalah bagian dari hasil yang diukur simulasi.
+- **Tim kustom bersifat global per user** (`src/utils/battleTeamStorage.js`), bukan per server.
+  Kolom `guild_id` dipertahankan hanya demi skema lama (selalu string kosong) dan
+  `migrateToGlobal()` menggabungkan baris lama per user+nama saat database pertama dibuka.
 - **Angka mengikuti `qualityList` di kode OwO, bukan deskripsi `?%`.** Deskripsi sengaja
   menyembunyikan nilainya; Sacrifice misalnya `[[50,75],[50,75]]` — jangan "menebak" dari teks.
 - **Deskripsi live bot menang atas repo OwO publik.** Repo `9aec92b` sudah tertinggal (Sacred

@@ -1,14 +1,19 @@
 // Penyimpanan tim kustom untuk simulasi battle.
 //
 // Satu tim = satu baris `teams`; isi slot ada di `team_slots` (maks 3 per tim,
-// mengikuti batas OwO). Tim dipisah per guild + user supaya anggota satu server
-// tidak saling menimpa.
+// mengikuti batas OwO). Tim bersifat global per user: tim yang sama dipakai di
+// server mana pun. Kolom `guild_id` masih ada demi kompatibilitas skema lama,
+// tetapi selalu diisi string kosong dan tidak pernah dipakai untuk memfilter.
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 
 const MAX_SLOTS = 3;
 const MAX_TEAMS = 10;
+
+// Semua tim disimpan pada satu lingkup global; kolom `guild_id` hanya diisi
+// nilai ini supaya skema lama tetap valid.
+const GLOBAL_SCOPE = '';
 
 let db = null;
 let dbPath = null;
@@ -59,7 +64,50 @@ function getDb() {
       PRIMARY KEY (guild_id, user_id)
     );
   `);
+  migrateToGlobal(db);
   return db;
+}
+
+// Tim dulu dipisah per guild. Saat pertama kali dibuka, satukan baris lama:
+// untuk tiap user+nama dipilih satu tim (yang paling baru diperbarui), tim lain
+// dibuang beserta slotnya, lalu semua baris ditandai lingkup global.
+function migrateToGlobal(database) {
+  const legacy = database.prepare('SELECT COUNT(*) AS n FROM teams WHERE guild_id <> ?').get(GLOBAL_SCOPE).n;
+  if (!legacy) return;
+  database.exec('BEGIN');
+  try {
+    const duplicates = database.prepare(`
+      SELECT user_id, name_key, MAX(id) AS keep_id
+      FROM teams GROUP BY user_id, name_key HAVING COUNT(*) > 1
+    `).all();
+    for (const { user_id, name_key, keep_id } of duplicates) {
+      const losers = database.prepare('SELECT id FROM teams WHERE user_id = ? AND name_key = ? AND id <> ?')
+        .all(user_id, name_key, keep_id).map(r => r.id);
+      for (const id of losers) {
+        database.prepare('DELETE FROM team_slots WHERE team_id = ?').run(id);
+        database.prepare('DELETE FROM active_team WHERE team_id = ?').run(id);
+        database.prepare('DELETE FROM teams WHERE id = ?').run(id);
+      }
+    }
+    database.prepare('UPDATE teams SET guild_id = ? WHERE guild_id <> ?').run(GLOBAL_SCOPE, GLOBAL_SCOPE);
+
+    // Satu baris active_team per user: pertahankan yang menunjuk tim hidup.
+    const actives = database.prepare('SELECT rowid, user_id, team_id FROM active_team ORDER BY rowid').all();
+    const seen = new Set();
+    for (const row of actives) {
+      const alive = database.prepare('SELECT 1 FROM teams WHERE id = ?').get(row.team_id);
+      if (!alive || seen.has(row.user_id)) {
+        database.prepare('DELETE FROM active_team WHERE rowid = ?').run(row.rowid);
+        continue;
+      }
+      seen.add(row.user_id);
+      database.prepare('UPDATE active_team SET guild_id = ? WHERE rowid = ?').run(GLOBAL_SCOPE, row.rowid);
+    }
+    database.exec('COMMIT');
+  } catch (e) {
+    database.exec('ROLLBACK');
+    throw e;
+  }
 }
 
 function normalizeName(name) {
@@ -100,10 +148,10 @@ function rowToTeam(row, slots = []) {
   };
 }
 
-function listTeams(guildId, userId) {
+function listTeams(userId) {
   const rows = getDb().prepare(
-    'SELECT * FROM teams WHERE guild_id = ? AND user_id = ? ORDER BY name COLLATE NOCASE'
-  ).all(String(guildId), String(userId));
+    'SELECT * FROM teams WHERE user_id = ? ORDER BY name COLLATE NOCASE'
+  ).all(String(userId));
   return rows.map(row => rowToTeam(row, loadSlots(row.id)));
 }
 
@@ -111,10 +159,10 @@ function loadSlots(teamId) {
   return getDb().prepare('SELECT * FROM team_slots WHERE team_id = ? ORDER BY slot').all(teamId).map(rowToSlot);
 }
 
-function getTeam(guildId, userId, name) {
+function getTeam(userId, name) {
   const row = getDb().prepare(
-    'SELECT * FROM teams WHERE guild_id = ? AND user_id = ? AND name_key = ?'
-  ).get(String(guildId), String(userId), keyOf(name));
+    'SELECT * FROM teams WHERE user_id = ? AND name_key = ?'
+  ).get(String(userId), keyOf(name));
   if (!row) return null;
   return rowToTeam(row, loadSlots(row.id));
 }
@@ -125,38 +173,38 @@ function getTeamById(teamId) {
   return rowToTeam(row, loadSlots(row.id));
 }
 
-function countTeams(guildId, userId) {
-  return getDb().prepare('SELECT COUNT(*) AS n FROM teams WHERE guild_id = ? AND user_id = ?')
-    .get(String(guildId), String(userId)).n;
+function countTeams(userId) {
+  return getDb().prepare('SELECT COUNT(*) AS n FROM teams WHERE user_id = ?')
+    .get(String(userId)).n;
 }
 
-function createTeam(guildId, userId, name) {
+function createTeam(userId, name) {
   const clean = normalizeName(name);
   if (!clean) return { error: 'Nama tim tidak boleh kosong.' };
-  if (countTeams(guildId, userId) >= MAX_TEAMS) {
+  if (countTeams(userId) >= MAX_TEAMS) {
     return { error: `Sudah mencapai batas ${MAX_TEAMS} tim. Hapus salah satu dulu.` };
   }
-  if (getTeam(guildId, userId, clean)) return { error: `Tim **${clean}** sudah ada.` };
+  if (getTeam(userId, clean)) return { error: `Tim **${clean}** sudah ada.` };
   const now = Date.now();
   const info = getDb().prepare(
     'INSERT INTO teams (guild_id, user_id, name, name_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(String(guildId), String(userId), clean, keyOf(clean), now, now);
+  ).run(GLOBAL_SCOPE, String(userId), clean, keyOf(clean), now, now);
   return { team: getTeamById(info.lastInsertRowid) };
 }
 
-function renameTeam(guildId, userId, from, to) {
-  const team = getTeam(guildId, userId, from);
+function renameTeam(userId, from, to) {
+  const team = getTeam(userId, from);
   if (!team) return { error: `Tim **${from}** tidak ditemukan.` };
   const clean = normalizeName(to);
   if (!clean) return { error: 'Nama baru tidak boleh kosong.' };
-  if (getTeam(guildId, userId, clean)) return { error: `Tim **${clean}** sudah ada.` };
+  if (getTeam(userId, clean)) return { error: `Tim **${clean}** sudah ada.` };
   getDb().prepare('UPDATE teams SET name = ?, name_key = ?, updated_at = ? WHERE id = ?')
     .run(clean, keyOf(clean), Date.now(), team.id);
   return { team: getTeamById(team.id) };
 }
 
-function deleteTeam(guildId, userId, name) {
-  const team = getTeam(guildId, userId, name);
+function deleteTeam(userId, name) {
+  const team = getTeam(userId, name);
   if (!team) return { error: `Tim **${name}** tidak ditemukan.` };
   const d = getDb();
   d.prepare('DELETE FROM team_slots WHERE team_id = ?').run(team.id);
@@ -167,8 +215,8 @@ function deleteTeam(guildId, userId, name) {
 
 // Menulis satu slot. `slot` 1..MAX_SLOTS. Data hewan bisa dari dex (`animalKey`)
 // atau stat manual (`custom`), tidak keduanya.
-function setSlot(guildId, userId, teamName, slot, data) {
-  const team = getTeam(guildId, userId, teamName);
+function setSlot(userId, teamName, slot, data) {
+  const team = getTeam(userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
   const index = Number(slot);
   if (!Number.isInteger(index) || index < 1 || index > MAX_SLOTS) {
@@ -203,8 +251,8 @@ function setSlot(guildId, userId, teamName, slot, data) {
 
 // Memasang atau mengganti senjata pada slot yang sudah berisi hewan. Hanya
 // kolom senjata yang disentuh, jadi level dan stat hewan tidak ikut berubah.
-function setWeapon(guildId, userId, teamName, slot, { weaponId, weaponQuality = null, passives = null }) {
-  const team = getTeam(guildId, userId, teamName);
+function setWeapon(userId, teamName, slot, { weaponId, weaponQuality = null, passives = null }) {
+  const team = getTeam(userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
   const index = Number(slot);
   if (!Number.isInteger(index) || index < 1 || index > MAX_SLOTS) {
@@ -224,8 +272,8 @@ function setWeapon(guildId, userId, teamName, slot, { weaponId, weaponQuality = 
   return { team: getTeamById(team.id) };
 }
 
-function clearSlot(guildId, userId, teamName, slot) {
-  const team = getTeam(guildId, userId, teamName);
+function clearSlot(userId, teamName, slot) {
+  const team = getTeam(userId, teamName);
   if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
   getDb().prepare('DELETE FROM team_slots WHERE team_id = ? AND slot = ?').run(team.id, Number(slot));
   touch(team.id);
@@ -236,19 +284,19 @@ function touch(teamId) {
   getDb().prepare('UPDATE teams SET updated_at = ? WHERE id = ?').run(Date.now(), teamId);
 }
 
-function setActiveTeam(guildId, userId, name) {
-  const team = getTeam(guildId, userId, name);
+function setActiveTeam(userId, name) {
+  const team = getTeam(userId, name);
   if (!team) return { error: `Tim **${name}** tidak ditemukan.` };
   getDb().prepare(`
     INSERT INTO active_team (guild_id, user_id, team_id) VALUES (?, ?, ?)
     ON CONFLICT(guild_id, user_id) DO UPDATE SET team_id = excluded.team_id
-  `).run(String(guildId), String(userId), team.id);
+  `).run(GLOBAL_SCOPE, String(userId), team.id);
   return { team };
 }
 
-function getActiveTeam(guildId, userId) {
-  const row = getDb().prepare('SELECT team_id FROM active_team WHERE guild_id = ? AND user_id = ?')
-    .get(String(guildId), String(userId));
+function getActiveTeam(userId) {
+  const row = getDb().prepare('SELECT team_id FROM active_team WHERE user_id = ?')
+    .get(String(userId));
   if (!row || row.team_id == null) return null;
   return getTeamById(row.team_id);
 }

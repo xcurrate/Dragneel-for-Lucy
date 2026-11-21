@@ -82,14 +82,13 @@ function parseFlags(args) {
 
 function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
-  const guildId = message.guildId;
   const userId = message.author.id;
 
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
     return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix)));
   }
 
-  const team = store.getActiveTeam(guildId, userId);
+  const team = store.getActiveTeam(userId);
   if (!team) {
     return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
   }
@@ -120,7 +119,7 @@ function handleSimCommand(message, args, prefix, deps = {}) {
   const player = resolveTeamSpecs(team);
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
-  const enemy = resolveEnemy(guildId, userId, rest, levels.enemy);
+  const enemy = resolveEnemy(userId, rest, levels.enemy);
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
   // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
@@ -151,15 +150,15 @@ function resolveTeamSpecs(team) {
 }
 
 // Menentukan lawan: tim lain, hewan dex, atau stat manual.
-function resolveEnemy(guildId, userId, args, overrideLevel) {
+function resolveEnemy(userId, args, overrideLevel) {
   const { options, rest } = parseOptions(args);
   const raw = rest.join(' ').trim();
 
   // Tanpa argumen: pakai tim aktif lain milik user, kalau tidak ada pakai
   // stat seimbang dari tim pemain agar simulasi tetap bermakna.
   if (!raw) {
-    const others = store.listTeams(guildId, userId);
-    const active = store.getActiveTeam(guildId, userId);
+    const others = store.listTeams(userId);
+    const active = store.getActiveTeam(userId);
     const other = others.find(t => active && t.id !== active.id && t.slots.length);
     if (other) {
       const specs = resolveTeamSpecs(other);
@@ -179,7 +178,7 @@ function resolveEnemy(guildId, userId, args, overrideLevel) {
   // `d sim blitz` / `d sim 1 vs blitz` → lawan tim milik user sendiri.
   // Dicek sebelum stat manual karena nama tim bisa berupa angka ("1").
   const enemyName = raw.includes(' vs ') ? raw.split(/\s+vs\s+/i).pop().trim() : raw;
-  const ownTeam = enemyName ? store.getTeam(guildId, userId, enemyName) : null;
+  const ownTeam = enemyName ? store.getTeam(userId, enemyName) : null;
   if (ownTeam) {
     if (!ownTeam.slots.length) {
       return { error: `Tim **${ownTeam.name}** masih kosong. Isi dulu dengan \`d team add 1 <hewan>\`.` };

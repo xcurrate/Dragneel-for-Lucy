@@ -2,6 +2,7 @@ const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const os = require('node:os');
 const fs = require('node:fs');
+const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
@@ -658,8 +659,8 @@ describe('balasan command memakai embed', () => {
   });
 
   it('d team list mengirim embed beserta tombol', () => {
-    store.createTeam('g', 'u', 'Alpha');
-    store.createTeam('g', 'u', 'Beta');
+    store.createTeam('u', 'Alpha');
+    store.createTeam('u', 'Beta');
     let payload = null;
     handleTeamCommand(message('d team list'), ['list'], 'd', {
       sendEmbed,
@@ -671,9 +672,9 @@ describe('balasan command memakai embed', () => {
   });
 
   it('d sim membalas dengan embed berisi statistik', () => {
-    store.createTeam('g', 'u', 'Solo');
-    store.setSlot('g', 'u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
-    store.setActiveTeam('g', 'u', 'Solo');
+    store.createTeam('u', 'Solo');
+    store.setSlot('u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.setActiveTeam('u', 'Solo');
     handleSimCommand(message('d sim -m 10 -s 3'), ['-m', '10', '-s', '3'], 'd', { sendEmbed });
     assert.strictEqual(replies.length, 1);
     assert.ok(replies[0].title.includes('Simulasi Battle'));
@@ -772,13 +773,13 @@ describe('dtm s memasang senjata ke slot', () => {
     });
     return out[0]?.description || '';
   };
-  const slotOf = n => store.getActiveTeam('g', 'u').slots.find(s => s.slot === n);
+  const slotOf = n => store.getActiveTeam('u').slots.find(s => s.slot === n);
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-dtm-'));
     process.chdir(dir);
-    store.createTeam('g', 'u', 'Alpha');
-    store.setActiveTeam('g', 'u', 'Alpha');
+    store.createTeam('u', 'Alpha');
+    store.setActiveTeam('u', 'Alpha');
     run('add', '1', STATS, 'level=100');
     run('add', '2', STATS, 'level=80');
   });
@@ -838,7 +839,7 @@ describe('dtm s memasang senjata ke slot', () => {
   });
 
   it('mempertahankan quality slot saat senjata diganti', () => {
-    store.setSlot('g', 'u', 'Alpha', 1, { custom: { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 }, level: 100, weaponId: 1, weaponQuality: 60 });
+    store.setSlot('u', 'Alpha', 1, { custom: { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 }, level: 100, weaponId: 1, weaponQuality: 60 });
     run('s', 'rstaff', '1');
     assert.strictEqual(slotOf(1).weaponQuality, 60);
   });
@@ -888,7 +889,7 @@ describe('dtm s memasang senjata ke slot', () => {
 
   it('senjata yang dipasang benar-benar dipakai simulasi', () => {
     run('s', 'rstaff', 'hgen', '1');
-    const specs = sim.toSpecs(store.getActiveTeam('g', 'u')).specs;
+    const specs = sim.toSpecs(store.getActiveTeam('u')).specs;
     const unit = engine.buildUnit(specs[0], rngModule.createRng(1), undefined);
     assert.strictEqual(unit.weapon.id, 14);
     assert.deepStrictEqual(unit.weapon.passives.map(p => p.id), [15]);
@@ -939,8 +940,8 @@ describe('alias senjata dan pasif', () => {
     const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-pending-'));
     process.chdir(tempDir);
-    store.createTeam('g', 'u', 'T');
-    store.setActiveTeam('g', 'u', 'T');
+    store.createTeam('u', 'T');
+    store.setActiveTeam('u', 'T');
     const replies = [];
     handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=cstaff'], 'd', {
       sendEmbed: (m, e) => replies.push(e.toJSON()),
@@ -985,12 +986,12 @@ describe('level default dan flag lvl', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-level-'));
     process.chdir(tempDir);
-    store.createTeam('g', 'u', 'A');
-    store.setSlot('g', 'u', 'A', 1, { custom: COEFFS_STRONG, level: 50 });
-    store.createTeam('g', 'u', 'B');
-    store.setSlot('g', 'u', 'B', 1, { custom: COEFFS_WEAK, level: 70 });
-    store.setSlot('g', 'u', 'B', 2, { custom: COEFFS_WEAK, level: 20 });
-    store.setActiveTeam('g', 'u', 'A');
+    store.createTeam('u', 'A');
+    store.setSlot('u', 'A', 1, { custom: COEFFS_STRONG, level: 50 });
+    store.createTeam('u', 'B');
+    store.setSlot('u', 'B', 1, { custom: COEFFS_WEAK, level: 70 });
+    store.setSlot('u', 'B', 2, { custom: COEFFS_WEAK, level: 20 });
+    store.setActiveTeam('u', 'A');
   });
 
   afterEach(() => {
@@ -1002,7 +1003,7 @@ describe('level default dan flag lvl', () => {
     replies = [];
     handleTeamCommand(message, ['add', '2', 'hp=14,att=6,pr=2,wp=3,mag=0,mr=1'], 'd', { sendEmbed });
     assert.ok(replies[0].description.includes('level 50'));
-    assert.strictEqual(store.getTeam('g', 'u', 'A').slots.find(s => s.slot === 2).level, 50);
+    assert.strictEqual(store.getTeam('u', 'A').slots.find(s => s.slot === 2).level, 50);
   });
 
   it('lvl<angka> menyamakan level kedua sisi', () => {
@@ -1026,8 +1027,8 @@ describe('level default dan flag lvl', () => {
 
   it('flag lvl tidak mengubah level tersimpan di tim', () => {
     run(['B', 'lvl100/60']);
-    assert.deepStrictEqual(store.getTeam('g', 'u', 'A').slots.map(s => s.level), [50]);
-    assert.deepStrictEqual(store.getTeam('g', 'u', 'B').slots.map(s => s.level), [70, 20]);
+    assert.deepStrictEqual(store.getTeam('u', 'A').slots.map(s => s.level), [50]);
+    assert.deepStrictEqual(store.getTeam('u', 'B').slots.map(s => s.level), [70, 20]);
   });
 
   it('bentuk lvl yang salah dilaporkan, bukan dianggap nama lawan', () => {
@@ -1054,11 +1055,11 @@ describe('lawan simulasi berupa tim', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-enemy-'));
     process.chdir(tempDir);
-    store.createTeam('g', 'u', '1');
-    store.setSlot('g', 'u', '1', 1, { custom: COEFFS_STRONG, level: 60 });
-    store.createTeam('g', 'u', 'blitz');
-    store.setSlot('g', 'u', 'blitz', 1, { custom: COEFFS_WEAK, level: 70 });
-    store.setActiveTeam('g', 'u', '1');
+    store.createTeam('u', '1');
+    store.setSlot('u', '1', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.createTeam('u', 'blitz');
+    store.setSlot('u', 'blitz', 1, { custom: COEFFS_WEAK, level: 70 });
+    store.setActiveTeam('u', '1');
   });
 
   afterEach(() => {
@@ -1066,31 +1067,31 @@ describe('lawan simulasi berupa tim', () => {
   });
 
   it('menerima nama tim sebagai lawan', () => {
-    const enemy = resolveEnemy('g', 'u', ['blitz']);
+    const enemy = resolveEnemy('u', ['blitz']);
     assert.ok(!enemy.error, enemy.error);
     assert.strictEqual(enemy.label, 'blitz');
   });
 
   it('menerima bentuk "x vs y"', () => {
-    const enemy = resolveEnemy('g', 'u', ['1', 'vs', 'blitz']);
+    const enemy = resolveEnemy('u', ['1', 'vs', 'blitz']);
     assert.ok(!enemy.error, enemy.error);
     assert.strictEqual(enemy.label, 'blitz');
   });
 
   it('nama tim berupa angka tetap dikenali sebagai tim', () => {
-    const enemy = resolveEnemy('g', 'u', ['1']);
+    const enemy = resolveEnemy('u', ['1']);
     assert.ok(!enemy.error, enemy.error);
     assert.strictEqual(enemy.label, '1');
   });
 
   it('tim kosong dilaporkan, bukan dianggap nama tidak dikenal', () => {
-    store.createTeam('g', 'u', 'kosong');
-    const enemy = resolveEnemy('g', 'u', ['kosong']);
+    store.createTeam('u', 'kosong');
+    const enemy = resolveEnemy('u', ['kosong']);
     assert.ok(enemy.error.includes('masih kosong'));
   });
 
   it('stat manual tetap didahulukan saat berbentuk angka', () => {
-    const enemy = resolveEnemy('g', 'u', ['hp=8,att=6,pr=2,wp=3,mag=5,mr=1']);
+    const enemy = resolveEnemy('u', ['hp=8,att=6,pr=2,wp=3,mag=5,mr=1']);
     assert.ok(!enemy.error, enemy.error);
     assert.strictEqual(enemy.label, 'stat manual');
   });
@@ -1115,38 +1116,87 @@ describe('storage tim', () => {
   it('membuat, membaca, dan menghapus tim', () => {
     load();
     try {
-      const created = store.createTeam('g1', 'u1', 'Alpha');
+      const created = store.createTeam('u1', 'Alpha');
       assert.ok(created.team);
-      assert.strictEqual(store.getTeam('g1', 'u1', 'Alpha').name, 'Alpha');
-      store.deleteTeam('g1', 'u1', 'Alpha');
-      assert.strictEqual(store.getTeam('g1', 'u1', 'Alpha'), null);
+      assert.strictEqual(store.getTeam('u1', 'Alpha').name, 'Alpha');
+      store.deleteTeam('u1', 'Alpha');
+      assert.strictEqual(store.getTeam('u1', 'Alpha'), null);
     } finally { cleanup(); }
   });
 
   it('nama tim unik tanpa peduli huruf besar/kecil', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      assert.ok(store.createTeam('g1', 'u1', 'alpha').error);
+      store.createTeam('u1', 'Alpha');
+      assert.ok(store.createTeam('u1', 'alpha').error);
     } finally { cleanup(); }
   });
 
-  it('tim terpisah per user dan per guild', () => {
+  it('tim bersifat global: sama di server mana pun, tetap terpisah antar user', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      assert.strictEqual(store.getTeam('g1', 'u2', 'Alpha'), null);
-      assert.strictEqual(store.getTeam('g2', 'u1', 'Alpha'), null);
+      store.createTeam('u1', 'Alpha');
+      assert.strictEqual(store.getTeam('u1', 'Alpha').name, 'Alpha');
+      assert.strictEqual(store.listTeams('u1').length, 1);
+      assert.strictEqual(store.getTeam('u2', 'Alpha'), null, 'user lain tetap terpisah');
     } finally { cleanup(); }
+  });
+
+  it('tim aktif berlaku lintas server', () => {
+    load();
+    try {
+      store.createTeam('u1', 'Alpha');
+      store.createTeam('u1', 'Beta');
+      store.setActiveTeam('u1', 'Beta');
+      assert.strictEqual(store.getActiveTeam('u1').name, 'Beta');
+    } finally { cleanup(); }
+  });
+
+  it('data tim lama per guild dimigrasi ke lingkup global', () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-battle-migrate-'));
+    process.chdir(tempDir);
+    const dbPath = path.join(tempDir, 'data', 'battle-teams.db');
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    const legacy = new DatabaseSync(dbPath);
+    legacy.exec(`
+      CREATE TABLE teams (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        name TEXT NOT NULL, name_key TEXT NOT NULL, created_at INTEGER, updated_at INTEGER,
+        UNIQUE (guild_id, user_id, name_key));
+      CREATE TABLE team_slots (team_id INTEGER NOT NULL, slot INTEGER NOT NULL, label TEXT, animal_key TEXT,
+        custom_hp INTEGER, custom_att INTEGER, custom_pr INTEGER, custom_wp INTEGER, custom_mag INTEGER, custom_mr INTEGER,
+        level INTEGER NOT NULL DEFAULT 1, weapon_id INTEGER, weapon_quality INTEGER, passives TEXT,
+        PRIMARY KEY (team_id, slot));
+      CREATE TABLE active_team (guild_id TEXT NOT NULL, user_id TEXT NOT NULL, team_id INTEGER,
+        PRIMARY KEY (guild_id, user_id));
+    `);
+    legacy.exec(`
+      INSERT INTO teams (id, guild_id, user_id, name, name_key, created_at, updated_at)
+        VALUES (1, 'gA', 'u1', 'Alpha', 'alpha', 1, 100), (2, 'gB', 'u1', 'Alpha', 'alpha', 2, 200);
+      INSERT INTO team_slots (team_id, slot, level) VALUES (1, 1, 10), (2, 1, 20);
+      INSERT INTO active_team (guild_id, user_id, team_id) VALUES ('gA', 'u1', 1), ('gB', 'u1', 2);
+    `);
+    legacy.close();
+
+    delete require.cache[require.resolve(path.join(ROOT, 'src/utils/battleTeamStorage'))];
+    store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+    try {
+      const teams = store.listTeams('u1');
+      assert.strictEqual(teams.length, 1, 'duplikat digabung');
+      assert.strictEqual(teams[0].slots[0].level, 20, 'versi terbaru dipertahankan');
+      assert.strictEqual(store.getActiveTeam('u1').name, 'Alpha', 'tim aktif tetap ada');
+    } finally {
+      try { store.getDb().close(); } catch {}
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('menyimpan slot hewan dan slot stat manual', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'snail', level: 50, weaponId: 1 });
-      store.setSlot('g1', 'u1', 'Alpha', 2, { custom: { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 }, level: 20 });
-      const team = store.getTeam('g1', 'u1', 'Alpha');
+      store.createTeam('u1', 'Alpha');
+      store.setSlot('u1', 'Alpha', 1, { animalKey: 'snail', level: 50, weaponId: 1 });
+      store.setSlot('u1', 'Alpha', 2, { custom: { hp: 14, att: 6, pr: 2, wp: 3, mag: 0, mr: 1 }, level: 20 });
+      const team = store.getTeam('u1', 'Alpha');
       assert.strictEqual(team.slots.length, 2);
       assert.strictEqual(team.slots[0].animalKey, 'snail');
       assert.strictEqual(team.slots[0].level, 50);
@@ -1157,28 +1207,28 @@ describe('storage tim', () => {
   it('slot di luar 1-3 ditolak', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 0, { animalKey: 'snail' }).error);
-      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 4, { animalKey: 'snail' }).error);
+      store.createTeam('u1', 'Alpha');
+      assert.ok(store.setSlot('u1', 'Alpha', 0, { animalKey: 'snail' }).error);
+      assert.ok(store.setSlot('u1', 'Alpha', 4, { animalKey: 'snail' }).error);
     } finally { cleanup(); }
   });
 
   it('slot harus berisi hewan atau stat, tidak keduanya', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 1, {}).error);
-      assert.ok(store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'snail', custom: { hp: 1 } }).error);
+      store.createTeam('u1', 'Alpha');
+      assert.ok(store.setSlot('u1', 'Alpha', 1, {}).error);
+      assert.ok(store.setSlot('u1', 'Alpha', 1, { animalKey: 'snail', custom: { hp: 1 } }).error);
     } finally { cleanup(); }
   });
 
   it('menimpa slot yang sama tanpa menduplikasi', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'snail', level: 10 });
-      store.setSlot('g1', 'u1', 'Alpha', 1, { animalKey: 'cat2', level: 30 });
-      const team = store.getTeam('g1', 'u1', 'Alpha');
+      store.createTeam('u1', 'Alpha');
+      store.setSlot('u1', 'Alpha', 1, { animalKey: 'snail', level: 10 });
+      store.setSlot('u1', 'Alpha', 1, { animalKey: 'cat2', level: 30 });
+      const team = store.getTeam('u1', 'Alpha');
       assert.strictEqual(team.slots.length, 1);
       assert.strictEqual(team.slots[0].animalKey, 'cat2');
       assert.strictEqual(team.slots[0].level, 30);
@@ -1188,22 +1238,22 @@ describe('storage tim', () => {
   it('menyimpan dan membaca tim aktif', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      store.createTeam('g1', 'u1', 'Beta');
-      store.setActiveTeam('g1', 'u1', 'Beta');
-      assert.strictEqual(store.getActiveTeam('g1', 'u1').name, 'Beta');
-      store.setActiveTeam('g1', 'u1', 'Alpha');
-      assert.strictEqual(store.getActiveTeam('g1', 'u1').name, 'Alpha');
+      store.createTeam('u1', 'Alpha');
+      store.createTeam('u1', 'Beta');
+      store.setActiveTeam('u1', 'Beta');
+      assert.strictEqual(store.getActiveTeam('u1').name, 'Beta');
+      store.setActiveTeam('u1', 'Alpha');
+      assert.strictEqual(store.getActiveTeam('u1').name, 'Alpha');
     } finally { cleanup(); }
   });
 
   it('mengganti nama tim dan menolak nama yang sudah dipakai', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      store.createTeam('g1', 'u1', 'Beta');
-      assert.ok(store.renameTeam('g1', 'u1', 'Alpha', 'Beta').error);
-      const renamed = store.renameTeam('g1', 'u1', 'Alpha', 'Gamma');
+      store.createTeam('u1', 'Alpha');
+      store.createTeam('u1', 'Beta');
+      assert.ok(store.renameTeam('u1', 'Alpha', 'Beta').error);
+      const renamed = store.renameTeam('u1', 'Alpha', 'Gamma');
       assert.strictEqual(renamed.team.name, 'Gamma');
     } finally { cleanup(); }
   });
@@ -1211,10 +1261,10 @@ describe('storage tim', () => {
   it('menghapus tim juga membersihkan tim aktif', () => {
     load();
     try {
-      store.createTeam('g1', 'u1', 'Alpha');
-      store.setActiveTeam('g1', 'u1', 'Alpha');
-      store.deleteTeam('g1', 'u1', 'Alpha');
-      assert.strictEqual(store.getActiveTeam('g1', 'u1'), null);
+      store.createTeam('u1', 'Alpha');
+      store.setActiveTeam('u1', 'Alpha');
+      store.deleteTeam('u1', 'Alpha');
+      assert.strictEqual(store.getActiveTeam('u1'), null);
     } finally { cleanup(); }
   });
 });
