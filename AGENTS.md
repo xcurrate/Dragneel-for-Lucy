@@ -449,6 +449,12 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   `dexStore.resolveAnimal()` yang mencocokkan `name_key`, `name`, `emoji_name`, dan `alias`
   tanpa peduli kapitalisasi. Gejala khasnya: sebagian pet tampil, sebagian 🐾, dan pet yang
   🐾 selalu yang nama aslinya berbeda dari nama emoji.
+- **Token yang tidak perlu di-mirror tetap harus dicatat ke `emoji_map`.** Emoji guild yang
+  sudah bisa dirender bot (emoji milik server bot sendiri) dilewati `mirrorEmojiTokens()`,
+  sedangkan `battleEmoji.resolve()` hanya membaca `emoji_map` — jadi melewatinya tanpa mencatat
+  membuat emoji yang sebenarnya valid jatuh ke 🐾. Sekarang token tersebut disimpan apa adanya,
+  dan `resolve()` punya lapisan kedua: pakai token asli bila `isRenderableToken(id)` benar.
+  Gejalanya: sebagian pet tampil, sebagian 🐾, tanpa pola yang jelas dari sisi nama.
 - **Tim kustom bersifat global per user** (`src/utils/battleTeamStorage.js`), bukan per server.
   Kolom `guild_id` dipertahankan hanya demi skema lama (selalu string kosong) dan
   `migrateToGlobal()` menggabungkan baris lama per user+nama saat database pertama dibuka.

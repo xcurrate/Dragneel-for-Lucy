@@ -47,13 +47,16 @@ function rankEmoji(quality) {
   return resolve(RANK_TOKENS[index], RANK_FALLBACK[index]);
 }
 
-// Token hasil mirror bila sudah ada, kalau belum pakai emoji unicode supaya
-// tampilan tidak menampilkan teks mentah `<:nama:id>`.
+// Token hasil mirror bila sudah ada. Token asli OwO dipakai apa adanya kalau bot
+// ternyata punya akses ke emoji itu (emoji guild milik bot sendiri); selain itu
+// pakai emoji unicode supaya tampilan tidak menampilkan teks mentah `<:nama:id>`.
 function resolve(token, fallback) {
   if (!token) return fallback;
-  const id = /:(\d+)>$/.exec(token);
-  const mapped = id ? dexStore.getEmojiToken(id[1]) : null;
-  return mapped || fallback;
+  const id = /:(\d+)>$/.exec(token)?.[1];
+  if (!id) return fallback;
+  const mapped = dexStore.getEmojiToken(id);
+  if (mapped) return mapped;
+  return dex.isRenderableToken(id) ? token : fallback;
 }
 
 // Quality kosong berarti tier tertinggi (lihat `DEFAULT_QUALITY`), bukan acak.

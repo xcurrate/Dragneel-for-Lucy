@@ -36,6 +36,12 @@ function tokenParts(token) {
   return m ? { animated: Boolean(m[1]), name: m[2], id: m[3] } : null;
 }
 
+// Token dengan ID ini bisa dirender bot apa adanya (emoji guild yang bot ikuti),
+// jadi tidak wajib punya padanan hasil mirror.
+function isRenderableToken(id) {
+  return Boolean(id && emojiClient?.emojis?.cache?.has?.(id));
+}
+
 function tokenFromEmoji(emoji) {
   return '<' + (emoji.animated ? 'a' : '') + ':' + emoji.name + ':' + emoji.id + '>';
 }
@@ -108,8 +114,13 @@ async function mirrorEmojiTokens(tokens) {
   const pending = new Map();
   for (const [id, p] of byId) {
     // Emoji guild yang bot sudah punya akses (mis. emoji buatan sendiri di
-    // server bot) langsung dipakai apa adanya — tidak perlu di-mirror.
-    if (emojiClient.emojis?.cache?.has?.(id)) continue;
+    // server bot) langsung dipakai apa adanya — tidak perlu di-mirror. Tetap
+    // dicatat ke `emoji_map`: `resolve()` hanya membaca tabel itu, jadi tanpa
+    // catatan token yang sebenarnya bisa dirender akan jatuh ke ikon netral.
+    if (emojiClient.emojis?.cache?.has?.(id)) {
+      store.setEmojiToken(id, p.token);
+      continue;
+    }
     const cached = store.getEmojiToken(id);
     if (cached) out.set(p.token, cached);
     else pending.set(id, p);
@@ -564,5 +575,5 @@ module.exports = {
   parseAnimalCard, isAnimalCard, captureMessage, buildDexResponse,
   formatAnimalEmbed, formatCompactTable, formatListEmbed, extractFlags, toQueries,
   normalizeName, parseStats, STAT_LABELS, STAT_ICONS, setClient, mirrorEmojiTokens, collectEmojiTokens,
-  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, syncAnimalEmoji, ensureAnimalEmoji, ensureAnimalEmojis
+  applyEmojiMap, allEmojiTokens, animalEmoji, animalEmojiId, isRenderableToken, syncAnimalEmoji, ensureAnimalEmoji, ensureAnimalEmojis
 };

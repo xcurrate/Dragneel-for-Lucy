@@ -543,8 +543,10 @@ describe('emoji hewan untuk tampilan battle', () => {
     const dex = require('../src/services/animalDex');
     const appEmojis = new Map();
     const created = [];
+    // `guildEmojiIds`: emoji yang sudah bisa dirender bot (emoji guild bot sendiri).
+    const guildEmojiIds = new Set(overrides.guildEmojiIds || []);
     dex.setClient({
-      emojis: { cache: { has: () => false } },
+      emojis: { cache: { has: id => guildEmojiIds.has(String(id)) } },
       application: {
         emojis: {
           fetch: async () => appEmojis,
@@ -554,7 +556,7 @@ describe('emoji hewan untuk tampilan battle', () => {
             appEmojis.set(emoji.id, emoji);
             return emoji;
           },
-          ...overrides
+          ...(overrides.application || {})
         }
       }
     });
@@ -689,6 +691,30 @@ describe('emoji hewan untuk tampilan battle', () => {
     });
     assert.ok(out.fields[0].name.includes('feagle:'), 'emoji pet terpasang dari kunci lama');
     assert.ok(!out.fields[0].name.includes('🐾'), 'tidak jatuh ke ikon netral');
+  });
+
+  it('emoji guild yang sudah bisa dirender bot tidak jatuh ke 🐾', async () => {
+    // Emoji milik server bot sendiri tidak perlu di-mirror, tapi `resolve()`
+    // hanya membaca `emoji_map`; tanpa catatan eksplisit hasilnya 🐾.
+    fakeClient({ guildEmojiIds: ['1542593595973046322'] });
+    const dexStore = require('../src/utils/animalDexStorage');
+    const be = require('../src/services/battleEmoji');
+
+    dexStore.upsertAnimal({
+      nameKey: 'charmander', name: 'charmander', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 2, attack: 1, protection: 2, wisdom: 2, magic: 13, mr: 2 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1542593595973046322.gif', emojiName: 'hlizard'
+    });
+    const animal = dexStore.getAnimal('charmander');
+
+    const dex = require('../src/services/animalDex');
+    await dex.mirrorEmojiTokens([dex.animalEmoji(animal)]);
+
+    assert.strictEqual(dexStore.getEmojiToken('1542593595973046322'), '<a:hlizard:1542593595973046322>',
+      'token dicatat ke emoji_map meski tidak perlu di-mirror');
+    assert.ok(!be.animalEmoji(animal).includes('🐾'), 'tidak jatuh ke ikon netral');
+    assert.ok(be.animalEmoji(animal).includes('hlizard:'), 'memakai emoji asli');
   });
 
   it('tetap memakai 🐾 bila pet tidak punya emoji sama sekali', () => {
