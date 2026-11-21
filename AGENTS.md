@@ -488,6 +488,21 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   hitungannya dari akhir). Jangan pindahkan gerbang ke awal handler: perintah salah ketik akan
   dibalas pesan cooldown, bukan pesan validasinya. `d sim help` sengaja bebas cooldown.
   Tes memakai `store.setCooldown`/`clearCooldown` agar tidak menunggu 5 detik nyata.
+- **Dua mode `d sim`.** Tanpa `-m` = SATU pertarungan (`duelEmbed`): sisa HP/WP tiap hewan
+  plus tombol 🔁. Dengan `-m` = statistik (`simEmbed`). Keberadaan flag yang menentukan, bukan
+  nilainya: `-m` tanpa angka tetap 50 pertarungan, jadi jangan pakai `flags['-m'] == null`
+  untuk mendeteksi mode. `DEFAULT_RUNS = 50`.
+- **Batas pertarungan per perintah.** User biasa maksimum `store.getMaxRuns()` (default 200,
+  tabel `battle_settings`); developer (`deps.isDeveloper`) tak dibatasi. Developer mengubahnya
+  dengan `d sim limit <jumlah>`; tanpa argumen hanya menampilkan nilai sekarang. Nilai tersimpan
+  yang rusak jatuh ke default, bukan mengunci semua user.
+- **Tombol 🔁 memakai jatah cooldown terpisah** (`REPEAT_COOLDOWN_ACTION = 'sim_repeat'`).
+  Tanpa itu tombol selalu ditolak karena `d sim` baru saja memasang cooldown `sim`. Hasilnya
+  dikirim ephemeral (`deferReply` + `editReply`) supaya tidak membanjiri channel. Cache
+  `duelResults` menyimpan SPEC, bukan hasil: tombol menjalankan simulasi baru.
+- **Pemisah komposisi memakai nama tim.** `renderMatchup(..., { playerLabel, enemyLabel })`
+  dan `duelEmbed` menaruh `**<nama tim>**` sebagai judul tiap blok; jangan kembali ke label
+  `Player:`/`Enemy:` — user meminta keduanya dibedakan dengan nama tim.
 - **Buff Wither (id 14) + Withering Staff (id 132).** Wither memotong `healed` dan
   `replenished`; sebar dilakukan di `postTurn` ke musuh yang belum terkena, dengan
   `effectiveness` dibagi `spreadWeakening` (0.5, dibaca dari data). Penumpukan memakai

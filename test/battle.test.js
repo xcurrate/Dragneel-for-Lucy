@@ -632,9 +632,9 @@ describe('embed UI', () => {
     assert.strictEqual(battle.winner, 'player');
     const json = panel.duelEmbed(battle, { playerLabel: 'A', enemyLabel: 'B', seed: 11 }).toJSON();
     assert.strictEqual(json.color, panel.COLOR.ok, 'menang hijau');
-    assert.strictEqual(json.fields.length, 2, 'satu field per unit');
+    assert.deepStrictEqual(json.fields.map(f => f.name), ['**A**', '**B**'], 'satu field per tim');
+    assert.ok(json.fields[0].value.includes('kuat'), 'pet tim pemain');
     assert.ok(json.fields[0].value.includes('/'), 'format hp/max');
-    assert.ok(json.fields[0].name.includes('kuat'));
     assert.ok(json.fields[1].value.includes('`0/'), 'yang kalah HP 0');
     assert.ok(json.description.includes('Menang'));
   });
@@ -674,13 +674,25 @@ describe('embed UI', () => {
     assert.ok(mixed.fields[2].name.includes('seri'));
   });
 
+  it('renderMatchup memakai nama tim sebagai pemisah', () => {
+    const body = panel.renderMatchup(
+      [{ label: 'Satu', level: 60 }],
+      [{ label: 'Foe', level: 50 }],
+      { playerLabel: 'Tim A', enemyLabel: 'Tim B' }
+    );
+    const lines = body.split('\n');
+    assert.strictEqual(lines[0], '**Tim A**', 'blok pemain diawali nama tim');
+    assert.ok(body.includes('**Tim B**'), 'blok lawan diawali nama tim');
+    assert.ok(!body.includes('Player:') && !body.includes('Enemy:'));
+  });
+
   it('renderMatchup memecah tim banyak slot per nomor', () => {
     const body = panel.renderMatchup(
       [{ label: 'Satu', level: 60 }, { label: 'Dua', level: 55 }],
       [{ label: 'Foe', level: 50 }]
     );
-    assert.ok(body.includes('Player:'), 'sisi pemain');
-    assert.ok(/Enemy: \*\*`L\.50`\*\* Foe/.test(body), 'satu slot tetap sebaris');
+    assert.ok(!body.includes('Player:') && !body.includes('Enemy:'), 'tanpa label pemisah');
+    assert.ok(body.endsWith('**`L.50`** Foe 🐾'), 'blok lawan menutup description');
     assert.ok(body.includes('`1`') && body.includes('`2`'), 'slot bernomor');
     assert.ok(body.includes('`L.60`') && body.includes('`L.55`'), 'level berformat L.n');
     assert.ok(body.includes('Satu') && body.includes('Dua'));
@@ -799,7 +811,12 @@ describe('balasan command memakai embed', () => {
     };
 
     // Run cukup besar agar melewati ambang progres, seed tetap agar cepat stabil.
-    await handleSimCommand(message('d sim -m 3000 -s 3'), ['-m', '3000', '-s', '3'], 'd', { sendEmbed: sendProgress });
+    // 3000 run melewati batas user biasa (200); developer tidak dibatasi.
+    await handleSimCommand(message('d sim -m 3000 -s 3'), ['-m', '3000', '-s', '3'], 'd', {
+      sendEmbed: sendProgress,
+      sendPayload: sendProgress,
+      isDeveloper: () => true,
+    });
 
     assert.strictEqual(sent.length, 1, 'hanya satu pesan dibuat, sisanya edit');
     assert.ok(sent[0].description.includes('Berjalan'), 'pesan pertama menandai simulasi berjalan');
@@ -1747,9 +1764,19 @@ describe('level default dan flag lvl', () => {
     return replies[0];
   }
 
-  // Komposisi kini ada di description embed: "Player: ...\nEnemy: ...".
+  // Komposisi ada di description: blok tim kamu lalu blok lawan, tanpa label.
   function composition(embed) {
     return embed.description;
+  }
+
+  // Description = blok tim pemain lalu blok lawan, masing-masing diawali nama
+  // tim. Tim pemain di sini satu slot, jadi bloknya tiga baris.
+  function playerBlock(embed) {
+    return composition(embed).split('\n').slice(0, 2).join('\n');
+  }
+
+  function enemyBlock(embed) {
+    return composition(embed).split('\n').slice(2).join('\n');
   }
 
   beforeEach(() => {
@@ -1776,8 +1803,10 @@ describe('level default dan flag lvl', () => {
   });
 
   it('lvl<angka> menyamakan level kedua sisi', async () => {
-    const body = composition(await run(['B', 'lvl100', '-m', '1']));
-    const [mine, theirs] = body.split('Enemy:');
+    const embed = await run(['B', 'lvl100', '-m', '1']);
+    const body = composition(embed);
+    const theirs = enemyBlock(embed);
+    const mine = playerBlock(embed);
     assert.ok(mine.includes('slot1') && mine.includes('L.100'), mine);
     assert.ok(!mine.includes('L.50'), 'level pemain ditimpa');
     assert.ok(theirs.includes('slot1') && theirs.includes('L.100'), theirs);
@@ -1785,8 +1814,9 @@ describe('level default dan flag lvl', () => {
   });
 
   it('lvl<n>/<m> memakai level berbeda per sisi', async () => {
-    const body = composition(await run(['B', 'lvl100/60', '-m', '1']));
-    const [mine, theirs] = body.split('Enemy:');
+    const embed = await run(['B', 'lvl100/60', '-m', '1']);
+    const mine = playerBlock(embed);
+    const theirs = enemyBlock(embed);
     assert.ok(mine.includes('L.100'), mine);
     assert.ok(!mine.includes('L.60'), 'sisi pemain tetap 100');
     assert.ok(theirs.includes('slot1') && theirs.includes('L.60'), theirs);
@@ -1794,8 +1824,9 @@ describe('level default dan flag lvl', () => {
   });
 
   it('lvl/<m> hanya menimpa level lawan', async () => {
-    const body = composition(await run(['B', 'lvl/40', '-m', '1']));
-    const [mine, theirs] = body.split('Enemy:');
+    const embed = await run(['B', 'lvl/40', '-m', '1']);
+    const mine = playerBlock(embed);
+    const theirs = enemyBlock(embed);
     assert.ok(mine.includes('slot1') && mine.includes('L.50'), mine);
     assert.ok(theirs.includes('slot1') && theirs.includes('L.40'), theirs);
     assert.ok(theirs.includes('slot2') && theirs.includes('L.40'), theirs);
@@ -2797,5 +2828,172 @@ describe('update OwO: Wounding Crossbow, Frostbite, Pest, Exposed, Resonance, Li
     );
     assert.ok(['player', 'enemy', 'tie'].includes(result.winner));
     assert.ok(result.turns >= 1 && result.turns <= data.limits.maxTurns);
+  });
+});
+
+describe('default, batas pertarungan, dan tombol ulang', () => {
+  const { handleSimCommand, handleRepeatButton, handleLimitCommand, DEFAULT_RUNS } =
+    require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+  const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
+
+  let tempDir;
+  let replies;
+  let lastPayload = null;
+  const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); };
+  const sendPayload = (m, payload) => {
+    lastPayload = payload;
+    replies.push(payload.embeds[0].toJSON());
+    return { payload, edit: async () => ({}) };
+  };
+  const message = { guildId: 'g', author: { id: 'u' } };
+
+  async function run(args, deps = {}) {
+    replies = [];
+    await handleSimCommand(message, args, 'd', { sendEmbed, sendPayload, ...deps });
+    return replies[0];
+  }
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-sim-limit-'));
+    process.chdir(tempDir);
+    store.createTeam('u', 'Solo');
+    store.setSlot('u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.setActiveTeam('u', 'Solo');
+    store.setMaxRuns(store.DEFAULT_MAX_RUNS);
+  });
+
+  afterEach(() => {
+    store.setMaxRuns(store.DEFAULT_MAX_RUNS);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('default 50 pertarungan dipakai tombol 🔁', () => {
+    assert.strictEqual(DEFAULT_RUNS, 50);
+  });
+
+  it('`-m` tanpa angka tetap berarti 50 pertarungan', async () => {
+    const embed = await run(['-m']);
+    assert.ok(embed.footer.text.includes('50 simulasi'), embed.footer.text);
+    assert.ok(!embed.fields.some(f => f.value.includes('/')), 'agregat, bukan sisa HP/WP');
+  });
+
+  it('`-m 51` menjalankan 51 pertarungan', async () => {
+    const embed = await run(['-m', '51']);
+    assert.ok(embed.footer.text.includes('51 simulasi'), embed.footer.text);
+  });
+
+  it('default batas user biasa adalah 200', () => {
+    assert.strictEqual(store.DEFAULT_MAX_RUNS, 200);
+    assert.strictEqual(store.getMaxRuns(), 200);
+  });
+
+  it('user biasa ditolak saat melewati batas', async () => {
+    const embed = await run(['-m', '201']);
+    assert.strictEqual(embed.color, 0xED4245);
+    assert.ok(embed.description.includes('200'), embed.description);
+    assert.ok(embed.description.includes('201'), embed.description);
+  });
+
+  it('tepat di batas masih boleh', async () => {
+    const embed = await run(['-m', '200']);
+    assert.ok(embed.title.includes('vs.'), embed.title);
+  });
+
+  it('developer bebas melewati batas', async () => {
+    const embed = await run(['-m', '500'], { isDeveloper: () => true });
+    assert.ok(embed.title.includes('vs.'), embed.title);
+    assert.ok(embed.footer.text.includes('500 simulasi'), embed.footer.text);
+  });
+
+  it('batas mengikuti nilai yang disimpan developer', async () => {
+    store.setMaxRuns(500);
+    const ok = await run(['-m', '500']);
+    assert.ok(ok.title.includes('vs.'), 'batas baru berlaku');
+    const tooBig = await run(['-m', '501']);
+    assert.strictEqual(tooBig.color, 0xED4245);
+  });
+
+  it('hasil satu pertarungan menyertakan tombol 🔁 berlabel 50', async () => {
+    lastPayload = null;
+    replies = [];
+    await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
+    assert.ok(replies[0].title.includes('vs.'), replies[0].title);
+    assert.ok(replies[0].fields.length >= 2, 'detail per unit');
+    const button = lastPayload.components[0].toJSON().components[0];
+    assert.strictEqual(button.label, '50', 'label jumlah pertarungan');
+    assert.ok(button.emoji.name === '🔁', 'emoji ulang');
+    assert.ok(panel.isRepeatButton(button.custom_id), button.custom_id);
+  });
+
+  it('d sim limit hanya bisa diubah developer', async () => {
+    replies = [];
+    handleLimitCommand(message, ['300'], 'd', { sendEmbed, isDeveloper: () => false });
+    assert.strictEqual(store.getMaxRuns(), 200, 'tidak berubah');
+    assert.ok(replies[0].description.includes('Hanya developer'));
+
+    replies = [];
+    handleLimitCommand(message, ['300'], 'd', { sendEmbed, isDeveloper: () => true });
+    assert.strictEqual(store.getMaxRuns(), 300, 'berubah oleh developer');
+    assert.ok(replies[0].description.includes('300'));
+  });
+
+  it('d sim limit tanpa argumen menampilkan nilai sekarang', async () => {
+    replies = [];
+    handleLimitCommand(message, [], 'd', { sendEmbed, isDeveloper: () => false });
+    assert.ok(replies[0].description.includes('200'));
+    assert.ok(replies[0].description.includes('50'));
+  });
+
+  it('d sim limit menolak angka tidak valid', async () => {
+    for (const bad of ['0', '-5', 'abc', '1.5']) {
+      replies = [];
+      handleLimitCommand(message, [bad], 'd', { sendEmbed, isDeveloper: () => true });
+      assert.strictEqual(replies[0].color, 0xED4245, `${bad} ditolak`);
+      assert.strictEqual(store.getMaxRuns(), 200);
+    }
+  });
+
+  it('tombol 🔁 menjalankan 50 pertarungan secara ephemeral', async () => {
+    lastPayload = null;
+    replies = [];
+    await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
+    const customId = lastPayload.components[0].toJSON().components[0].custom_id;
+
+    let replied = null;
+    let edited = null;
+    const interaction = {
+      customId,
+      user: { id: 'u' },
+      reply: async payload => { replied = payload; },
+      deferReply: async payload => { replied = payload; },
+      editReply: async payload => { edited = payload; },
+    };
+    await handleRepeatButton(interaction);
+
+    assert.ok(replied.flags === 64, 'balasan ephemeral');
+    assert.ok(edited, 'hasil dikirim setelah defer');
+    const json = edited.embeds[0].toJSON();
+    assert.ok(json.title.includes('vs.'), json.title);
+    assert.ok(json.footer.text.includes('50 simulasi'), json.footer.text);
+  });
+
+  it('tombol 🔁 menolak pengguna lain dan token kedaluwarsa', async () => {
+    lastPayload = null;
+    replies = [];
+    await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
+    const customId = lastPayload.components[0].toJSON().components[0].custom_id;
+
+    const other = { customId, user: { id: 'orang-lain' }, reply: async p => { other.out = p; } };
+    await handleRepeatButton(other);
+    assert.ok(other.out.content.includes('milik orang lain'), other.out.content);
+
+    const stale = {
+      customId: panel.repeatButton('u', 'tidak-ada', 50).toJSON().components[0].custom_id,
+      user: { id: 'u' },
+      reply: async p => { stale.out = p; },
+    };
+    await handleRepeatButton(stale);
+    assert.ok(stale.out.content.includes('kedaluwarsa'), stale.out.content);
   });
 });

@@ -90,6 +90,13 @@ function getDb() {
       ready_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, action)
     );
+    -- Pengaturan simulasi global (bukan per user), mis. batas jumlah
+    -- pertarungan. Disimpan di database agar bertahan setelah restart.
+    CREATE TABLE IF NOT EXISTS battle_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
   try { db.exec('ALTER TABLE teams ADD COLUMN slot_id INTEGER'); } catch {}
   for (const column of [
@@ -469,6 +476,37 @@ function getActiveTeam(userId) {
 }
 
 // Sisa waktu tunggu sebuah aksi untuk user ini. 0 berarti sudah boleh dipakai.
+// Batas jumlah pertarungan per perintah untuk user biasa. Developer tidak
+// dibatasi; nilainya bisa diubah lewat `d sim limit <jumlah>`.
+const DEFAULT_MAX_RUNS = 200;
+const MAX_RUNS_KEY = 'max_runs';
+
+function getSetting(key) {
+  const row = getDb().prepare('SELECT value FROM battle_settings WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+function setSetting(key, value) {
+  getDb().prepare(
+    'INSERT INTO battle_settings (key, value, updated_at) VALUES (?, ?, ?)'
+    + ' ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
+  ).run(key, String(value), Date.now());
+}
+
+// Nilai tersimpan bisa rusak/negatif; jatuh ke default agar tidak mengunci
+// semua user tanpa jalan keluar.
+function getMaxRuns() {
+  const raw = Number(getSetting(MAX_RUNS_KEY));
+  return Number.isSafeInteger(raw) && raw >= 1 ? raw : DEFAULT_MAX_RUNS;
+}
+
+function setMaxRuns(value) {
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1) return null;
+  setSetting(MAX_RUNS_KEY, n);
+  return n;
+}
+
 function cooldownRemaining(userId, action, now = Date.now()) {
   const row = getDb().prepare(
     'SELECT ready_at FROM command_cooldowns WHERE user_id = ? AND action = ?'
@@ -517,6 +555,11 @@ module.exports = {
   MAX_TEAM_ID,
   getDb,
   cooldownRemaining,
+  DEFAULT_MAX_RUNS,
+  getSetting,
+  setSetting,
+  getMaxRuns,
+  setMaxRuns,
   setCooldown,
   clearCooldown,
   normalizeName,

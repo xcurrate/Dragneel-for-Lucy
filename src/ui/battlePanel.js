@@ -239,36 +239,40 @@ function sideLine(spec) {
   return `**\`L.${spec.level}\`**${name} ${icons.join('')}`.trimEnd();
 }
 
-// Tim satu slot ditulis sebaris; tim banyak slot dipecah dengan nomor.
-function sideBlock(title, specs) {
-  if (specs.length === 1) return `${title}: ${sideLine(specs[0])}`;
-  return [`${title}:`, ...specs.map((spec, i) => `> \`${i + 1}\` ${sideLine(spec)}`)].join('\n');
+// Satu blok komposisi: nama tim sebagai judul, lalu isi slot di bawahnya.
+function sideBlock(label, specs) {
+  const rows = specs.map((spec, i) => `> \`${i + 1}\` ${sideLine(spec)}`);
+  return [`**${label}**`, ...rows].join('\n');
 }
 
 // Ringkasan komposisi kedua tim, dipakai sebagai isi description embed.
-function renderMatchup(playerSpecs, enemySpecs) {
-  return [sideBlock('Player', playerSpecs), sideBlock('Enemy', enemySpecs)].join('\n');
+// Nama tim dipakai sebagai pemisah karena keduanya tampil berurutan.
+function renderMatchup(playerSpecs, enemySpecs, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan' } = {}) {
+  return [sideBlock(playerLabel, playerSpecs), sideBlock(enemyLabel, enemySpecs)].join('\n');
 }
 
-// Satu unit versi ringkas: "**L.100** lobbot" + baris HP/WP + senjata.
-// Dipakai hasil satu pertarungan, bukan simulasi massal.
-function duelUnitField(unit) {
+// Satu unit versi ringkas untuk hasil satu pertarungan: baris pertama kondisi
+// akhir HP/WP, baris kedua senjata bila ada.
+function duelUnitLines(unit) {
   const maxHpValue = Math.ceil(engine.maxHp(unit));
   const maxWpValue = Math.ceil(engine.maxWp(unit));
   const hp = Math.max(0, Math.ceil(unit.stats.hp[0]));
   const wp = Math.max(0, Math.ceil(unit.stats.wp[0]));
-  const lines = [
-    `${emoji.statIcon('hp')} \`${hp}/${maxHpValue}\` ${emoji.statIcon('wp')} \`${wp}/${maxWpValue}\``,
-  ];
-  if (unit.weapon) {
-    const quality = unit.weapon.quality ?? data.DEFAULT_QUALITY;
-    const icons = [emoji.rankEmoji(quality), emoji.weaponEmoji(unit.weapon.id, quality)];
-    lines.push(`${icons.join('')} ${quality}%`);
-  }
+  const head = `> ${emoji.statIcon('hp')} \`${hp}/${maxHpValue}\` ${emoji.statIcon('wp')} \`${wp}/${maxWpValue}\``;
+  const body = `> **L.${unit.level}** ${emoji.animalEmoji(unit.animal)} ${unit.nickname}`;
+  if (!unit.weapon) return `${body}\n${head}`;
+  const quality = unit.weapon.quality ?? data.DEFAULT_QUALITY;
+  const icons = [emoji.rankEmoji(quality), emoji.weaponEmoji(unit.weapon.id, quality)];
+  return `${body}\n${head}\n> ${icons.join('')} ${quality}%`;
+}
+
+// Satu field per tim. Nama tim dipakai sebagai pemisah supaya jelas sisi mana
+// yang menang dan mana yang kalah.
+function duelTeamField(label, units) {
   return {
-    name: `**L.${unit.level}** ${emoji.animalEmoji(unit.animal)} ${unit.nickname}`,
-    value: lines.join('\n'),
-    inline: true,
+    name: `**${label}**`,
+    value: units.map(duelUnitLines).join('\n'),
+    inline: false,
   };
 }
 
@@ -283,7 +287,10 @@ function duelEmbed(battle, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', ela
     .setColor(color)
     .setTitle(`${playerLabel} vs. ${enemyLabel}`)
     .setDescription(`${icon} **${verdict}** dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`)
-    .addFields([...units.player, ...units.enemy].map(duelUnitField))
+    .addFields([
+      duelTeamField(playerLabel, units.player),
+      duelTeamField(enemyLabel, units.enemy),
+    ])
     .setFooter({
       text: `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`,
     });
@@ -381,6 +388,8 @@ function isTeamButton(customId) {
 // supaya hasil milik orang lain tidak bisa dibuka, dan `token` supaya tombol
 // lama tidak menampilkan data dari simulasi yang sudah digantikan.
 const GLOBAL_BUTTON = 'battle_global_losses';
+// Tombol 🔁 pada hasil satu pertarungan: ulangi sebagai `-m <runs>`.
+const REPEAT_BUTTON = 'battle_sim_repeat';
 
 function globalLossButton(userId, token) {
   return new ActionRowBuilder().addComponents(
@@ -399,6 +408,27 @@ function isGlobalLossButton(customId) {
 function parseGlobalLossButton(customId) {
   const parts = String(customId || '').split(ID_SEP);
   if (parts.length !== 3 || parts[0] !== GLOBAL_BUTTON) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2] };
+}
+
+// Tombol ulang: `battle_sim_repeat:<userId>:<token>`.
+function repeatButton(userId, token, runs) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${REPEAT_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}`)
+      .setLabel(String(runs))
+      .setEmoji('🔁')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+function isRepeatButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${REPEAT_BUTTON}${ID_SEP}`);
+}
+
+function parseRepeatButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 3 || parts[0] !== REPEAT_BUTTON) return { ok: false };
   return { ok: true, userId: parts[1], token: parts[2] };
 }
 
@@ -571,7 +601,8 @@ module.exports = {
   COLOR, TEAM_BUTTON, MAX_SLOTS,
   weaponName, bar, slotField, slotStats, slotIcon,
   teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, teamCompLines, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
-  turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitField,
+  turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
   teamButtons, isTeamButton, parseTeamButton,
   GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
+  REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,
 };

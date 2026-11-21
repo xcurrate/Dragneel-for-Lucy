@@ -15,6 +15,7 @@ const globalSim = require('../services/globalSim');
 const data = require('../data/owoBattle');
 const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
+  repeatButton, parseRepeatButton, isRepeatButton,
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
@@ -26,6 +27,10 @@ const PROGRESS_EDIT_MS = 1000;
 // memakai CPU bot, jadi satu user tidak boleh menumpuknya.
 const SIM_COOLDOWN_MS = 5000;
 const SIM_COOLDOWN_ACTION = 'sim';
+const REPEAT_COOLDOWN_ACTION = 'sim_repeat';
+
+// Jumlah pertarungan saat `-m` tidak disebut, termasuk untuk tombol 🔁.
+const DEFAULT_RUNS = 50;
 
 function usage(prefix = 'd') {
   return [
@@ -37,9 +42,10 @@ function usage(prefix = 'd') {
     '',
     '',
     'Tanpa `-m` hasilnya **satu** pertarungan (sisa HP/WP tiap hewan).',
-    'Dengan `-m <jumlah>` hasilnya statistik dari banyak pertarungan.',
+    `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
+    'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
-    'Opsi: `-m <jumlah>` (tanpa batas atas), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+    'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
     '',
     'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
@@ -120,6 +126,28 @@ const MAX_GLOBAL_BATTLES = 10_000_000;
 // agar tombol dari hasil lama tidak menampilkan data yang sudah basi.
 const GLOBAL_RESULT_TTL_MS = 15 * 60 * 1000;
 const globalResults = new Map();
+// Hasil satu pertarungan disimpan sebentar supaya tombol 🔁 bisa mengulang
+// matchup yang sama tanpa user mengetik ulang perintahnya.
+const duelResults = new Map();
+const DUEL_RESULT_TTL_MS = 15 * 60 * 1000;
+
+function rememberDuelResult(userId, token, payload) {
+  const now = Date.now();
+  for (const [key, entry] of duelResults) {
+    if (now - entry.at > DUEL_RESULT_TTL_MS) duelResults.delete(key);
+  }
+  duelResults.set(`${userId}${token}`, { at: now, ...payload });
+}
+
+function getDuelResult(userId, token) {
+  const entry = duelResults.get(`${userId}${token}`);
+  if (!entry) return null;
+  if (Date.now() - entry.at > DUEL_RESULT_TTL_MS) {
+    duelResults.delete(`${userId}${token}`);
+    return null;
+  }
+  return entry;
+}
 
 function rememberGlobalResult(userId, token, payload) {
   const now = Date.now();
@@ -431,6 +459,98 @@ async function handleGlobalLossButton(i) {
   });
 }
 
+// Tombol 🔁: jalankan ulang matchup yang sama sebagai `-m <DEFAULT_RUNS>`.
+// Balasannya ephemeral supaya hasil panjang tidak membanjiri channel.
+async function handleRepeatButton(i, deps = {}) {
+  const parsed = parseRepeatButton(i.customId);
+  if (!parsed.ok) {
+    return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `d sim` lagi.', flags: MessageFlags.Ephemeral });
+  }
+  if (parsed.userId !== i.user.id) {
+    return i.reply({
+      content: 'Tombol ini milik orang lain. Jalankan `d sim` untuk hasilmu sendiri.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  const entry = getDuelResult(parsed.userId, parsed.token);
+  if (!entry) {
+    return i.reply({
+      content: 'Hasil ini sudah kedaluwarsa. Jalankan `d sim` lagi.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // Jatah terpisah dari `sim`: tombol ditekan tepat setelah `d sim`, yang sudah
+  // memasang cooldown. Tanpa ini tombolnya selalu ditolak selama 5 detik.
+  const waiting = store.cooldownRemaining(parsed.userId, REPEAT_COOLDOWN_ACTION);
+  if (waiting > 0) {
+    return i.reply({
+      content: `⏳ Tunggu **${(waiting / 1000).toFixed(1)} detik** lagi sebelum mengulang.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  store.setCooldown(parsed.userId, REPEAT_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
+  const result = await sim.simulate(entry.playerSpecs, entry.enemySpecs, {
+    runs: DEFAULT_RUNS,
+    playerQuality: entry.playerQuality,
+    enemyQuality: entry.enemyQuality,
+  });
+  store.setCooldown(parsed.userId, REPEAT_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+
+  await animalDex.ensureAnimalEmojis([
+    ...entry.playerSpecs.map(spec => spec.animal),
+    ...entry.enemySpecs.map(spec => spec.animal),
+  ]);
+  const embed = simEmbed(result, {
+    ...entry.labels,
+    matchup: renderMatchup(entry.playerSpecs, entry.enemySpecs, entry.labels),
+  });
+  return i.editReply({ embeds: [embed] });
+}
+
+// Batas jumlah pertarungan untuk user biasa. Tanpa argumen hanya menampilkan
+// nilai sekarang; developer tetap bebas melewatinya.
+function handleLimitCommand(message, args, prefix, deps = {}) {
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  const dev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  const current = store.getMaxRuns();
+
+  if (!args.length) {
+    return send(message, usageEmbed(
+      '⚙️ Batas Pertarungan',
+      [
+        `Maksimum sekarang: **${current.toLocaleString('id-ID')}** pertarungan per perintah.`,
+        `Default saat \`-m\` tidak disebut: **${DEFAULT_RUNS}**.`,
+        '',
+        `Ubah dengan \`${prefix} sim limit <jumlah>\` (khusus developer).`,
+        'Developer tidak dibatasi angka ini.',
+      ].join('\n')
+    ));
+  }
+
+  if (!dev) {
+    return send(message, errorEmbed('Hanya developer bot yang bisa mengubah batas pertarungan.'));
+  }
+
+  const value = Number(args[0]);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    return send(message, errorEmbed(
+      'Batas harus bilangan bulat 1 atau lebih. Contoh: `' + prefix + ' sim limit 500`.'
+    ));
+  }
+  const saved = store.setMaxRuns(value);
+  if (saved == null) {
+    return send(message, errorEmbed('Gagal menyimpan batas pertarungan.'));
+  }
+  return send(message, usageEmbed(
+    '⚙️ Batas Pertarungan',
+    `Maksimum per perintah sekarang **${saved.toLocaleString('id-ID')}** untuk semua user.\n`
+    + `Default tanpa \`-m\` tetap **${DEFAULT_RUNS}**.`
+  ));
+}
+
 async function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const userId = message.author.id;
@@ -438,6 +558,11 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // `help` tidak kena cooldown: perintah bantuan tidak menjalankan simulasi.
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
     return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix)));
+  }
+
+  // `d sim limit [jumlah]` — developer mengatur batas pertarungan semua user.
+  if ((args[0] || '').toLowerCase() === 'limit') {
+    return handleLimitCommand(message, args.slice(1), prefix, deps);
   }
 
   // `d sim global` / `d sim g` — mode simulasi melawan semua tim tersimpan.
@@ -463,13 +588,25 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (levels.invalid || flags.lvl?.malformed) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
   }
-  // Tanpa `-m`, perintah menampilkan satu pertarungan lengkap dengan sisa
-  // HP/WP tiap hewan; dengan `-m`, hasilnya statistik dari banyak run.
-  const singleBattle = flags['-m'] == null && flags['-n'] == null && flags['-runs'] == null;
-  const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? 1;
+  // Tanpa `-m` hasilnya satu pertarungan (sisa HP/WP tiap hewan) sekaligus
+  // tombol 🔁 untuk mengulanginya sebanyak `DEFAULT_RUNS`. Dengan `-m N`
+  // hasilnya statistik dari N pertarungan.
+  // Dicek dari keberadaan flag, bukan nilainya: `-m` tanpa angka tetap berarti
+  // simulasi massal 50 pertarungan, bukan satu pertarungan.
+  const singleBattle = !['-m', '-n', '-runs'].some(key => key in flags);
+  const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? DEFAULT_RUNS;
   const runCount = Number(runs);
   if (!Number.isSafeInteger(runCount) || runCount < 1) {
     return send(message, errorEmbed('Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim -m 500`.'));
+  }
+  // Batas per perintah: user biasa mengikuti setting developer, developer bebas.
+  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  const maxRuns = isDev ? Infinity : store.getMaxRuns();
+  if (runCount > maxRuns) {
+    return send(message, errorEmbed(
+      `Jumlah pertarungan maksimum **${maxRuns.toLocaleString('id-ID')}** per perintah.`
+      + `\nKamu meminta ${runCount.toLocaleString('id-ID')}.`
+    ));
   }
   const seed = flags['-s'] ?? flags['-seed'];
   if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
@@ -528,6 +665,14 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       elapsedMs: Date.now() - startedAt,
       seed: seed != null ? Number(seed) : null,
     });
+    // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
+    // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.
+    const token = resultToken(seed != null ? Number(seed) : 1);
+    rememberDuelResult(userId, token, {
+      playerSpecs, enemySpecs, playerQuality, enemyQuality, labels,
+    });
+    const payload = { embeds: [embed], components: [repeatButton(userId, token, DEFAULT_RUNS)] };
+    if (deps.sendPayload) return deps.sendPayload(message, payload);
     return send(message, embed);
   }
 
@@ -548,7 +693,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   const finalEmbed = simEmbed(result, {
     ...labels,
-    matchup: renderMatchup(playerSpecs, enemySpecs),
+    matchup: renderMatchup(playerSpecs, enemySpecs, labels),
   });
 
   return publishProgress.finish({ embeds: [finalEmbed] });
@@ -626,7 +771,7 @@ function resolveEnemy(userId, args, overrideLevel) {
 }
 
 module.exports = {
-  handleSimCommand, handleGlobalSim, handleGlobalLossButton,
+  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleRepeatButton, handleLimitCommand, DEFAULT_RUNS,
   parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
 };
