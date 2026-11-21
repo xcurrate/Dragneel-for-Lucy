@@ -516,6 +516,9 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   menolak **seluruh pesan** dengan error `10014` (Unknown Emoji), bukan sekadar
   kehilangan satu ikon. `isRenderableToken()` memeriksa cache guild **dan** cache
   `client.application.emojis`; emoji aplikasi bot tidak ada di `client.emojis`.
+  Aturan ini berlaku untuk emoji battle **dan** emoji dex hewan: `resolve()` di
+  `battleEmoji` serta `ensureAnimalEmoji()`/`ensureAnimalEmojis()` di `animalDex`
+  semuanya memverifikasi sebelum memakai hasil cache.
 - **`id` internal ≠ `owoId`.** Senjata lama memakai id 1-22 (urutan internal), sedangkan
   OwO punya id resmi sendiri (Flame Staff 10 vs 110, Glacial Axe 15 vs 115). JANGAN
   renumber `id`: dipakai tes, penyimpanan tim, dan alias. Id resmi disimpan di `owoId`.

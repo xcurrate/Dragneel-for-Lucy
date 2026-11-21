@@ -416,7 +416,8 @@ async function ensureAnimalEmoji(animal) {
   if (!token) return null;
   const id = animalEmojiId(animal).id;
   const cached = store.getEmojiToken(id);
-  if (cached) return cached;
+  // Pemetaan basi tidak boleh dipakai: Discord menolak seluruh pesan (10014).
+  if (cached && tokenIsLive(cached)) return cached;
   return syncAnimalEmoji(animal);
 }
 
@@ -424,7 +425,9 @@ async function ensureAnimalEmoji(animal) {
 async function ensureAnimalEmojis(animals) {
   const pending = (animals || []).filter(Boolean).filter(a => {
     const found = animalEmojiId(a);
-    return found && !store.getEmojiToken(found.id);
+    if (!found) return false;
+    const cached = store.getEmojiToken(found.id);
+    return !cached || !tokenIsLive(cached);
   });
   if (!pending.length) return;
   const tokens = pending.map(animalEmoji).filter(Boolean);

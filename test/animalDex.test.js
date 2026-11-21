@@ -549,6 +549,9 @@ describe('emoji hewan untuk tampilan battle', () => {
       emojis: { cache: { has: id => guildEmojiIds.has(String(id)) } },
       application: {
         emojis: {
+          // discord.js asli menyimpan emoji aplikasi di cache; `create()` dan
+          // `fetch()` sama-sama mengisinya.
+          cache: appEmojis,
           fetch: async () => appEmojis,
           create: async ({ name }) => {
             created.push(name);
@@ -715,6 +718,29 @@ describe('emoji hewan untuk tampilan battle', () => {
       'token dicatat ke emoji_map meski tidak perlu di-mirror');
     assert.ok(!be.animalEmoji(animal).includes('🐾'), 'tidak jatuh ke ikon netral');
     assert.ok(be.animalEmoji(animal).includes('hlizard:'), 'memakai emoji asli');
+  });
+
+  it('mengabaikan pemetaan emoji basi saat menyiapkan emoji pet', async () => {
+    // Regresi: `ensureAnimalEmoji()` memakai baris `emoji_map` apa adanya, jadi
+    // pemetaan yang emojinya sudah dihapus tetap dipakai dan Discord menolak
+    // seluruh pesan (10014). Pemetaan basi harus di-mirror ulang.
+    const { dex, created } = fakeClient();
+    const dexStore = require('../src/utils/animalDexStorage');
+
+    dexStore.upsertAnimal({
+      nameKey: 'pidgeotto', name: 'pidgeotto', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: { hp: 2, attack: 13, protection: 2, wisdom: 1, magic: 1, mr: 2 }, statTokens: {},
+      imageUrl: 'https://cdn.discordapp.com/emojis/1522265093155590318.gif', emojiName: 'feagle'
+    });
+    dexStore.setEmojiToken('1522265093155590318', '<:feagle:9001>');
+    assert.strictEqual(dex.tokenIsLive('<:feagle:9001>'), false, 'ID 9001 tidak ada di cache');
+
+    const animal = dexStore.getAnimal('pidgeotto');
+    const token = await dex.ensureAnimalEmoji(animal);
+    assert.ok(created.includes('feagle'), 'emoji basi di-mirror ulang');
+    assert.strictEqual(token, '<:feagle:9301>', 'memakai token hasil mirror baru');
+    assert.ok(dex.tokenIsLive(token), 'token baru bisa dirender');
   });
 
   it('tetap memakai 🐾 bila pet tidak punya emoji sama sekali', () => {
