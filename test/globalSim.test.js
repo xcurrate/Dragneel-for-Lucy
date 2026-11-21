@@ -380,6 +380,29 @@ describe('paralelisasi simulasi global', () => {
     assert.strictEqual(r.tally.enemy, 0);
     assert.strictEqual(r.streak.max, 50000, 'streak melintasi batas potongan');
   });
+
+  it('menghitung streak yang terkurung di tengah potongan', async () => {
+    // Pola kalah-menang-kalah: streak kemenangan tidak menyentuh awal maupun
+    // akhir potongan, jadi hanya terbaca kalau potongan melaporkan streak
+    // internalnya sendiri. Tanpa itu `max` jatuh ke 0 padahal `avg` benar.
+    const kuat = mk(50, 0).map(s => ({
+      ...s, coeffs: { hp: 500, att: 500, pr: 500, wp: 500, mag: 500, mr: 500 },
+    }));
+    const dewa = mk(999, 1).map(s => ({
+      ...s, coeffs: { hp: 99999, att: 99999, pr: 99999, wp: 99999, mag: 99999, mr: 99999 },
+    }));
+    const lawan = [
+      { label: 'dewa1', teamId: 1, specs: dewa },
+      { label: 'lemah', teamId: 2, specs: kuat },
+      { label: 'dewa2', teamId: 3, specs: dewa },
+    ];
+    for (const workers of [1, 3]) {
+      const r = await globalSim.runGlobalSim(kuat, lawan, { runs: 10, workers, seed: 9 });
+      assert.strictEqual(r.tally.player, 10, 'menang 10 kali di tengah');
+      assert.strictEqual(r.streak.max, 10, `streak terkurung worker ${workers}`);
+      assert.strictEqual(r.streak.avg, 10, `rata-rata streak worker ${workers}`);
+    }
+  });
 });
 
 describe('antrean simulasi global', () => {

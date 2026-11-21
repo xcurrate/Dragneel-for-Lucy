@@ -214,9 +214,10 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     if (!name) return say(send, message, `Format: \`${prefix} team new <nama>\``);
     const result = store.createTeam(userId, name);
     if (result.error) return say(send, message, `❌ ${result.error}`);
-    // Tim pertama otomatis aktif supaya user bisa langsung memakainya.
-    if (!store.getActiveTeam(userId)) store.setActiveTeam(userId, result.team.name);
-    return say(send, message, `✅ Tim **[${result.team.slotId}] ${result.team.name}** dibuat. Isi slot dengan \`${prefix} team add 1 <hewan>\`.`);
+    // Tim baru langsung aktif: balasan di bawah menyuruh `team add`, dan tanpa
+    // ini perintah itu justru menulis ke tim aktif yang lama.
+    store.setActiveTeam(userId, result.team.name);
+    return say(send, message, `✅ Tim **[${result.team.slotId}] ${result.team.name}** dibuat dan diaktifkan. Isi slot dengan \`${prefix} team add 1 <hewan>\`.`);
   }
 
   if (sub === 'pick' || sub === 'pilih' || sub === 'use') {

@@ -55,13 +55,17 @@ const PROGRESS_STEP = 2000;
 // Ringkasan streak harus bisa digabung antar-potong tanpa menyimpan urutan
 // pertarungan. Karena itu tiap potong melaporkan ekor dan kepalanya:
 //
-//   head  = kemenangan berturut-turut di awal potong
-//   tail  = kemenangan berturut-turut di akhir potong
-//   sum   = total panjang streak yang SELESAI di dalam potong
-//   count = jumlah streak tersebut
+//   head        = kemenangan berturut-turut di awal potong
+//   tail        = kemenangan berturut-turut di akhir potong
+//   sum         = total panjang streak yang SELESAI di dalam potong
+//   count       = jumlah streak tersebut
+//   maxInternal = streak terpanjang yang seluruhnya berada di dalam potong
 //
 // Streak yang melewati batas potong tidak dihitung di sini; penggabung yang
 // menghitungnya dari `tail` potong sebelumnya + `head` potong berikutnya.
+// `maxInternal` tetap diperlukan karena streak yang terkurung di tengah potong
+// tidak pernah muncul sebagai head atau tail, sehingga tanpa field ini streak
+// terpanjang bisa hilang sama sekali.
 function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep = null } = {}) {
   const work = units || opponents.map((_, i) => ({
     opponentIndex: i, from: 0, to: opponents[i].runs ?? 0,
@@ -81,6 +85,7 @@ function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep
   let count = 0;
   let head = 0;
   let headFixed = false;
+  let maxInternal = 0;
   let battles = 0;
 
   for (const unit of work) {
@@ -113,6 +118,7 @@ function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep
       if (result.winner === 'player') {
         streak += 1;
         if (!headFixed) head += 1;
+        if (streak > maxInternal) maxInternal = streak;
       } else {
         // Seri juga memutus streak: bukan kemenangan.
         // Streak pertama (head) sengaja TIDAK dihitung: penggabung yang
@@ -137,7 +143,7 @@ function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep
     tally,
     buckets,
     losses: [...perOpponent.values()].filter(entry => entry.tally.enemy > 0),
-    streak: { head, tail: streak, sum, count },
+    streak: { head, tail: streak, sum, count, maxInternal },
   };
 }
 

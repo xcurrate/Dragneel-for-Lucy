@@ -670,6 +670,14 @@ describe('balasan command memakai embed', () => {
     assert.ok(replies[0].description.includes('Tank'));
   });
 
+  it('d team new mengaktifkan tim baru walau sudah ada tim aktif', async () => {
+    store.createTeam('u', 'Lama');
+    store.setActiveTeam('u', 'Lama');
+    await handleTeamCommand(message('d team new Baru'), ['new', 'Baru'], 'd', { sendEmbed });
+    assert.strictEqual(store.getActiveTeam('u').name, 'Baru',
+      'tim baru harus aktif supaya `team add` berikutnya tidak menulis ke tim lama');
+  });
+
   it('d team list mengirim embed beserta tombol', async () => {
     store.createTeam('u', 'Alpha');
     store.createTeam('u', 'Beta');
