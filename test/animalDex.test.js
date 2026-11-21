@@ -265,9 +265,9 @@ describe('dex prefix command', () => {
     }
   });
 
-  it('trims compact rows dynamically so the description stays within limits', async () => {
+  it('splits a long compact table across pages instead of dropping rows', async () => {
     const { captureMessage, buildDexResponse } = require('../src/services/animalDex');
-    // Angka stat panjang → setiap baris tabel panjang, tidak mungkin muat semua.
+    // Angka stat panjang → setiap baris tabel panjang, tidak mungkin muat satu embed.
     // (Nama emoji tidak bisa dipakai lagi: Discord membatasi 32 karakter dan
     // token hewan kini dipotong sesuai batas itu.)
     const big = '12345678901234567890';
@@ -278,11 +278,19 @@ describe('dex prefix command', () => {
       captureMessage(makeMessage(card({ name: 'animal' + i, stats: longStats }), { id: 'm' + i }));
     }
     const res = await buildDexResponse('animal -c');
-    const desc = res.embeds[0].data.description;
-    assert.ok(desc.length <= 4096, 'description <= 4096');
-    assert.match(desc, /…dan \d+ lainnya tidak ditampilkan\./);
-    // Baris tidak terpotong di tengah: setiap baris data berisi pola ` | `.
-    for (const line of desc.split('\n').slice(1, -1)) assert.match(line, / \| /);
+    const messages = res.messages || [{ embeds: res.embeds }];
+    const embeds = messages.flatMap(m => m.embeds);
+
+    assert.ok(embeds.length > 1, 'tabel panjang dipecah ke beberapa halaman');
+    for (const embed of embeds) {
+      assert.ok(embed.data.description.length <= 4096, 'description <= 4096');
+      // Baris tidak terpotong di tengah: setiap baris data berisi pola ` | `.
+      for (const line of embed.data.description.split('\n').slice(1)) assert.match(line, / \| /);
+    }
+    // Tidak ada baris yang dibuang: 30 hewan semuanya tampil.
+    const rows = embeds.reduce((n, e) => n + e.data.description.split('\n').length - 1, 0);
+    assert.strictEqual(rows, 30, 'semua hewan tampil');
+    assert.match(embeds[0].data.title, /1\/\d+/, 'halaman diberi nomor');
   });
 
   it('shows usage instructions when no name is given', async () => {

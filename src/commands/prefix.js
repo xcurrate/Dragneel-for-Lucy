@@ -147,7 +147,17 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   }
 
   const dex = parseDexInput(message.content, prefix);
-  if (dex) return _send(message, await buildDexResponse(dex.args, { prefix }));
+  if (dex) {
+    const payload = await buildDexResponse(dex.args, { prefix });
+    // Tabel ringkas yang panjang datang sebagai beberapa pesan; kirim berurutan
+    // supaya semua hewan tampil, bukan terpotong di pesan pertama.
+    if (payload.messages) {
+      await _send(message, payload.messages[0]);
+      for (const extra of payload.messages.slice(1)) await _send(message, extra);
+      return;
+    }
+    return _send(message, payload);
+  }
 
   const parsed = parsePrefixInput(message.content, prefix);
   if (!parsed) return;

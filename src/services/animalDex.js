@@ -379,7 +379,11 @@ function formatListEmbed(query, animals) {
 }
 
 const STAT_COLUMNS = ['hp', 'attack', 'protection', 'wisdom', 'magic', 'mr'];
-const TABLE_MAX_ROWS = 30;
+// Satu pesan Discord dibatasi 6000 karakter untuk seluruh embed di dalamnya,
+// dan satu embed dibatasi 4096 karakter description. Baris tabel ~57 karakter,
+// jadi 169 hewan (~9.700 karakter) butuh lebih dari satu pesan. Batas baris per
+// pesan dihitung dari kedua batas itu, bukan angka tetap.
+const MAX_EMBEDS_PER_MESSAGE = 10;
 
 // ID emoji hewan diambil dari URL gambarnya (mis. .../emojis/<id>.gif). URL
 // lampiran biasa tidak cocok, dan hewan seperti itu memang tidak punya emoji.
@@ -446,10 +450,41 @@ const TABLE_TOTAL_ICON = '∑';
 // Unicode itu, jaraknya tidak jadi nol.
 const COLUMN_GAP = ' \u2001';
 
+// Batas total karakter seluruh embed dalam satu pesan.
+const MESSAGE_CHAR_BUDGET = 6000;
+// Biaya non-description per embed (judul, footer, dan bungkus JSON embed).
+const EMBED_OVERHEAD = 120;
+
+// Bagi baris tabel menjadi beberapa embed yang masing-masing muat di batas
+// description, lalu kelompokkan embed itu menjadi pesan yang muat di batas
+// 6000 karakter. Pemecahan mengikuti batas asli Discord, bukan jumlah baris
+// tetap, supaya satu query besar tetap tampil lengkap.
+function chunkTableRows(header, rows) {
+  const chunks = [];
+  let current = [];
+  let len = header.length;
+  for (const row of rows) {
+    const add = 1 + row.length;
+    if (current.length && len + add > LIMITS.description) {
+      chunks.push(current);
+      current = [];
+      len = header.length;
+    }
+    current.push(row);
+    len += add;
+  }
+  if (current.length) chunks.push(current);
+
+  const perMessage = Math.max(1, Math.floor(MESSAGE_CHAR_BUDGET / (LIMITS.description + EMBED_OVERHEAD)));
+  const messages = [];
+  for (let i = 0; i < chunks.length; i += perMessage) messages.push(chunks.slice(i, i + perMessage));
+  return messages.map(group => group.map(rowsInChunk => [header, ...rowsInChunk].join('\n')));
+}
+
 // Tampilan ringkas: satu blok mirip tabel (tanpa tabel embed) — baris judul
 // berisi emoji statistik, baris data berisi emoji hewan + angka statistiknya.
 // Angka dibungkus code span agar lebar tiap digit sama, dan antar sel diberi
-// spasi em supaya tetap ada jarak.
+// spasi em supaya tetap ada jarak. Hasil panjang dipecah ke beberapa pesan.
 function formatCompactTable(animals, emojiMap) {
   const icon = key => applyEmojiMap(STAT_ICONS[key], emojiMap);
   const groups = [
@@ -457,18 +492,33 @@ function formatCompactTable(animals, emojiMap) {
     STAT_COLUMNS.slice(3).map(icon).join(COLUMN_GAP)
   ];
   const cell = value => (value != null ? '`' + value + '`' : '–');
-  const rows = animals.slice(0, TABLE_MAX_ROWS).map(animal => {
+  const rows = animals.map(animal => {
     const label = applyEmojiMap(animalEmoji(animal), emojiMap) || '**' + animal.name + '**';
     const cells = group => group.map(k => cell(animal.stats?.[k])).join(COLUMN_GAP);
     return label + ' | ' + cells(STAT_COLUMNS.slice(0, 3)) + ' | ' + cells(STAT_COLUMNS.slice(3)) +
       ' | ' + cell(totalStats(animal));
   });
   const header = TABLE_LABEL_ICON + ' | ' + groups[0] + ' | ' + groups[1] + ' | ' + TABLE_TOTAL_ICON;
-  const desc = rows.length ? fitRows(header, rows, LIMITS.description) : '';
-  return new EmbedBuilder().setColor(0x9B59B6)
-    .setTitle('📖 Animal Dex (ringkas)')
-    .setDescription(clip(desc, LIMITS.description))
-    .setFooter({ text: clip(animals.length + ' hewan • total dex: ' + store.countAnimals(), LIMITS.footer) });
+  if (!rows.length) {
+    return [[new EmbedBuilder().setColor(0x9B59B6)
+      .setTitle('📖 Animal Dex (ringkas)')
+      .setDescription('')
+      .setFooter({ text: clip('total dex: ' + store.countAnimals(), LIMITS.footer) })]];
+  }
+
+  const footer = clip(animals.length + ' hewan • total dex: ' + store.countAnimals(), LIMITS.footer);
+  const pages = chunkTableRows(header, rows);
+  const flat = pages.flat();
+  let index = 0;
+  return pages.map(group => group.map(description => {
+    index += 1;
+    const label = flat.length > 1 ? ' — ' + index + '/' + flat.length : '';
+    return new EmbedBuilder()
+      .setColor(0x9B59B6)
+      .setTitle(clip('📖 Animal Dex (ringkas)' + label, LIMITS.title))
+      .setDescription(clip(description, LIMITS.description))
+      .setFooter({ text: footer });
+  }));
 }
 
 // Batas jumlah kartu detail agar total karakter embed tetap di bawah 6000
@@ -569,7 +619,11 @@ async function buildDexResponse(input, { prefix } = {}) {
   const found = perQuery.filter(r => r.matches.length).map(r => r.q).join(' ');
   const emojiMap = await mirrorEmojiTokens(collectEmojiTokens(results));
 
-  if (compact) return { embeds: [formatCompactTable(results, emojiMap)] };
+  if (compact) {
+    // Hasil panjang dipecah ke beberapa pesan agar tidak ada hewan yang hilang.
+    const messages = formatCompactTable(results, emojiMap);
+    return { messages: messages.map(embeds => ({ embeds })), embeds: messages[0] };
+  }
 
   if (perQuery.every(r => r.matches.length === 1) && results.length <= MAX_DETAIL_EMBEDS) {
     return { embeds: results.map(a => formatAnimalEmbed(a, emojiMap)) };

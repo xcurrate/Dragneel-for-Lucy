@@ -526,6 +526,14 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   `null` sebagai label baris. Ini kena ke **11 dari 169** hewan — justru yang
   paling umum (`bee`, `bug`, `sheep`, `dragon`, `whale`), yaitu hewan yang
   gambarnya lampiran biasa sehingga tidak punya token emoji.
+- **Tabel ringkas tidak boleh memotong hasil.** `d dex ... -c` dulu memakai
+  `TABLE_MAX_ROWS = 30`, jadi query besar (mis. menempel seluruh pesan kebun
+  binatang) berhenti di hewan ke-30 tanpa penjelasan — padahal sisa ruang embed
+  masih 1888 karakter. Sekarang baris dipecah mengikuti batas asli Discord:
+  4096 karakter per description, dan 6000 karakter total per pesan. Hasil
+  panjang dikirim sebagai **beberapa pesan** berurutan, dengan judul bernomor
+  `1/3`, `2/3`, dst. `buildDexResponse()` mengembalikan `{ messages: [...] }`
+  untuk kasus ini; `prefix.js` mengirim tiap pesan berurutan.
 - **`id` internal ≠ `owoId`.** Senjata lama memakai id 1-22 (urutan internal), sedangkan
   OwO punya id resmi sendiri (Flame Staff 10 vs 110, Glacial Axe 15 vs 115). JANGAN
   renumber `id`: dipakai tes, penyimpanan tim, dan alias. Id resmi disimpan di `owoId`.
