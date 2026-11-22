@@ -17,6 +17,18 @@ function engine() {
   return engineRef;
 }
 
+// OwO menyimpan tipe damage di `this.type` senjata (PHYSICAL/MAGICAL/TRUE) dan
+// setiap `attackWeapon` memanggil inflictDamage dengan konstanta itu. Engine kita
+// memakai huruf kecil 'p'/'m'/'t', jadi nilai data harus dipetakan — bukan
+// dipakai mentah, karena string 'MAGICAL' tidak akan cocok dengan perbandingan
+// di inflictDamage dan resistensi target jadi terlewat.
+const DAMAGE_TYPE = { PHYSICAL: 'p', MAGICAL: 'm', TRUE: 't' };
+
+function damageType(def, fallback) {
+  const mapped = DAMAGE_TYPE[String(def?.type || '').toUpperCase()];
+  return mapped || fallback;
+}
+
 function statAt(range, quality) {
   const q = Math.min(100, Math.max(0, Number(quality) || 0));
   const [min, max] = range;
@@ -130,7 +142,7 @@ const ABILITIES = {
     const ab = weapon.ability;
     e.useMana(actor, weapon.manaCost);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
-    for (const target of e.aliveOf(actor.foes)) e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
+    for (const target of e.aliveOf(actor.foes)) e.inflictDamage(ctx, actor, target, raw, damageType(weapon.def, e.PHYSICAL));
     return true;
   },
 
@@ -141,7 +153,7 @@ const ABILITIES = {
     if (!target) return false;
     e.useMana(actor, weapon.manaCost);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
-    e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
+    e.inflictDamage(ctx, actor, target, raw, damageType(weapon.def, e.PHYSICAL));
     return true;
   },
 
@@ -157,7 +169,7 @@ const ABILITIES = {
     const already = target.buffs.some(b => b.id === buffId);
     const pct = weapon.stats[0] + (already && ab.bonusIfBuffed ? weapon.stats[ab.bonusIfBuffed] : 0);
     const raw = e.getDamage(actor.stats[ab.stat], pct / 100, ctx.rng);
-    e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
+    e.inflictDamage(ctx, actor, target, raw, damageType(weapon.def, e.PHYSICAL));
     // Glacial Axe memasang 2 stack Freeze sekaligus; Freeze memakai mode
     // `independent` sehingga tiap stack memblokir satu giliran sendiri.
     if (!(ab.skipIfBuffed && already)) {
@@ -389,7 +401,7 @@ const ABILITIES = {
     const buff = e.pickRandom(target.buffs, ctx.rng);
     buff.effectiveness = (buff.effectiveness ?? 1) * (weapon.stats[0] / 100);
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[1] / 100, ctx.rng);
-    e.inflictDamage(ctx, actor, target, raw, e.PHYSICAL);
+    e.inflictDamage(ctx, actor, target, raw, damageType(weapon.def, e.PHYSICAL));
     return true;
   },
 
@@ -451,7 +463,7 @@ const ABILITIES = {
     e.useMana(actor, weapon.manaCost);
     weapon.arrowLoaded = false;
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[0] / 100, ctx.rng);
-    e.inflictDamage(ctx, actor, target, raw, ab.type || e.PHYSICAL);
+    e.inflictDamage(ctx, actor, target, raw, damageType(weapon.def, e.PHYSICAL));
     // Stack Exposed dipasang per instance karena buff ini menghitung jumlah
     // stack dari panjang array, bukan dari satu nilai.
     const stacks = Math.max(0, Math.round(weapon.stats[1]));

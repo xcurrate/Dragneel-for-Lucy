@@ -1080,6 +1080,45 @@ describe('batch senjata baru: Bleeding Gaze, Conduit Claw, Corruption, Scepter',
     assert.deepStrictEqual(flame.stats, [40, 110]);
   });
 
+  // OwO memanggil inflictDamage dengan `this.type` senjata (FlameStaff.js:
+  // WeaponInterface.MAGICAL), bukan selalu PHYSICAL. Dulu engine memakai
+  // `ab.type || PHYSICAL` dan `ab.type` berisi string 'MAGICAL', sehingga
+  // perbandingan `type === MAGICAL` gagal dan resistensi MR tidak dipakai.
+  it('Flame Staff menghantam MAGIC, bukan fisik', () => {
+    const me = [unit('me')];
+    const them = [unit('e1')];
+    link(me, them);
+    me[0].weapon = buildWeapon({ id: 10 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, them);
+    const hit = them[0].stats.hp[0];
+    assert.ok(hit < 5000, 'target harus kena damage');
+
+    const magic = [unit('m1', { mr: [0.9, 0] })];
+    const phys = [unit('p1', { pr: [0.9, 0] })];
+    link(me, magic); link(me, phys);
+    me[0].weapon = buildWeapon({ id: 10 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, magic);
+    me[0].weapon = buildWeapon({ id: 10 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, phys);
+    const lossMagic = 5000 - magic[0].stats.hp[0];
+    const lossPhys = 5000 - phys[0].stats.hp[0];
+    assert.ok(lossMagic < lossPhys, `MR harus menahan Flame Staff (mag ${lossMagic} vs phys ${lossPhys})`);
+  });
+
+  it('Glacial Axe tetap fisik walau ab.type berupa string OwO', () => {
+    const me = [unit('me')];
+    const phys = [unit('p1', { pr: [0.9, 0] })];
+    const magic = [unit('m1', { mr: [0.9, 0] })];
+    link(me, phys); link(me, magic);
+    me[0].weapon = buildWeapon({ id: 15 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, phys);
+    me[0].weapon = buildWeapon({ id: 15 }, rng, 100);
+    weaponAbility(ctxOf(), me[0].weapon, me[0], me, magic);
+    const lossPhys = 5000 - phys[0].stats.hp[0];
+    const lossMagic = 5000 - magic[0].stats.hp[0];
+    assert.ok(lossPhys < lossMagic, `PR harus menahan Glacial Axe (phys ${lossPhys} vs mag ${lossMagic})`);
+  });
+
   it('Bleeding Gaze: biaya HP 20-10% Max HP, bukan WP', () => {
     const me = [unit('me')];
     const them = [unit('e1'), unit('e2')];
