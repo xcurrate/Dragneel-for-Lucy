@@ -103,7 +103,9 @@ function slotField(entry, slot, prefix) {
   if (!entry) return { name: BLANK, value: addHint(prefix, slot), inline: false };
 
   const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
-  const name = entry.label || animal?.name || entry.animalKey || 'custom';
+  const name = sim.slotLabel({
+    label: entry.label, animalKey: entry.animalKey, animal, custom: entry.custom,
+  }) || 'custom';
   const level = entry.level || data.DEFAULT_LEVEL;
   const stats = slotStats(entry);
 
@@ -238,7 +240,11 @@ function sideLine(spec) {
     for (const id of spec.weapon.passives || []) icons.push(emoji.passiveEmoji(id, quality));
     icons.push(`${quality}%`);
   }
-  const name = spec.label ? ` ${spec.label}` : '';
+  // Pet dari stat manual memakai statnya sebagai label (mis. `8.6.2.3.5.1`).
+  const label = sim.slotLabel({
+    label: spec.label, animalKey: spec.animal?.nameKey, animal: spec.animal, custom: spec.coeffs,
+  });
+  const name = label ? ` ${label}` : '';
   return `**\`L.${spec.level}\`**${name} ${icons.join('')}`.trimEnd();
 }
 

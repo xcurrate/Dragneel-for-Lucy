@@ -17,6 +17,16 @@ const DEX_STAT_MAP = {
   hp: 'hp', attack: 'att', protection: 'pr', wisdom: 'wp', magic: 'mag', mr: 'mr',
 };
 
+// Label yang tampil untuk satu pet. Pet dari dex tetap memakai nama hewannya;
+// pet yang dibuat dari stat manual (tanpa hewan) memakai stat itu sendiri
+// dengan pemisah titik, mis. `8.6.2.3.5.1`, supaya terbaca rapi.
+function slotLabel({ label, animalKey, animal, custom }) {
+  if (label) return label;
+  if (animalKey) return animal?.name || animalKey;
+  if (custom) return STAT_KEYS.map(key => custom[key]).join('.');
+  return null;
+}
+
 function dexStatsToCustom(animal) {
   if (!animal || !animal.stats) return null;
   const custom = {};
@@ -66,7 +76,7 @@ function toSpecs(team) {
   for (const slot of team.slots) {
     const spec = {
       slot: slot.slot,
-      label: slot.label || slot.animalKey || `slot${slot.slot}`,
+      label: slotLabel(slot) || `slot${slot.slot}`,
       level: slot.level || 1,
       weapon: slot.weaponId ? { id: slot.weaponId, quality: slot.weaponQuality, passives: slot.passives } : null,
       finalStats: slot.finalStats || null,
@@ -193,6 +203,7 @@ module.exports = {
   STAT_KEYS,
   STAT_LABELS,
   DEX_STAT_MAP,
+  slotLabel,
   dexStatsToCustom,
   parseCustomStats,
   toSpecs,

@@ -1776,14 +1776,39 @@ describe('level default dan flag lvl', () => {
     assert.strictEqual(store.getTeam('u', 'A').slots.find(s => s.slot === 2).level, 50);
   });
 
+  it('pet dari stat manual memakai statnya sebagai label di `d sim`', async () => {
+    // A satu slot stat COEFFS_STRONG: 8.6.2.3.5.1
+    const embed = await run(['B', '-m', '1']);
+    const mine = playerBlock(embed);
+    assert.ok(mine.includes('8.6.2.3.5.1'), mine);
+    assert.ok(!mine.includes('slot1'), mine);
+  });
+
+  it('label stat juga muncul di `d team show`', async () => {
+    replies = [];
+    await handleTeamCommand(message, ['show', 'A'], 'd', { sendEmbed });
+    const names = (replies[0].fields || []).map(f => f.name).join(' | ');
+    assert.ok(names.includes('8.6.2.3.5.1'), names);
+    assert.ok(!names.includes('slot1'), names);
+  });
+
+  it('label manual yang diisi user tetap menang atas stat', async () => {
+    store.setSlot('u', 'A', 1, { custom: COEFFS_STRONG, level: 50, label: 'petku' });
+    const embed = await run(['B', '-m', '1']);
+    assert.ok(playerBlock(embed).includes('petku'), playerBlock(embed));
+  });
+
   it('lvl<angka> menyamakan level kedua sisi', async () => {
     const embed = await run(['B', 'lvl100', '-m', '1']);
     const body = composition(embed);
     const theirs = enemyBlock(embed);
     const mine = playerBlock(embed);
-    assert.ok(mine.includes('slot1') && mine.includes('L.100'), mine);
+    // Label pet dari stat manual adalah statnya sendiri, jadi posisi dicek
+    // lewat jumlah baris slot, bukan lewat teks label.
+    assert.ok(mine.includes('L.100'), mine);
     assert.ok(!mine.includes('L.50'), 'level pemain ditimpa');
-    assert.ok(theirs.includes('slot1') && theirs.includes('L.100'), theirs);
+    assert.strictEqual(theirs.split('\n').length - 1, 2, 'lawan tetap dua slot');
+    assert.ok(theirs.includes('L.100'), theirs);
     assert.ok(!body.includes('L.70') && !body.includes('L.20'), 'level lawan ikut ditimpa');
   });
 
@@ -1793,17 +1818,20 @@ describe('level default dan flag lvl', () => {
     const theirs = enemyBlock(embed);
     assert.ok(mine.includes('L.100'), mine);
     assert.ok(!mine.includes('L.60'), 'sisi pemain tetap 100');
-    assert.ok(theirs.includes('slot1') && theirs.includes('L.60'), theirs);
-    assert.ok(theirs.includes('slot2') && theirs.includes('L.60'), theirs);
+    // Dua slot lawan, keduanya ikut level 60.
+    assert.strictEqual(theirs.split('\n').length - 1, 2, theirs);
+    assert.ok(theirs.includes('L.60'), theirs);
+    assert.ok(!theirs.includes('L.20'), 'level lawan ditimpa');
   });
 
   it('lvl/<m> hanya menimpa level lawan', async () => {
     const embed = await run(['B', 'lvl/40', '-m', '1']);
     const mine = playerBlock(embed);
     const theirs = enemyBlock(embed);
-    assert.ok(mine.includes('slot1') && mine.includes('L.50'), mine);
-    assert.ok(theirs.includes('slot1') && theirs.includes('L.40'), theirs);
-    assert.ok(theirs.includes('slot2') && theirs.includes('L.40'), theirs);
+    assert.ok(mine.includes('L.50'), mine);
+    assert.strictEqual(theirs.split('\n').length - 1, 2, theirs);
+    assert.ok(theirs.includes('L.40'), theirs);
+    assert.ok(!theirs.includes('L.70'), 'level lawan ditimpa');
   });
 
   it('flag lvl tidak mengubah level tersimpan di tim', () => {
