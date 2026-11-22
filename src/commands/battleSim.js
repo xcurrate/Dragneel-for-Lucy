@@ -11,6 +11,7 @@ const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
 const engine = require('../services/battleEngine');
+const { createRng, randomSeed } = require('../services/battleRng');
 const globalSim = require('../services/globalSim');
 const data = require('../data/owoBattle');
 const {
@@ -47,7 +48,9 @@ function usage(prefix = 'd') {
     'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
     'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
-    `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer; \`-tie\` opsional.`,
+    'Filter hasil: `-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok,',
+    '  lalu hasil itu yang ditampilkan. Bisa digabung `-m`, mis. `' + prefix + ' sim 2 -lose -m 20`.',
+    `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
     '',
     'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
@@ -107,20 +110,36 @@ function parseLevels(arg) {
 }
 
 // Opsi berbentuk flag: `-m 500`, `-s 42`, `-qp 80`, `-qe 50`, `lvl100/60`.
+const VALUE_FLAGS = ['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe', '-total', '-t'];
+// `-win`, `-lose`, `-tie` menyaring hasil: pertarungan diulang sampai hasilnya
+// cocok, lalu hasil itu yang ditampilkan. Peta ini juga dipakai untuk pesan
+// bantuan supaya nama flag dan artinya tidak pernah menyimpang.
+const OUTCOME_FLAGS = {
+  '-win': 'player', '--win': 'player',
+  '-lose': 'enemy', '--lose': 'enemy',
+  '-tie': 'tie', '--tie': 'tie',
+};
+const OUTCOME_LABEL = { player: 'menang', enemy: 'kalah', tie: 'seri' };
+
 function parseFlags(args) {
   const flags = {};
   const rest = [];
+  // Opsi berawalan `-` yang tidak dikenal dikumpulkan terpisah. Tanpa ini
+  // `d sim 2 -lose` menyatukan `2` dan `-lose` jadi nama lawan, sehingga
+  // errornya menyesatkan ("Lawan `2 -lose` tidak dikenal").
+  const unknown = [];
   for (let i = 0; i < args.length; i++) {
-    const arg = String(args[i]).toLowerCase();
-    if (['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe', '-total', '-t'].includes(arg)) {
+    const raw = String(args[i]);
+    const arg = raw.toLowerCase();
+    if (VALUE_FLAGS.includes(arg)) {
       flags[arg] = args[i + 1];
       i++;
       continue;
     }
     // Flag tanpa nilai. Dipisah supaya `-tie` tidak menelan argumen berikutnya
     // (mis. `d sim 2 -tie` jangan sampai menjadikan `2` nilai flag).
-    if (['-tie', '--tie'].includes(arg)) {
-      flags.tie = true;
+    if (OUTCOME_FLAGS[arg]) {
+      flags.outcome = OUTCOME_FLAGS[arg];
       continue;
     }
     // Token berawalan `lvl` selalu dianggap flag level, supaya bentuk yang
@@ -130,9 +149,23 @@ function parseFlags(args) {
       flags.lvl = level ? { player: level[1], enemy: level[2] } : { malformed: arg };
       continue;
     }
+    if (/^--?[a-z]/i.test(arg)) {
+      unknown.push(raw);
+      continue;
+    }
     rest.push(args[i]);
   }
-  return { flags, rest };
+  return { flags, rest, unknown };
+}
+
+// Pesan seragam untuk opsi tak dikenal. Daftar opsinya disebut supaya user
+// tidak menebak-nebak nama flag yang tidak pernah ada (mis. `-win`, `-lose`).
+function unknownFlagsError(unknown, prefix) {
+  return errorEmbed(
+    `Opsi ${unknown.map(u => `\`${u}\``).join(', ')} tidak dikenal.`
+    + `\nOpsi yang tersedia: \`-m <jumlah>\`, \`-s <seed>\`, \`-qp <0-100>\`, \`-qe <0-100>\`, \`-tie\`.`
+    + `\nLihat \`${prefix} sim help\`.`
+  );
 }
 
 // Cooldown simulasi global. Lebih panjang dari `dsim` karena sekali jalan
@@ -157,6 +190,93 @@ const globalResults = new Map();
 // Hasil satu pertarungan disimpan sebentar supaya tombol 🔁 bisa mengulang
 // matchup yang sama tanpa user mengetik ulang perintahnya.
 const duelResults = new Map();
+// Batas percobaan saat `-win`/`-lose`/`-tie` dipakai. Tanpa batas, matchup
+// yang mustahil (mis. `-tie` pada tim yang selalu kalah) akan berputar
+// selamanya. 2000 cukup untuk hasil langka; di atas itu dianggap tidak ada.
+const OUTCOME_SEARCH_LIMIT = 2000;
+
+// Cari satu pertarungan yang hasilnya cocok dengan filter `-win`/`-lose`/`-tie`.
+// RNG di-fork per percobaan supaya hasilnya tetap deterministik untuk seed yang
+// sama, dan `tried` dikembalikan agar pesan gagal bisa menyebut berapa
+// pertarungan sudah diperiksa.
+function findBattleWithOutcome(playerSpecs, enemySpecs, {
+  wanted, seed, playerQuality, enemyQuality,
+}) {
+  const rng = createRng(seed == null ? randomSeed() : seed);
+  for (let tried = 1; tried <= OUTCOME_SEARCH_LIMIT; tried++) {
+    const battle = engine.runBattle(playerSpecs, enemySpecs, {
+      rng: rng.fork(), playerQuality, enemyQuality,
+    });
+    if (battle.winner === wanted) return { battle, tried };
+  }
+  return { battle: null, tried: OUTCOME_SEARCH_LIMIT };
+}
+
+// `-m N` bersama filter: berapa kali percobaan dijalankan per hasil yang
+// diminta. 20x memberi ruang untuk hasil langka (mis. 5%) tanpa membuat
+// perintah yang mustahil berjalan terlalu lama.
+const OUTCOME_ATTEMPT_FACTOR = 20;
+
+// Jalankan pertarungan sampai `runs` hasil yang cocok terkumpul. Statistik
+// yang dikembalikan dihitung HANYA dari pertarungan yang cocok, jadi angka
+// menang/kalah/seri selalu 100% sesuai filter. `runs` dilaporkan sebagai
+// jumlah pertarungan yang benar-benar dijalankan agar footer tidak menipu.
+async function simulateMatching(playerSpecs, enemySpecs, {
+  wanted, runs, seed, playerQuality, enemyQuality,
+}) {
+  const wantedCount = Math.max(1, Math.floor(Number(runs) || 1));
+  const maxAttempts = wantedCount * OUTCOME_ATTEMPT_FACTOR;
+  const startedAt = Date.now();
+  const base = createRng(seed == null ? randomSeed() : seed);
+  const tally = { player: 0, enemy: 0, tie: 0 };
+  const histogram = new Uint32Array(data.limits.maxTurns + 2);
+  let matched = 0;
+  let attempts = 0;
+  let timeouts = 0;
+
+  while (matched < wantedCount && attempts < maxAttempts) {
+    attempts++;
+    const battle = engine.runBattle(playerSpecs, enemySpecs, {
+      rng: base.fork(), playerQuality, enemyQuality,
+    });
+    if (battle.winner !== wanted) continue;
+    matched++;
+    tally[battle.winner] += 1;
+    histogram[Math.min(battle.turns, data.limits.maxTurns + 1)] += 1;
+    if (battle.timeout) timeouts += 1;
+    if (attempts % 500 === 0) await new Promise(r => setImmediate(r));
+  }
+  if (!matched) return null;
+
+  let min = 0;
+  let max = 0;
+  for (let t = 0; t < histogram.length; t++) {
+    if (!histogram[t]) continue;
+    if (!min) min = t;
+    max = t;
+  }
+  const turnHistogram = [];
+  for (let t = 0; t < histogram.length; t++) {
+    if (histogram[t]) turnHistogram.push({ turns: t, count: histogram[t] });
+  }
+  const rate = n => Math.round((n / matched) * 1000) / 10;
+
+  return {
+    runs: matched,
+    attempts,
+    seed: seed == null ? undefined : seed,
+    tally,
+    timeouts,
+    turnHistogram,
+    elapsedMs: Date.now() - startedAt,
+    turns: { min, max },
+    winRate: rate(tally.player),
+    lossRate: rate(tally.enemy),
+    tieRate: rate(tally.tie),
+    filtered: wanted,
+  };
+}
+
 const DUEL_RESULT_TTL_MS = 15 * 60 * 1000;
 
 function rememberDuelResult(userId, token, payload) {
@@ -364,7 +484,8 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
   }
 
-  const { flags, rest } = parseFlags(args);
+  const { flags, rest, unknown } = parseFlags(args);
+  if (unknown.length) return send(message, unknownFlagsError(unknown, prefix));
   if (rest.length) {
     return send(message, errorEmbed(`Argumen \`${rest.join(' ')}\` tidak dikenal di simulasi global. Lihat \`${prefix} sim global help\`.`));
   }
@@ -703,7 +824,8 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     return handleGlobalSim(message, rest, prefix, deps);
   }
 
-  const { flags, rest } = parseFlags(args);
+  const { flags, rest, unknown } = parseFlags(args);
+  if (unknown.length) return send(message, unknownFlagsError(unknown, prefix));
   const levels = parseLevels(flags.lvl);
   if (levels.invalid || flags.lvl?.malformed) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
@@ -788,11 +910,32 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   if (singleBattle) {
     const startedAt = Date.now();
-    const battle = engine.runBattle(playerSpecs, enemySpecs, {
-      seed: seed != null ? Number(seed) : undefined,
-      playerQuality,
-      enemyQuality,
-    });
+    // `-win`/`-lose`/`-tie` mencari pertarungan dengan hasil yang diminta.
+    // Tanpa filter, satu pertarungan biasa sudah cukup.
+    const wanted = flags.outcome || null;
+    let battle = null;
+    let tried = 1;
+    if (wanted) {
+      ({ battle, tried } = findBattleWithOutcome(playerSpecs, enemySpecs, {
+        wanted,
+        seed: seed != null ? Number(seed) : undefined,
+        playerQuality,
+        enemyQuality,
+      }));
+      if (!battle) {
+        store.clearCooldown(userId, SIM_COOLDOWN_ACTION);
+        return send(message, errorEmbed(
+          `Tidak ada hasil **${OUTCOME_LABEL[wanted]}** dalam ${OUTCOME_SEARCH_LIMIT.toLocaleString('id-ID')} pertarungan.`
+          + `\nMatchup ini mungkin memang tidak pernah ${OUTCOME_LABEL[wanted]}; coba tanpa \`-${wanted === 'player' ? 'win' : wanted === 'enemy' ? 'lose' : 'tie'}\` atau ubah timnya.`
+        ));
+      }
+    } else {
+      battle = engine.runBattle(playerSpecs, enemySpecs, {
+        seed: seed != null ? Number(seed) : undefined,
+        playerQuality,
+        enemyQuality,
+      });
+    }
     store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
     await animalDex.ensureAnimalEmojis([
       ...playerSpecs.map(spec => spec.animal),
@@ -813,6 +956,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       elapsedMs: Date.now() - startedAt,
       seed: seed != null ? Number(seed) : null,
       stats,
+      filter: wanted ? { wanted, tried } : null,
     });
     // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
     // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.
@@ -825,13 +969,32 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     return send(message, embed);
   }
 
-  const result = await sim.simulate(playerSpecs, enemySpecs, {
-    runs: runCount,
-    seed: seed != null ? Number(seed) : undefined,
-    playerQuality,
-    enemyQuality,
-    onProgress: publishProgress,
-  });
+  // `-m N` + `-win`/`-lose`/`-tie`: hitung hanya pertarungan yang cocok, sampai
+  // N terkumpul. Percobaan dibatasi supaya hasil yang mustahil tidak berputar
+  // lama; kalau kurang dari N, hasilnya tetap ditampilkan apa adanya.
+  const wanted = flags.outcome || null;
+  let result;
+  if (wanted) {
+    result = await simulateMatching(playerSpecs, enemySpecs, {
+      wanted, runs: runCount, seed: seed != null ? Number(seed) : undefined,
+      playerQuality, enemyQuality,
+    });
+    if (!result) {
+      store.clearCooldown(userId, SIM_COOLDOWN_ACTION);
+      return send(message, errorEmbed(
+        `Tidak ada hasil **${OUTCOME_LABEL[wanted]}** dalam ${(runCount * OUTCOME_ATTEMPT_FACTOR).toLocaleString('id-ID')} pertarungan.`
+        + `\nCoba tanpa \`-${wanted === 'player' ? 'win' : wanted === 'enemy' ? 'lose' : 'tie'}\` atau ubah timnya.`
+      ));
+    }
+  } else {
+    result = await sim.simulate(playerSpecs, enemySpecs, {
+      runs: runCount,
+      seed: seed != null ? Number(seed) : undefined,
+      playerQuality,
+      enemyQuality,
+      onProgress: publishProgress,
+    });
+  }
   store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
 
   // Ringkasan matchup memuat emoji hewan; siapkan dulu seperti `d dex`.

@@ -1,3 +1,5 @@
+`mirror` artinya tim diadu dengan salinan persisnya. Berguna untuk melihat seberapa besar pengaruh RNG: kalau winrate jauh dari 50%, berarti urutan serangan ikut menentukan.
+
 ▸ Lawan dari dex atau stat manual (tanpa perlu bikin tim lawan)
 ```
 d sim snail level=60

@@ -2918,6 +2918,51 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     assert.ok(panel.isRepeatButton(button.custom_id), button.custom_id);
   });
 
+  // Lawan sangat lemah supaya `-win` mudah dan `-lose` harus dicari.
+  const WEAK = 'hp=1,att=1,pr=0,wp=1,mag=1,mr=0';
+  // Lawan sangat kuat: kebalikannya.
+  const STRONG = 'hp=99,att=99,pr=90,wp=99,mag=99,mr=90';
+
+  it('`-win`/`-lose`/`-tie` menyaring hasil, bukan sekadar diterima', async () => {
+    // Cooldown 5 detik antar `d sim`, jadi dibersihkan di antara dua pemanggilan.
+    store.clearCooldown('u', 'sim');
+    const lose = await run([STRONG, '-lose', '-s', '7']);
+    assert.ok(lose.title.includes('vs.'), 'bukan error: ' + JSON.stringify(lose.description));
+    assert.match(lose.footer.text, /filter lose/);
+    assert.match(lose.footer.text, /kamu kalah dalam \d+ turn/);
+
+    store.clearCooldown('u', 'sim');
+    const win = await run([WEAK, '-win', '-s', '7']);
+    assert.match(win.footer.text, /filter win/);
+    assert.match(win.footer.text, /kamu menang dalam \d+ turn/);
+  });
+
+  it('filter yang mustahil dilaporkan, bukan mengembalikan hasil lain', async () => {
+    // Tim sangat kuat tidak akan pernah kalah dari lawan hp=1.
+    const embed = await run([WEAK, '-lose', '-s', '3']);
+    assert.ok(embed.description.includes('Tidak ada hasil'), embed.description);
+    assert.ok(embed.description.includes('kalah'), embed.description);
+  });
+
+  it('filter dihormati saat digabung `-m`', async () => {
+    store.clearCooldown('u', 'sim');
+    const embed = await run([STRONG, '-lose', '-m', '5', '-s', '11']);
+    assert.match(embed.footer.text, /Filter lose/);
+    assert.match(embed.footer.text, /5 cocok dari \d+ percobaan/);
+    // Hanya hasil yang cocok yang dihitung: 5 kalah, tanpa menang/seri.
+    const names = embed.fields.map(f => f.name).join(' | ');
+    assert.ok(names.includes('5** kalah'), names);
+    assert.ok(!/\b\d+\*\* menang/.test(names.replace('0** menang', '')), names);
+    assert.ok(!embed.fields.some(f => f.name.includes('seri')), names);
+  });
+
+  it('opsi tak dikenal ditolak sebagai opsi, bukan dianggap nama lawan', async () => {
+    const embed = await run(['2', '-zzz']);
+    assert.ok(embed.description.includes('tidak dikenal'), embed.description);
+    assert.ok(!embed.description.includes('Lawan `2 -zzz`'), embed.description);
+    assert.ok(embed.description.includes('-zzz'), embed.description);
+  });
+
   it('d sim limit hanya bisa diubah developer', async () => {
     replies = [];
     handleLimitCommand(message, ['300'], 'd', { sendEmbed, isDeveloper: () => false });

@@ -286,6 +286,7 @@ function duelTeamField(label, units) {
 // tidak perlu menjalankan `-m` terpisah hanya untuk tahu rasio akhirnya.
 function duelEmbed(battle, {
   playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null, stats = null,
+  filter = null,
 } = {}) {
   const { units, winner, turns, timeout } = battle;
   const color = winner === 'player' ? COLOR.ok : winner === 'enemy' ? COLOR.error : COLOR.tie;
@@ -294,10 +295,18 @@ function duelEmbed(battle, {
 
   // Footer tidak mendukung markdown: `**tebal**` akan tampil sebagai tanda bintang
   // mentah di Discord, jadi teks footer sengaja tanpa penanda apa pun.
+  // Info filter ditaruh paling depan karena itu yang dicari user saat memakai
+  // `-win`/`-lose`/`-tie`: berapa pertarungan diperiksa sampai hasilnya cocok.
+  const filterNote = filter
+    ? `filter ${filter.wanted === 'player' ? 'win' : filter.wanted === 'enemy' ? 'lose' : 'tie'}`
+      + ` (percobaan ke-${filter.tried}) | `
+    : '';
   const footer = stats
-    ? `${icon} kamu ${verdict.toLowerCase()} dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`
+    ? filterNote
+      + `${icon} kamu ${verdict.toLowerCase()} dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`
       + ` | 🎲 ${stats.tally.player} win, ${stats.tally.enemy} lose, ${stats.tally.tie} tie`
-    : `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`;
+    : filterNote
+      + `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`;
 
   return new EmbedBuilder()
     .setColor(color)
@@ -345,8 +354,12 @@ function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matc
     .setTitle(`${playerLabel} vs. ${enemyLabel}`)
     .addFields(fields)
     .setFooter({
-      text: `Hasil dari ${runs.toLocaleString('id-ID')} simulasi`
-        + ` | ${shortDuration(result.elapsedMs)} ⚡ | seed ${result.seed}`,
+      text: (result.filtered
+        ? `Filter ${result.filtered === 'player' ? 'win' : result.filtered === 'enemy' ? 'lose' : 'tie'}`
+          + ` · ${runs.toLocaleString('id-ID')} cocok dari ${result.attempts.toLocaleString('id-ID')} percobaan`
+          + ` | ${shortDuration(result.elapsedMs)} ⚡`
+        : `Hasil dari ${runs.toLocaleString('id-ID')} simulasi`
+          + ` | ${shortDuration(result.elapsedMs)} ⚡ | seed ${result.seed}`),
     });
 
   // Discord menolak description kosong, jadi hanya dipasang bila ada isinya.

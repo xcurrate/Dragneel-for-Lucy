@@ -121,8 +121,30 @@ Tim yang masih kosong **tidak bisa** dipakai simulasi; bot menolak dengan pesan
   50 pertarungan untuk matchup yang sama:
 
   ```
-  🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie (dalam 50 pertarungan)
+  🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie
   ```
+
+### Menyaring hasil: `-win`, `-lose`, `-tie`
+
+Ketiga flag ini mengulang pertarungan sampai hasilnya cocok, lalu hasil itu yang
+ditampilkan. Berguna untuk melihat seperti apa kondisi saat timmu kalah.
+
+```
+d sim 2 -lose              → satu pertarungan yang kalah
+d sim 2 -win               → satu pertarungan yang menang
+d sim 2 -tie               → satu pertarungan yang seri
+d sim 2 -lose -m 20        → statistik dari 20 pertarungan yang kalah
+```
+
+Footer menyebut berapa percobaan yang dibutuhkan:
+
+```
+filter lose (percobaan ke-37) | 💀 kamu kalah dalam 12 turn | 🎲 0 win, 50 lose, 0 tie
+```
+
+Kalau matchup-nya memang tidak pernah menghasilkan hasil itu, perintahnya
+dilaporkan gagal, bukan menampilkan hasil lain. Batasnya 2.000 percobaan untuk
+satu pertarungan, dan `-m N` dikali 20 percobaan untuk statistik.
 - **Dengan `-m <jumlah>`** → statistik dari banyak pertarungan (menang/kalah/seri,
   distribusi turn). Default-nya 50 kalau `-m` disebut tanpa angka.
 

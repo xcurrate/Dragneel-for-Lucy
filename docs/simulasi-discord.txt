@@ -76,7 +76,8 @@ Tim yang masih kosong tidak bisa dipakai simulasi; bot akan menolak.
 LANGKAH 3 — JALANKAN SIMULASI
 ━━━━━━━━━━━━━━━━━━━━
 `d sim` punya dua bentuk hasil:
-• TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn. Footer-nya juga merangkum rekap 50 pertarungan untuk matchup itu, contoh: "🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie (dalam 50 pertarungan)".
+• TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn. Footer-nya juga merangkum rekap 50 pertarungan untuk matchup itu, contoh: "🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie".
+• FILTER HASIL: `-win`, `-lose`, `-tie` mengulang pertarungan sampai hasilnya cocok, lalu hasil itu yang ditampilkan. Contoh: `d sim 2 -lose`, `d sim 2 -lose -m 20`. Kalau hasil itu mustahil untuk matchup-nya, perintah dilaporkan gagal (bukan menampilkan hasil lain).
 • DENGAN `-m <jumlah>` → statistik banyak pertarungan (menang/kalah/seri + distribusi turn). Default 50 kalau `-m` disebut tanpa angka.
 
 ▸ Lawan tim milikmu sendiri
