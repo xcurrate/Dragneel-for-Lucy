@@ -31,6 +31,31 @@ Pasif 5 sendirian **menaikkan** winrate 76% -> 87%.
 Gabungan 5+16 justru menjatuhkan ke 66% — kombinasi inilah yang bermasalah,
 bukan crune-nya sendiri.
 
+## Komposisi yang dimaksud
+
+Rantai yang dirancang: tank memasang taunt agar semua penyerang musuh
+menyerangnya, Frost Armor (pasif 24) menempelkan Frostbite ke penyerang,
+lalu Conduit Claw memindahkan satu debuff dari musuh dan memberi 120-170% MAG.
+
+Diukur pada 100 pertarungan: **95% serangan musuh mendarat di tank**
+(1.095 dari 1.150). Frostbite menumpuk di penyerang sampai 19-82 stack.
+Rantai ini memang berjalan.
+
+Namun Conduit Claw **tidak memindahkan debuff ke tim kita**. Kode memilih
+penerima dari `target.team` — yaitu tim musuh:
+
+```js
+const receiver = target.team
+  .filter(u => e.isAlive(u) && u !== target)
+  .sort((a, b) => b.buffs.length - a.buffs.length)[0];
+```
+
+Teks sumber senjata sendiri berbunyi "Move a **debuff** from an enemy to the
+ally with the most **buffs**" — ally milik pemakai senjata, jadi seharusnya
+tim kita. Terukur pada 200 pertarungan: **482 debuff dipindah ke tim lawan,
+0 ke tim kita**. Ini kemungkinan bug, belum saya ubah karena perlu kepastian
+arti "ally".
+
 ## Mekanisme: heal crune menjadi HP lawan
 
 gspider memakai Leeching Scythe. Leech (buff 11) memotong heal yang masuk ke
@@ -89,6 +114,31 @@ Rincian percobaan Celebration (bukan penyebab, hanya gejala):
 Kegagalan karena WP kurang nol di semua konfigurasi, jadi Energize tidak
 membuat Celebration kehabisan WP. Yang naik adalah kegagalan karena HP tim
 sudah penuh, seiring heal yang makin besar.
+
+## Di mana komposisi ini pecah
+
+Uji isolasi pada konfigurasi asli (pasif 5+16), 200 seed:
+
+| Perlakuan | Menang | Kalah | Seri |
+|---|---|---|---|
+| apa adanya | 132/200 | 26 | 42 |
+| Leech dimatikan | **200/200** | 0 | 0 |
+| heal crune dimatikan | **200/200** | 0 | 0 |
+
+Kedua perlakuan memberi hasil identik, karena keduanya memutus rantai yang
+sama: heal crune → dicuri Leech gspider → gspider tidak pernah mati.
+
+Polanya konsisten di semua kekalahan: gspider selesai dengan **HP 500/500
+penuh** dan Frostbite 62-82 stack. Rencananya "hancurkan penyerang musuh
+dulu" berhasil — feagle dan gfish mati lebih dulu — tetapi gspider tidak
+pernah bisa dihabisi. Ia menerima heal curian lebih besar daripada damage
+yang masuk (1.238 vs 1.568, net -330), jadi HP-nya selalu pulih penuh.
+
+Karena itu Conduit Claw kehilangan target di fase akhir: setelah hanya
+gspider tersisa, `receiver` tidak ada (tidak ada sekutu lain di tim musuh),
+sehingga ability gagal dan damage 120-170% MAG tidak keluar sama sekali.
+Damage yang tersisa hanya serangan dasar 88-148 per turn, jauh di bawah heal
+yang dicuri gspider per turn.
 
 ## Bug Leech yang ditemukan dan diperbaiki
 
