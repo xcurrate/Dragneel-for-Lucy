@@ -1573,14 +1573,14 @@
       "qualityList": [
         [
           20,
-          45
+          50
         ],
         [
           15,
-          35
+          40
         ]
       ],
-      "note": "Heal 20-45% PR dan isi WP 15-35% MR tiap akhir turn."
+      "note": "Heal 20-50% PR dan isi WP 15-40% MR tiap akhir turn."
     },
     {
       "id": 11,

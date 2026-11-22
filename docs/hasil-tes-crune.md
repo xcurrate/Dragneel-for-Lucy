@@ -188,8 +188,19 @@ diubah `'independent'` -> `'refresh'`.
 Ketiga perbaikan ini mengubah besaran curian, tetapi tidak membalik arah
 kesimpulan: crune tetap kalah dari tanpa senjata.
 
-## Catatan data yang belum diselesaikan
+## Koreksi data Celebration
 
-`qualityList` Celebration di repo: `[[20,45],[15,35]]`.
-Deskripsi pengguna: heal **20-50%** PR, replenish **15-40%** MR.
-Nilai repo lebih rendah dari deskripsi. Belum diubah, perlu konfirmasi.
+`qualityList` buff 10 (Celebration) semula `[[20,45],[15,35]]`, sedangkan
+deskripsi sumber menyebut heal **20-50%** PR dan replenish **15-40%** MR.
+Sudah dikoreksi menjadi `[[20,50],[15,40]]`.
+
+Dampak terukur pada 200 seed, konfigurasi crune pasif 5:
+
+| Nilai | Heal tim per battle |
+|---|---|
+| lama `[[20,45],[15,35]]` | 693 |
+| baru `[[20,50],[15,40]]` | 774 |
+
+Winrate tidak berubah (200/200) karena setelah perbaikan Conduit Claw
+pertarungan selesai rata-rata 3,3 turn, sehingga heal tidak lagi menentukan
+hasil.
