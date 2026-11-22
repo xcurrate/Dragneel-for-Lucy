@@ -362,6 +362,22 @@ describe('buff', () => {
     assert.strictEqual(createBuff(2, { quality: q100.quality, from: null, duration: 3, rng }).stats[0], 65);
   });
 
+  // OwO: PoisonDagger.js memakai WeaponInterface.PHYSICAL untuk hit, sedangkan
+  // Poison.js memakai WeaponInterface.TRUE untuk tick racunnya. Keduanya harus
+  // tetap berbeda: hit ditahan PR, tick menembus PR maupun MR.
+  it('Poison Dagger: hit fisik, tick Poison TRUE (tembus resistensi)', () => {
+    const rng = rngModule.createRng(4);
+    const caster = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const victim = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const seen = [];
+    ctx.log = { damage: (a, t, amount, type) => seen.push(type) };
+
+    const poison = createBuff(2, { quality: 100, from: caster, duration: 3, rng });
+    poison.postTurn(ctx, victim);
+    assert.deepStrictEqual(seen, ['t'], 'tick Poison harus TRUE, bukan fisik');
+  });
+
   it('Poison memberi damage tiap akhir turn', () => {
     const rng = rngModule.createRng(9);
     const caster = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
