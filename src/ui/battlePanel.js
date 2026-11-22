@@ -292,6 +292,7 @@ function duelTeamField(label, units) {
 // tidak perlu menjalankan `-m` terpisah hanya untuk tahu rasio akhirnya.
 function duelEmbed(battle, {
   playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null, stats = null,
+  logUrl = null,
 } = {}) {
   const { units, winner, turns, timeout } = battle;
   const color = winner === 'player' ? COLOR.ok : winner === 'enemy' ? COLOR.error : COLOR.tie;
@@ -305,7 +306,7 @@ function duelEmbed(battle, {
       + ` | 🎲 ${stats.tally.player} win, ${stats.tally.enemy} lose, ${stats.tally.tie} tie`
     : `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`;
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${playerLabel} vs. ${enemyLabel}`)
     .setDescription(`${icon} **${verdict}** dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`)
@@ -314,6 +315,10 @@ function duelEmbed(battle, {
       duelTeamField(enemyLabel, units.enemy),
     ])
     .setFooter({ text: footer });
+
+  // Tautan log hanya ada bila `-log` dipakai DAN URL publik dashboard diisi.
+  if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
+  return embed;
 }
 
 function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null } = {}) {

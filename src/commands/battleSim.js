@@ -13,6 +13,7 @@ const sim = require('../services/battleSim');
 const engine = require('../services/battleEngine');
 const { createRng, randomSeed } = require('../services/battleRng');
 const globalSim = require('../services/globalSim');
+const battleLogStore = require('../utils/battleLogStorage');
 const data = require('../data/owoBattle');
 const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
@@ -20,6 +21,15 @@ const {
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
+
+// Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
+// dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
+// akan menghasilkan link mati.
+function battleLogUrl(id) {
+  const base = (process.env.BATTLE_LOG_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (!base) return null;
+  return `${base}/battle-log#${id}`;
+}
 
 // Jeda minimum antar-edit pesan progres; Discord membatasi edit pesan.
 const PROGRESS_EDIT_MS = 1000;
@@ -48,6 +58,7 @@ function usage(prefix = 'd') {
     'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
     'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+    '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (satu pertarungan).',
     'Filter hasil: `-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok,',
     '  lalu hasil itu yang ditampilkan. Bisa digabung `-m`, mis. `' + prefix + ' sim 2 -lose -m 20`.',
     `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
@@ -142,6 +153,8 @@ function parseFlags(args) {
       flags.outcome = OUTCOME_FLAGS[arg];
       continue;
     }
+    // `-log`: simpan jalannya pertarungan dan kirim tautan berbaginya.
+    if (arg === '-log' || arg === '--log') { flags.log = true; continue; }
     // Token berawalan `lvl` selalu dianggap flag level, supaya bentuk yang
     // salah tidak diam-diam jadi nama lawan.
     if (LEVEL_PREFIX.test(arg)) {
@@ -200,14 +213,25 @@ const OUTCOME_SEARCH_LIMIT = DEFAULT_RUNS;
 // sama, dan `tried` dikembalikan agar pesan gagal bisa menyebut berapa
 // pertarungan sudah diperiksa.
 function findBattleWithOutcome(playerSpecs, enemySpecs, {
-  wanted, seed, playerQuality, enemyQuality,
+  wanted, seed, playerQuality, enemyQuality, log = false,
 }) {
   const rng = createRng(seed == null ? randomSeed() : seed);
   for (let tried = 1; tried <= OUTCOME_SEARCH_LIMIT; tried++) {
     const battle = engine.runBattle(playerSpecs, enemySpecs, {
       rng: rng.fork(), playerQuality, enemyQuality,
     });
-    if (battle.winner === wanted) return { battle, tried };
+    if (battle.winner !== wanted) continue;
+    // Percobaan yang tidak ditampilkan tidak perlu dicatat. Yang cocok dijalankan
+    // ulang dengan RNG yang sama supaya hasilnya identik sekaligus berlog.
+    if (log) {
+      return {
+        battle: engine.runBattle(playerSpecs, enemySpecs, {
+          rng: rng.fork(), playerQuality, enemyQuality, log: true,
+        }),
+        tried,
+      };
+    }
+    return { battle, tried };
   }
   return { battle: null, tried: OUTCOME_SEARCH_LIMIT };
 }
@@ -916,6 +940,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
         seed: seed != null ? Number(seed) : undefined,
         playerQuality,
         enemyQuality,
+        log: Boolean(flags.log),
       }));
       if (!battle) {
         store.clearCooldown(userId, SIM_COOLDOWN_ACTION);
@@ -931,6 +956,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
         seed: seed != null ? Number(seed) : undefined,
         playerQuality,
         enemyQuality,
+        log: Boolean(flags.log),
       });
     }
     store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
@@ -948,11 +974,21 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       playerQuality,
       enemyQuality,
     });
+    // `-log` menyimpan jalannya pertarungan lalu menautkannya di embed.
+    // Gagal menyimpan tidak boleh membatalkan hasil battle yang sudah dihitung:
+    // embed tetap dikirim, hanya tautannya yang tidak muncul.
+    let logUrl = null;
+    if (flags.log && battle.log) {
+      const saved = battleLogStore.save(battle.log);
+      if (saved.id) logUrl = battleLogUrl(saved.id);
+      else console.error('[BattleLog]', saved.error);
+    }
     const embed = duelEmbed(battle, {
       ...labels,
       elapsedMs: Date.now() - startedAt,
       seed: seed != null ? Number(seed) : null,
       stats,
+      logUrl,
     });
     // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
     // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.

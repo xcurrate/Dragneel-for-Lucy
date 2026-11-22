@@ -12,6 +12,7 @@ const data = require('../data/owoBattle');
 const { createRng } = require('./battleRng');
 const { buildWeapon, weaponAbility } = require('./battleWeapon');
 const { stackOf } = require('./battleBuffs');
+const { createRecorder } = require('./battleLog');
 
 const MAX_TURNS = data.limits.maxTurns;
 const MAX_SLOTS = data.limits.maxSlots;
@@ -134,6 +135,7 @@ function inflictDamage(ctx, attacker, target, rawDamage, type, { bypassRes = fal
   for (const buff of attacker.buffs) buff.postAttack?.(ctx, attacker, target, total, type);
   if (attacker.weapon) for (const p of attacker.weapon.passives) p.postAttack?.(ctx, attacker, target, total, type);
 
+  ctx.log?.damage(attacker, target, total, type);
   return Math.round(total);
 }
 
@@ -175,6 +177,7 @@ function heal(ctx, target, amount, from, { overheal = false, revive = false } = 
     ctx.healBudget = prevHealBudget;
   }
 
+  ctx.log?.heal(target, total, from);
   return Math.round(total);
 }
 
@@ -208,6 +211,7 @@ function replenish(ctx, target, amount, from, { overreplenish = false } = {}) {
     ctx.replenishBudget = prevReplenishBudget;
   }
 
+  ctx.log?.wp(target, total, from);
   return Math.round(total);
 }
 
@@ -269,7 +273,7 @@ function buildUnit(spec, rng, quality) {
 function bindBuff(ctx, target, buff) {
   if (!isAlive(target)) return;
   const stinky = target.buffs.find(b => b.id === 12);
-  if (stinky) { stinky.preBind?.(ctx, target, buff); return; }
+  if (stinky) { stinky.preBind?.(ctx, target, buff); ctx.log?.buff(target, buff); return; }
 
   // Sacred Ward menolak debuff: satu stack habis, lalu replenish MAG pemasang.
   const ward = buff.debuff && target.buffs.find(b => b.id === 13);
@@ -283,7 +287,7 @@ function bindBuff(ctx, target, buff) {
   const rule = stackOf(buff);
   const same = b => b.id === buff.id && (!rule.sameFrom || b.from === buff.from);
 
-  if (rule.kind === 'independent') { target.buffs.push(buff); return; }
+  if (rule.kind === 'independent') { target.buffs.push(buff); ctx.log?.buff(target, buff); return; }
 
   if (rule.kind === 'replace') {
     // Flame: instance lama meledak lalu dibuang. OwO menghitung ledakan dari
@@ -293,6 +297,7 @@ function bindBuff(ctx, target, buff) {
       target.buffs = target.buffs.filter(b => b !== old);
     }
     target.buffs.push(buff);
+    ctx.log?.buff(target, buff);
     return;
   }
 
@@ -304,20 +309,24 @@ function bindBuff(ctx, target, buff) {
       existing.duration = buff.duration;
       existing.stats = buff.stats;
       existing.from = buff.from;
+      ctx.log?.buff(target, buff);
       return;
     }
     target.buffs.push(buff);
+    ctx.log?.buff(target, buff);
     return;
   }
 
   const existing = target.buffs.find(same);
-  if (existing) { existing.duration += buff.duration; return; }
+  if (existing) { existing.duration += buff.duration; ctx.log?.buff(target, buff); return; }
   target.buffs.push(buff);
+  ctx.log?.buff(target, buff);
 }
 
 function runTurn(ctx, player, enemy) {
   // Nomor giliran dipakai senjata berjadwal (Scepter of Celebrations: tiap 4 turn).
   ctx.turn = (ctx.turn || 0) + 1;
+  ctx.log?.startTurn(ctx.turn);
   for (const [team, foe] of [[player, enemy], [enemy, player]]) {
     for (const unit of team) {
       if (!isAlive(unit)) continue;
@@ -351,7 +360,7 @@ function runTurn(ctx, player, enemy) {
     if (!actor || !isAlive(actor)) continue;
     // OwO Shield.attackWeapon: setelah Taunt baru dipasang di preTurn, unit
     // melewati serangan pada turn itu.
-    if (actor.skippedAttack) continue;
+    if (actor.skippedAttack) { ctx.log?.act(actor, 'skip'); continue; }
     // OwO memanggil canAttack semua buff (tidak berhenti di yang pertama),
     // karena buff bisa mengubah durasinya sendiri di sini. Freeze hanya boleh
     // menghabiskan SATU stack per giliran ("remove a stack after triggering"),
@@ -369,7 +378,7 @@ function runTurn(ctx, player, enemy) {
       }
       if (buff.canAttack?.(ctx, actor, allies, foes) === false) blocked = true;
     }
-    if (blocked) continue;
+    if (blocked) { ctx.log?.act(actor, 'blocked'); continue; }
     act(ctx, actor, allies, foes);
   }
 
@@ -407,7 +416,10 @@ function act(ctx, actor, allies, foes) {
   // serangan biasa selamanya.
   const freeNow = weapon?.ability?.kind === 'heavy_arrow' && !weapon.arrowLoaded;
   if (hasAbility && (freeNow || actor.stats.wp[0] >= (weapon.manaCost || 0))) {
+    ctx.log?.act(actor, 'ability', weapon.ability.kind);
     if (weaponAbility(ctx, weapon, actor, allies, foes)) return;
+    // Ability menolak jalan (mis. tidak ada sasaran sah); jatuh ke serangan biasa.
+    ctx.log?.act(actor, 'ability_fail', weapon.ability.kind);
   }
   basicAttack(ctx, actor, allies, foes);
 }
@@ -415,6 +427,7 @@ function act(ctx, actor, allies, foes) {
 function basicAttack(ctx, actor, allies, foes) {
   const target = chooseTarget(actor, allies, foes, ctx.rng);
   if (!target) return;
+  ctx.log?.act(actor, 'attack');
   // Sebagian senjata mengganti serangan dasarnya, bukan menambah ability aktif
   // (OwO: override attackPhysical). Bentuknya `basicAttack` di data.
   const weapon = actor.weapon;
@@ -446,7 +459,19 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
     tags: new Set(),
     damageDealt: 0,
     playerFirst: options.playerFirst ?? true,
+    // Pencatatan hanya aktif bila diminta; simulasi massal tidak membayarnya.
+    log: null,
   };
+
+  if (options.log) {
+    ctx.log = createRecorder({
+      seed: options.seed ?? null,
+      playerSpecs,
+      enemySpecs,
+    });
+    for (const unit of player) ctx.log.register(unit, 'player');
+    for (const unit of enemy) ctx.log.register(unit, 'enemy');
+  }
 
   let turns = 0;
   let winner = 'tie';
@@ -454,6 +479,15 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
   while (turns < MAX_TURNS) {
     turns++;
     runTurn(ctx, player, enemy);
+    // Kematian dicatat setelah satu turn penuh, saat giliran sudah berakhir.
+    if (ctx.log) {
+      for (const unit of [...player, ...enemy]) {
+        if (unit.stats.hp[0] <= 0 && !unit.loggedDeath) {
+          unit.loggedDeath = true;
+          ctx.log.death(unit);
+        }
+      }
+    }
     const playerDead = isTeamDead(player);
     const enemyDead = isTeamDead(enemy);
     if (playerDead || enemyDead) {
@@ -463,7 +497,9 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
     if (turns >= MAX_TURNS) { timeout = true; winner = 'tie'; }
   }
 
-  return { winner, turns, timeout, units: { player, enemy } };
+  const battle = { winner, turns, timeout, units: { player, enemy } };
+  if (ctx.log) battle.log = ctx.log.finish(battle);
+  return battle;
 }
 
 module.exports = {

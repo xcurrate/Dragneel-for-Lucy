@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10131b">
+  <meta name="robots" content="noindex">
+  <title>Battle Log</title>
+  <link rel="stylesheet" href="/assets/battle-log.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="head">
+      <div class="eyebrow">BATTLE LOG</div>
+      <h1 id="title">Memuat…</h1>
+      <p id="subtitle" class="muted"></p>
+    </header>
+
+    <section id="error" class="card error" hidden>
+      <strong>Log tidak ditemukan</strong>
+      <p id="error-text" class="muted"></p>
+    </section>
+
+    <div id="content" hidden>
+      <section class="card">
+        <div class="teams">
+          <div class="team" id="team-player"></div>
+          <div class="vs">VS</div>
+          <div class="team" id="team-enemy"></div>
+        </div>
+        <div class="meta" id="meta"></div>
+      </section>
+
+      <section class="card">
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="filter-all" checked> Tampilkan semua kejadian</label>
+          <span class="muted" id="count"></span>
+        </div>
+      </section>
+
+      <section id="turns" class="turns"></section>
+    </div>
+  </main>
+  <script src="/assets/battle-log.js"></script>
+</body>
+</html>

@@ -8,6 +8,7 @@ const bossRewardStore = require('../utils/bossRewardStorage');
 const noteStorage = require('../utils/noteStorage');
 const family100Scores = require('../utils/family100Storage');
 const family100 = require('../services/family100');
+const battleLogStore = require('../utils/battleLogStorage');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
@@ -130,6 +131,16 @@ function startDashboard(client, tracker) {
   }
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+    // Tautan log battle dibagikan ke siapa pun yang menerima link, jadi endpoint
+    // bacanya sengaja publik: ID 128-bit berfungsi sebagai rahasia tautan.
+    // Endpoint ini hanya bisa membaca, tidak pernah menulis atau menghapus.
+    if (req.method === 'GET' && url.pathname.startsWith('/api/battle-log/')) {
+      const id = url.pathname.slice('/api/battle-log/'.length);
+      const found = battleLogStore.get(id);
+      if (!found) return json(res, 404, { error: 'Log tidak ditemukan atau sudah kedaluwarsa.' });
+      return json(res, 200, found);
+    }
+
     // Static dashboard files are public; every API endpoint requires the developer token.
     if (url.pathname.startsWith('/api/')) {
       const supplied = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -247,6 +258,17 @@ function startDashboard(client, tracker) {
         else if (!saved.enabled) tracker.stopGuild(guild.id);
         console.log('[Dashboard] Pengaturan diperbarui untuk guild', guild.id);
         return json(res, 200, { ok: true, settings: publicSettings(saved) });
+      }
+      if (req.method === 'GET' && url.pathname === '/battle-log') {
+        const file = path.join(PUBLIC_DIR, 'battle-log.html');
+        if (!fs.existsSync(file)) return json(res, 404, { error: 'Not found' });
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': 'no-cache',
+          'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'"
+        });
+        return res.end(fs.readFileSync(file));
       }
       if (req.method === 'GET' && (url.pathname === '/' || url.pathname.startsWith('/assets/'))) {
         const relative = url.pathname === '/' ? 'index.html' : url.pathname.slice('/assets/'.length);
