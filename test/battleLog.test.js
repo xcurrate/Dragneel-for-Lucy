@@ -246,6 +246,22 @@ describe('battle log page', () => {
     assert.match(js, /cdn\.discordapp\.com|image/, 'player harus memakai gambar hewan');
   });
 
+  it('renders a v1 log (tanpa actions) tanpa memutar apa pun', async () => {
+    const store = require(path.join(ROOT, 'src/utils/battleLogStorage'));
+    const log = { ...run(true).log, version: 1 };
+    delete log.actions;
+    delete log.droppedActions;
+    const saved = store.save(log);
+
+    const res = await fetch(baseUrl + '/api/battle-log/' + saved.id);
+    assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    // Halaman mendeteksi absennya `actions` dan beralih ke mode teks; yang
+    // penting API tetap mengirim log lama apa adanya.
+    assert.strictEqual(body.log.actions, undefined);
+    assert.ok(body.log.events.length > 0);
+  });
+
   it('keeps the rest of the API behind the token', async () => {
     const res = await fetch(baseUrl + '/api/settings?guildId=g');
     assert.strictEqual(res.status, 401);
