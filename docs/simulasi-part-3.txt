@@ -1,3 +1,12 @@
+▸ Atur jumlah pertarungan
+```
+d sim -m 100
+d sim 1 vs 2 -m 200
+```
+Makin banyak, makin stabil angka winrate-nya. Batasnya 200 per perintah untuk user biasa.
+
+Tanpa `-m`, tombol 🔁 di bawah hasil tetap mengulang matchup yang sama sebanyak 50 pertarungan sekaligus — lihat satu pertarungan dulu, lalu cek statistiknya tanpa mengetik ulang.
+
 ▸ Atur level dan kualitas senjata
 ```
 d sim 1 vs 2 lvl100          → kedua sisi level 100
@@ -40,13 +49,4 @@ LANGKAH 5 — MEMBACA HASIL
 💀 13 kalah (26%)       ← berapa kali kalah
 ⚖️ 3 seri (6%)          ← hanya muncul kalau ada yang seri
 ```
-
-Di atasnya ada komposisi kedua sisi. Arti ikonnya:
-• 🐾 hewan
-• 🔴 🟡 🟠 🟣 🔵 🟢 ⚪ peringkat kualitas senjata, dari tertinggi (fabled) ke terendah (common)
-• ⚔️ senjata
-• ✨ pasif
-• `100%` kualitas senjata
-
-Di footer ada jumlah simulasi dan seed. Seed itulah yang bisa dimasukkan lewat `-s` untuk mengulang hasil yang sama.
 

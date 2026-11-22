@@ -2897,12 +2897,17 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     assert.strictEqual(tooBig.color, 0xED4245);
   });
 
-  it('`d sim` tanpa `-m` menjalankan 50 pertarungan dan memasang tombol 🔁', async () => {
+  it('`d sim` tanpa `-m` menampilkan satu pertarungan dan memasang tombol 🔁', async () => {
     lastPayload = null;
     replies = [];
     await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
-    assert.ok(replies[0].footer.text.includes('50 simulasi'), replies[0].footer.text);
+    // Hasil satu pertarungan: sisa HP/WP tiap unit, bukan statistik agregat.
+    assert.ok(replies[0].footer.text.includes('1 pertarungan'), replies[0].footer.text);
+    assert.ok(
+      replies[0].fields.some(f => f.value.includes('/')),
+      'memuat sisa HP/WP per unit',
+    );
     const button = lastPayload.components[0].toJSON().components[0];
     assert.strictEqual(button.label, '50', 'label jumlah pertarungan');
     assert.ok(button.emoji.name === '🔁', 'emoji ulang');
@@ -2940,7 +2945,8 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
   it('tombol 🔁 menjalankan 50 pertarungan secara ephemeral', async () => {
     lastPayload = null;
     replies = [];
-    await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
+    // `-m` supaya `d sim` sendiri tidak memakai jatah cooldown tombol 🔁.
+    await handleSimCommand(message, ['-m', '10'], 'd', { sendEmbed, sendPayload });
     const customId = lastPayload.components[0].toJSON().components[0].custom_id;
 
     let replied = null;

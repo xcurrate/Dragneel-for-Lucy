@@ -488,10 +488,16 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   hitungannya dari akhir). Jangan pindahkan gerbang ke awal handler: perintah salah ketik akan
   dibalas pesan cooldown, bukan pesan validasinya. `d sim help` sengaja bebas cooldown.
   Tes memakai `store.setCooldown`/`clearCooldown` agar tidak menunggu 5 detik nyata.
-- **`d sim` SELALU simulasi massal.** Tanpa `-m` berarti `DEFAULT_RUNS = 50`, bukan satu
-  pertarungan; `-m` tanpa angka juga 50, `-m 5` berarti 5. Tidak ada mode duel terpisah —
-  pernah ada dan sudah dihapus karena user tidak memintanya. Jangan menambahkan cabang
-  "satu pertarungan" lagi.
+- **`d sim` punya dua bentuk hasil, dan keduanya wajib dipertahankan.**
+  - Tanpa `-m` → SATU pertarungan lewat `engine.runBattle`, ditampilkan `duelEmbed`:
+    kondisi akhir tiap unit (sisa HP/WP, senjata) plus pemenang dan jumlah turn.
+  - Dengan `-m N` → statistik agregat `N` pertarungan lewat `sim.simulate` + `simEmbed`.
+    `-m` tanpa angka berarti `DEFAULT_RUNS = 50`; `-m 5` berarti 5.
+  Pembedanya flag `singleBattle = !['-m','-n','-runs'].some(k => k in flags)` — dicek dari
+  KEBERADAAN flag, bukan nilainya. Tombol 🔁 menempel pada kedua bentuk dan selalu mengulang
+  50 pertarungan agregat. `runBattle` karena itu harus tetap mengembalikan `units`;
+  `duelEmbed`/`duelUnitLines`/`duelTeamField` jangan dihapus lagi — sempat dihapus dan
+  user menolaknya.
 - **`d sim <tim> vs <lawan>` memilih kedua sisi.** `splitVs(rest)` memecah argumen pada token
   `vs`; tanpa `vs`, sisi pemain adalah tim aktif dan seluruh argumen menjadi lawan. Karena itu
   `resolveEnemy` TIDAK boleh lagi memecah ` vs ` sendiri (dulu begitu, dan hasilnya sisi pemain

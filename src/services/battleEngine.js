@@ -397,8 +397,10 @@ function basicAttack(ctx, actor, allies, foes) {
 
 function isTeamDead(team) { return team.every(u => !isAlive(u)); }
 
-// Satu pertarungan. Mengembalikan { winner, turns, timeout }.
+// Satu pertarungan. Mengembalikan { winner, turns, timeout, units }.
 // winner: 'player' | 'enemy' | 'tie'
+// `units` berisi kondisi akhir tiap unit (HP/WP sisa) dan hanya dipakai
+// tampilan; simulasi massal tidak membacanya supaya tidak ada alokasi tambahan.
 function runBattle(playerSpecs, enemySpecs, options = {}) {
   const rng = options.rng || createRng(options.seed ?? 1);
   const player = playerSpecs.map(s => buildUnit(s, rng, options.playerQuality));
@@ -427,7 +429,7 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
     if (turns >= MAX_TURNS) { timeout = true; winner = 'tie'; }
   }
 
-  return { winner, turns, timeout };
+  return { winner, turns, timeout, units: { player, enemy } };
 }
 
 module.exports = {

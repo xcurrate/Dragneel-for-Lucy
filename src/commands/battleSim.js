@@ -10,10 +10,11 @@ const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
+const engine = require('../services/battleEngine');
 const globalSim = require('../services/globalSim');
 const data = require('../data/owoBattle');
 const {
-  simEmbed, simProgressEmbed, renderMatchup, usageEmbed, errorEmbed, warnEmbed,
+  simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
 } = require('../ui/battlePanel');
@@ -41,7 +42,8 @@ function usage(prefix = 'd') {
     `\`${prefix} sim A vs B\` — dua tim milikmu diadu langsung`,
     `\`${prefix} sim global\` — tim aktif vs **semua** tim tersimpan (lihat \`${prefix} sim global help\`)`,
     '',
-    `Setiap \`${prefix} sim\` menjalankan **${DEFAULT_RUNS}** pertarungan lalu menampilkan statistiknya.`,
+    'Tanpa `-m` hasilnya **satu** pertarungan (sisa HP/WP tiap hewan).',
+    `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
     'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
     'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
@@ -715,8 +717,12 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (!team.slots.length) {
     return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
   }
-  // `d sim` selalu menjalankan N pertarungan lalu menampilkan statistiknya.
-  // Tanpa `-m` berarti `DEFAULT_RUNS` (50); `-m` tanpa angka juga 50.
+  // Tanpa `-m` hasilnya satu pertarungan (sisa HP/WP tiap hewan) sekaligus
+  // tombol 🔁 untuk mengulanginya sebanyak `DEFAULT_RUNS`. Dengan `-m N`
+  // hasilnya statistik dari N pertarungan.
+  // Dicek dari keberadaan flag, bukan nilainya: `-m` tanpa angka tetap berarti
+  // simulasi massal 50 pertarungan, bukan satu pertarungan.
+  const singleBattle = !['-m', '-n', '-runs'].some(key => key in flags);
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? DEFAULT_RUNS;
   const runCount = Number(runs);
   if (!Number.isSafeInteger(runCount) || runCount < 1) {
@@ -772,6 +778,34 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // Ditandai dua kali: sebelum jalan supaya simulasi yang panjang tidak bisa
   // ditumpuk, dan sesudah selesai supaya cooldown dihitung dari akhir simulasi.
   store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+
+  if (singleBattle) {
+    const startedAt = Date.now();
+    const battle = engine.runBattle(playerSpecs, enemySpecs, {
+      seed: seed != null ? Number(seed) : undefined,
+      playerQuality,
+      enemyQuality,
+    });
+    store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+    await animalDex.ensureAnimalEmojis([
+      ...playerSpecs.map(spec => spec.animal),
+      ...enemySpecs.map(spec => spec.animal),
+    ]);
+    const embed = duelEmbed(battle, {
+      ...labels,
+      elapsedMs: Date.now() - startedAt,
+      seed: seed != null ? Number(seed) : null,
+    });
+    // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
+    // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.
+    const token = resultToken(seed != null ? Number(seed) : 1);
+    rememberDuelResult(userId, token, {
+      playerSpecs, enemySpecs, playerQuality, enemyQuality, labels,
+    });
+    const payload = { embeds: [embed], components: [repeatButton(userId, token, DEFAULT_RUNS)] };
+    if (deps.sendPayload) return deps.sendPayload(message, payload);
+    return send(message, embed);
+  }
 
   const result = await sim.simulate(playerSpecs, enemySpecs, {
     runs: runCount,

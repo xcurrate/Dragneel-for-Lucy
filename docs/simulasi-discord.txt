@@ -75,7 +75,9 @@ Tim yang masih kosong tidak bisa dipakai simulasi; bot akan menolak.
 ━━━━━━━━━━━━━━━━━━━━
 LANGKAH 3 — JALANKAN SIMULASI
 ━━━━━━━━━━━━━━━━━━━━
-Setiap `d sim` menjalankan 50 pertarungan lalu menampilkan statistiknya. Jumlahnya bisa diubah dengan `-m`.
+`d sim` punya dua bentuk hasil:
+• TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn.
+• DENGAN `-m <jumlah>` → statistik banyak pertarungan (menang/kalah/seri + distribusi turn). Default 50 kalau `-m` disebut tanpa angka.
 
 ▸ Lawan tim milikmu sendiri
 ```
@@ -100,6 +102,8 @@ d sim -m 100
 d sim 1 vs 2 -m 200
 ```
 Makin banyak, makin stabil angka winrate-nya. Batasnya 200 per perintah untuk user biasa.
+
+Tanpa `-m`, tombol 🔁 di bawah hasil tetap mengulang matchup yang sama sebanyak 50 pertarungan sekaligus — lihat satu pertarungan dulu, lalu cek statistiknya tanpa mengetik ulang.
 
 ▸ Atur level dan kualitas senjata
 ```
