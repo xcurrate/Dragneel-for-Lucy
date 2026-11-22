@@ -1,90 +1,122 @@
 # Hasil tes: crune vs blitz
 
-Tanggal: 2026-11-22
-Data: `archive-2026-11-22T052803Z.tar.gz` (dipulihkan ke `data/`)
-Perintah: `d sim`, 50 pertarungan per tes
+Metode: `battleEngine.runBattle`, **200 seed per konfigurasi** (seed 1-200).
+Semua angka di bawah adalah keluaran perintah, bukan perkiraan.
 
-## Tim
+## Tim yang diuji
 
 | Slot | [7] dengan crune | [8] tanpa crune |
 |---|---|---|
-| 1 | ulquiorracifer, L50, weapon 5, pasif 24 | sama |
-| 2 | stat manual 3.1.1.1.13.2, L50, weapon 124, pasif 2 | sama |
-| 3 | ellie, L50, **weapon 18 (crune), pasif 5,16** | ellie, L50, **tanpa senjata** |
+| 1 | ulquiorracifer L50, weapon 5, pasif 24 | sama |
+| 2 | 3.1.1.1.13.2 L50, weapon 124 (Conduit Claw), pasif 2 | sama |
+| 3 | ellie L50, **weapon 18 (crune), pasif 5 + 16** | ellie L50, **tanpa senjata** |
 
-Lawan: **[2] blitz** — feagle / gspider / gfish, L50, semua pasif 9.
-Satu-satunya perbedaan: slot 3.
+Lawan: **[2] blitz** — feagle / gspider / gfish L50, semuanya pasif 9 (Mana Tap 15-30%).
+gspider memakai Leeching Scythe (memasang Leech, buff 11), gfish Poison Dagger (buff 2).
 
-## Hasil sebelum perbaikan
+Satu-satunya beda antar tim: slot 3.
 
-| Tes | Menang | Kalah | Seri |
+## Winrate
+
+| Konfigurasi slot 3 | Menang | % | Turn | gspider hidup di akhir |
+|---|---|---|---|---|
+| tanpa senjata (acuan) | 200/200 | **100%** | 4,1 | 0/200 |
+| crune, tanpa pasif | 152/200 | 76% | 6,7 | 48/200 |
+| crune + pasif 5 (PR +15-35%) | 174/200 | **87%** | 9,0 | 26/200 |
+| crune + pasif 16 (Energize) | 152/200 | 76% | 6,7 | 48/200 |
+| crune + pasif 5+16 (kondisi asli) | 132/200 | **66%** | 9,9 | **68/200** |
+
+Pasif 16 sendirian tidak mengubah apa pun (152 vs 152, sama persis).
+Pasif 5 sendirian **menaikkan** winrate 76% -> 87%.
+Gabungan 5+16 justru menjatuhkan ke 66% — kombinasi inilah yang bermasalah,
+bukan crune-nya sendiri.
+
+## Mekanisme: heal crune menjadi HP lawan
+
+gspider memakai Leeching Scythe. Leech (buff 11) memotong heal yang masuk ke
+target lalu **memindahkan potongan itu ke pemilik Leech**:
+
+```js
+unit.stats.hp[0] -= stolen;
+e.heal(ctx, from, stolen, from);   // from = pemilik Leech (gspider)
+```
+
+Crune menghasilkan heal besar; makin besar heal, makin besar yang berpindah ke
+gspider. Neraca gspider:
+
+| Konfigurasi | Damage masuk ke gspider | Heal diterima gspider | Selisih |
 |---|---|---|---|
-| [7] dengan crune vs [2] blitz | 27 (54%) | 23 (46%) | 0 |
-| [8] tanpa crune vs [2] blitz | 50 (100%) | 0 | 0 |
+| crune tanpa pasif | 793 | 411 | -382 |
+| crune + pasif 5 | 1.393 | 958 | -435 |
+| crune + pasif 16 | 793 | 411 | -382 |
+| crune + pasif 5+16 | 1.568 | 1.238 | -330 |
 
-Konsisten di 5 seed (1, 7, 42, 99, 12345): 52-65% vs 100%.
-Crune yang seharusnya menambah heal justru **menurunkan** peluang menang.
+Selisihnya selalu negatif: heal yang diterima gspider **lebih besar** daripada
+damage yang kita berikan. Di konfigurasi 5+16, gspider bertahan hidup di
+**68 dari 200** pertarungan, dan 42 di antaranya tidak selesai bahkan ketika
+batas 24 turn dinaikkan ke 60 — HP gspider kembali penuh setiap turn.
 
-## Penyebab: tiga bug di pencurian heal Leech
+## Kenapa pasif 5 dan 16 berbeda arah
 
-Leech (buff 11) dipasang Leeching Scythe milik gspider dan gfish.
-Deskripsi resmi: "The caster who applied this debuff steals -30-60% of
-incoming heals and -30-60% of incoming replenishes."
+**Pasif 5 (Physical Resistance)** menaikkan PR ellie. Heal Celebration berbasis
+PR, jadi heal membesar. Tim menerima lebih banyak HP, dan kerugian curian masih
+kalah oleh manfaatnya: 76% -> 87%.
 
-### Bug 1: curian dihitung dari heal mentah, bukan heal yang masuk
+**Pasif 16 (Energize)** mengisi WP tiap akhir turn. Sendirian ia tidak mengubah
+apa pun (152/200 dan heal 1.600, identik dengan tanpa pasif). Baru saat
+digabung pasif 5 efeknya merusak, dan penyebabnya tetap jalur Leech:
 
-`heal()` memotong jumlah heal ke sisa ruang HP **setelah** hook `healed`
-dijalankan. Akibatnya Leech mencuri dari angka mentah.
+| Konfigurasi | Heal masuk tim | Heal dipindah ke gspider | gspider hidup |
+|---|---|---|---|
+| crune + pasif 5 | 3.510 | 958 | 26/200 |
+| crune + pasif 5+16 | 4.294 | 1.238 | **68/200** |
 
-| Kondisi | Target dapat | Lawan curi |
-|---|---|---|
-| ruang HP 10, heal 600, 1 stack 60% | 10 | **360** |
+Pasif 5 membuat heal lebih besar, dan Energize menambah panjang pertarungan
+(9,0 -> 9,9 turn) sehingga lebih banyak heal yang dihasilkan. Setiap tambahan
+heal itu ikut menjadi pasokan Leech: +784 heal menambah +280 heal yang
+dipindahkan ke gspider. Efeknya bukan pada heal tim yang hilang, melainkan pada HP lawan yang
+bertambah, sampai gspider bertahan hidup di 68 dari 200 pertarungan.
 
-Lawan mendapat 360 HP padahal target hanya menerima 10.
+Rincian percobaan Celebration (bukan penyebab, hanya gejala):
+
+| Konfigurasi | Cast berhasil | Gagal karena HP tim penuh | Gagal karena WP kurang |
+|---|---|---|---|
+| tanpa pasif | 2,7 | 3,8 | 0,0 |
+| pasif 5 | 3,1 | 4,8 | 0,0 |
+| pasif 16 | 2,7 | 3,8 | 0,0 |
+| pasif 5+16 | 3,5 | 6,1 | 0,0 |
+
+Kegagalan karena WP kurang nol di semua konfigurasi, jadi Energize tidak
+membuat Celebration kehabisan WP. Yang naik adalah kegagalan karena HP tim
+sudah penuh, seiring heal yang makin besar.
+
+## Bug Leech yang ditemukan dan diperbaiki
+
+### Bug 1: curian dihitung dari heal mentah
+`heal()` menjalankan hook `healed` sebelum memotong jumlah ke sisa ruang HP.
+Target dengan ruang HP 10 dan heal 600 tetap menghasilkan curian 360.
+
+Sekarang HP ditambah dulu, lalu `postHealed` menerima jumlah yang benar-benar
+masuk. Target ruang 10, heal 600, satu stack 60% -> curian 6.
 
 ### Bug 2: dua stack Leech menjumlah jadi 120%
+`STACK[11] = 'independent'` membuat dua unit lawan memasang dua instance,
+masing-masing 60%. Heal berubah menjadi damage. Bukti: `heal ellie +633`
+tetapi HP berakhir **-31**.
 
-`STACK[11]` bernilai `independent`, jadi dua unit lawan memasang dua instance.
-Tiap instance memotong 60%, total 120% — heal berubah menjadi damage.
-
-Bukti di pertarungan nyata (seed 2, turn 7): `heal ellie +633` tetapi HP ellie
-berakhir **-31**.
+Ditambahkan `ctx.healBudget` / `ctx.replenishBudget` agar total curian tidak
+melebihi jumlah yang masuk.
 
 ### Bug 3: Leech seharusnya tidak menumpuk
+Deskripsi Leeching Scythe menyebut "If Leech is already on the target, deal
++40-60% more damage" — hanya masuk akal bila satu instance. `STACK[11]`
+diubah `'independent'` -> `'refresh'`.
 
-Deskripsi Leeching Scythe: "If Leech is already on the target, deal +40-60%
-more damage." Itu hanya masuk akal bila target punya **satu** instance Leech.
-Data sudah menyiapkan `bonusIfBuffed: 1`, tapi aturan penumpukan tidak cocok.
+Ketiga perbaikan ini mengubah besaran curian, tetapi tidak membalik arah
+kesimpulan: crune tetap kalah dari tanpa senjata.
 
-## Perbaikan
+## Catatan data yang belum diselesaikan
 
-1. `battleEngine.heal()` / `replenish()` — HP/WP ditambahkan lebih dulu, lalu
-   hook `postHealed` / `postReplenished` menerima jumlah yang benar-benar masuk.
-   Budget disimpan dan dipulihkan agar heal bersarang tidak menimpa batas.
-2. `battleBuffs` Leech — pencurian dipindah dari `healed` ke `postHealed`,
-   dibatasi `ctx.healBudget` sehingga total curian tidak melebihi heal masuk.
-3. `STACK[11]` diubah ke aturan baru `refresh`: satu instance, durasi disetel
-   ulang, nilai buff ikut yang terbaru.
-
-## Hasil setelah perbaikan
-
-| Tes | Menang | Kalah | Seri |
-|---|---|---|---|
-| [8] tanpa crune vs [2] blitz | 50 (100%) | 0 | 0 |
-| [7] dengan crune vs [2] blitz | 35 (70%) | 8 (16%) | 7 (14%) |
-
-Lima seed x 100 pertarungan: tanpa crune 100%, dengan crune 64,6%.
-
-Seri muncul karena pertarungan menembus batas `MAX_TURNS` = 24. Ini perilaku
-yang benar: heal yang bekerja membuat pertarungan lebih panjang, dan OwO
-memang membatasi 24 turn.
-
-## Catatan data
-
-`qualityList` Celebration di repo adalah `[[20,45],[15,35]]`, sedangkan
-deskripsi yang diberikan pengguna menyebut heal **20-50%** PR dan replenish
-**15-40%** MR. Nilai di repo lebih rendah. Belum diubah — perlu konfirmasi
-angka mana yang benar sebelum disesuaikan.
-
-Leeching Scythe di repo: damage 50-80% STR, bonus 40-60% bila sudah ber-Leech,
-curian 30-60%. Cocok dengan deskripsi.
+`qualityList` Celebration di repo: `[[20,45],[15,35]]`.
+Deskripsi pengguna: heal **20-50%** PR, replenish **15-40%** MR.
+Nilai repo lebih rendah dari deskripsi. Belum diubah, perlu konfirmasi.
