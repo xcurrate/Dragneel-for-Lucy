@@ -327,6 +327,12 @@ siap untuk integrasi giveaway nanti.
   Pendukung: `shareable`, `setcollectible`, `reset`, alias `active`/`info`.
 - **`r create <KATEGORI> <FORMAT>`** tanpa nama/isi; balas kode template. Kategori menerima nama aksi
   (`battle` → `HUNT_BATTLE`) lewat `resolveCategoryInput`.
+- **`r give` satu langkah**: `r give @user <KATEGORI> <FORMAT> <isi>` membuat template otomatis
+  (`metadata.autoActivate`), lalu award + DM satu claim ID. Template tidak ditampilkan ke developer.
+  Saat redeem, `redeemAward` membuat reminder `active: true` bila template punya isi dan
+  `autoActivate` — jadi penerima cukup redeem, tanpa `r enable`. Template dari `r create` tetap
+  nonaktif setelah redeem (perilaku lama). Format NORMAL memakai seluruh sisa argumen sebagai pesan;
+  format EMBED memakai JSON/discohook di sisa argumen.
 - **Counter OFF tidak mematikan reminder**: `handleAction` tetap memasang pengingat (hanya berhenti
   menghitung), dan `lucyCounter.handleMessage` tetap memanggil hook `onCounted` lewat `notifyCounted`.
 - **Embed menerima payload discohook/webhook**: `unwrapWebhookPayload` mengambil `embeds[0]`;

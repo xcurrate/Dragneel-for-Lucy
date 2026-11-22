@@ -822,15 +822,29 @@ bertanda 🔒. Reminder nonaktif tetap bisa disunting. Mengubah pesan/embed/coll
 Memakai sistem Developer ID yang sudah ada (`isDeveloper`): `DEVELOPER_IDS`, pemilik aplikasi bot, atau
 pemilik server. Tidak ada daftar developer kedua.
 
+- `<prefix> r give <@user> <KATEGORI> <FORMAT> <isi>` — **cara utama**: template dibuat otomatis,
+  bot DM penerima berisi satu claim ID, dan reminder langsung aktif setelah di-redeem.
+  Contoh: `<prefix> r give @pemenang battle normal Halo {USER}, ayo battle!`.
+  Untuk embed: `<prefix> r give @pemenang battle embed {"title":"Battle Reminder"}`.
 - `<prefix> r create <KATEGORI> <FORMAT>` — buat template kosong; bot membalas kode template.
   Kategori bisa ditulis sebagai nama aksi (`battle`, `hunt`, `pray`, `curse`, `lucy`) atau nama
   kategori resmi (`HUNT_BATTLE`, `PRAY_CURSE`, `LUCY`). Contoh: `<prefix> r create battle embed`.
 - `<prefix> r templates` — daftar template (kategori + format tampil).
-- `<prefix> r give <@user> <TEMPLATE_ID>` — beri reminder; bot DM penerima berisi claim ID.
+- `<prefix> r give <@user> <TEMPLATE_ID>` — beri reminder dari template yang sudah ada; bot DM
+  penerima berisi claim ID.
 - `<prefix> r awards` — daftar claim + status (`pending`, `redeemed`, `revoked`).
 - `<prefix> r revoke <CLAIM_ID>` — cabut claim yang belum diklaim (perlu konfirmasi).
 
-Alur pemberian:
+Alur utama (satu kode, penerima cukup redeem):
+
+```
+d r give @pemenang battle normal Halo {USER}, ayo battle!
+# penerima:
+d r redeem C-ABC12
+→ Reminder langsung aktif. Tidak perlu `r enable`.
+```
+
+Alur lama (template kosong, penerima mengatur isinya sendiri) tetap didukung:
 
 ```
 d r create battle embed

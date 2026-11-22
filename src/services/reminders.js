@@ -226,9 +226,14 @@ function redeemAward({ claimId, userId, now = Date.now() }) {
 
   try {
     return store.inTransaction(() => {
+      // Template dari `r give` satu langkah sudah berisi pesan/embed, jadi
+      // reminder langsung aktif saat diklaim. Template lama (`r create`) tetap
+      // nonaktif supaya penerima mengatur isinya dulu.
+      const autoActivate = template.metadata?.autoActivate === true
+        && Boolean((template.message && template.message.trim()) || template.embed);
       const reminder = store.createReminder({
         ownerId: userId, templateId: template.templateId, message: template.message,
-        embed: template.embed, collectible: template.collectible, active: false, now,
+        embed: template.embed, collectible: template.collectible, active: autoActivate, now,
         category: template.category, format: template.format, name: template.name
       });
       const won = store.markAwardRedeemed({ claimId: id, recipientId: userId, reminderId: reminder.reminderId, now });
@@ -238,7 +243,7 @@ function redeemAward({ claimId, userId, now = Date.now() }) {
       // dibuat tertinggal. Hasilnya ditangkap di bawah sebagai kegagalan biasa
       // agar pengguna tetap menerima pesan yang jelas.
       if (!won) throw new Error('CLAIM_RACE');
-      return { ok: true, reminder, template };
+      return { ok: true, reminder, template, autoActivate };
     });
   } catch (error) {
     if (error?.message === 'CLAIM_RACE') {
@@ -278,7 +283,8 @@ function helpText(prefix) {
     '',
     '**Developer**',
     '`' + prefix + ' r create <KATEGORI> <FORMAT>` — buat template; bot membalas kode template',
-    '`' + prefix + ' r give <@user> <KODE>` — beri reminder ke pemenang',
+    '`' + prefix + ' r give <@user> <KATEGORI> <FORMAT> <isi>` — beri reminder; template dibuat otomatis',
+    '`' + prefix + ' r give <@user> <KODE>` — beri reminder dari template yang sudah ada',
     '`' + prefix + ' r delete <ID>` — hapus reminder siapa pun (perlu konfirmasi)',
     '`' + prefix + ' r templates` — daftar kode template',
     '`' + prefix + ' r awards` / `' + prefix + ' r revoke <CLAIM_ID>` — kelola claim',
@@ -354,15 +360,19 @@ async function handleMessage(message, deps = {}) {
       console.error('[Reminders] redeem gagal:', error?.message);
     }
     if (!result.ok) { await sendError(message, result.errors.join(' ')); return true; }
+    const activated = Boolean(result.autoActivate);
     await sendEmbed(message, {
-      title: ICON.ok + ' Reminder Diklaim',
+      title: ICON.ok + (activated ? ' Reminder Diklaim & Aktif' : ' Reminder Diklaim'),
       color: COLOR.ok,
-      description: 'Reminder kamu: `' + result.reminder.reminderId + '`\nDari template `' + result.template.name + '`.',
+      description: 'Reminder kamu: `' + result.reminder.reminderId + '`\nDari template `' + result.template.name + '`.' +
+        (activated ? '\nLangsung aktif — tidak perlu perintah tambahan.' : ''),
       fields: [
         { name: 'Kategori', value: cats.categoryLabel(result.reminder.category), inline: true },
         { name: 'Format', value: cats.formatLabel(result.reminder.format), inline: true }
       ],
-      footer: 'Nyalakan dengan ' + prefix + ' r enable ' + result.reminder.reminderId
+      footer: activated
+        ? 'Kelola dengan ' + prefix + ' r view ' + result.reminder.reminderId
+        : 'Nyalakan dengan ' + prefix + ' r enable ' + result.reminder.reminderId
     });
     return true;
   }
@@ -602,12 +612,60 @@ async function handleMessage(message, deps = {}) {
   if (sub === 'give' || sub === 'beri') {
     if (!dev) { await sendError(message, 'Hanya developer bot yang bisa memberi reminder.'); return true; }
     const targetId = parseUserArg(args[0]);
-    const templateId = args[1];
-    if (!targetId || !store.isValidTemplateId(templateId)) {
-      await sendError(message, 'Format: `' + prefix + ' r give <@user> <KODE>` — contoh `' + prefix + ' r give @user T-ABC12`.');
+    const templateArg = args[1];
+    if (!targetId || !templateArg) {
+      await sendError(message, 'Format:\n' +
+        '• `' + prefix + ' r give <@user> <KODE_TEMPLATE>`\n' +
+        '• `' + prefix + ' r give <@user> <KATEGORI> <FORMAT> <isi>` — template dibuat otomatis\n' +
+        'Contoh: `' + prefix + ' r give @user battle normal Halo {USER}, ayo battle!`');
       return true;
     }
-    const result = awardReminder({ templateId, recipientId: targetId, issuerId: message.author.id });
+
+    let template;
+    let oneShot = false;
+    if (store.isValidTemplateId(templateArg)) {
+      template = store.getTemplate(templateArg);
+      if (!template) { await sendError(message, 'Template ' + store.normalizeId(templateArg) + ' tidak ditemukan.'); return true; }
+      if (!template.available) { await sendError(message, 'Template ' + template.templateId + ' sudah tidak tersedia.'); return true; }
+    } else {
+      const category = cats.resolveCategoryInput(templateArg);
+      const format = cats.normalizeFormat(args[2]);
+      if (!category || !format) {
+        await sendError(message, 'Format:\n' +
+          '• `' + prefix + ' r give <@user> <KODE_TEMPLATE>`\n' +
+          '• `' + prefix + ' r give <@user> <KATEGORI> <FORMAT> <isi>`\n' +
+          'Kategori: ' + cats.CATEGORY_KEYS.join(', ') + '\nFormat: ' + cats.FORMAT_KEYS.join(', ') + '\n' +
+          'Contoh: `' + prefix + ' r give @user battle normal Halo {USER}, ayo battle!`');
+        return true;
+      }
+      const rest = args.slice(3).join(' ').trim();
+      let templateMessage = '';
+      let embed = null;
+      if (format === 'EMBED') {
+        if (!rest) { await sendError(message, 'Format embed butuh JSON: `' + prefix + ' r give @user <KATEGORI> embed {"title":"..."}`.'); return true; }
+        const parsed = validate.parseAndValidateEmbed(rest);
+        if (!parsed.ok) { await sendError(message, 'Embed ditolak:\n• ' + parsed.errors.join('\n• ')); return true; }
+        embed = parsed.value;
+      } else {
+        templateMessage = rest;
+      }
+      if (!templateMessage && !embed) {
+        await sendError(message, 'Isi reminder wajib diisi supaya penerima tinggal redeem. Contoh: `' + prefix + ' r give @user battle normal Halo {USER}!`');
+        return true;
+      }
+      template = store.createTemplate({
+        name: cats.displayNameFor(category, format),
+        message: templateMessage,
+        embed,
+        creatorId: message.author.id,
+        category,
+        format,
+        metadata: { autoActivate: true }
+      });
+      oneShot = true;
+    }
+
+    const result = awardReminder({ templateId: template.templateId, recipientId: targetId, issuerId: message.author.id });
     if (!result.ok) { await sendError(message, result.errors.join(' ')); return true; }
     const { award, created } = result;
     if (!created) {
@@ -615,15 +673,18 @@ async function handleMessage(message, deps = {}) {
       return true;
     }
     const dm = await dmAward(client(message), targetId, award, result.template, prefix);
+    const fields = [
+      { name: 'Claim ID', value: '`' + award.claimId + '`', inline: true },
+      { name: 'Kategori', value: cats.categoryLabel(result.template.category), inline: true },
+      { name: 'Format', value: cats.formatLabel(result.template.format), inline: true }
+    ];
+    if (!oneShot) fields.push({ name: 'Template', value: '`' + result.template.templateId + '`', inline: true });
+    fields.push({ name: 'DM', value: dm.ok ? ICON.ok + ' terkirim' : ICON.warn + ' gagal — sampaikan claim ID manual', inline: false });
     await sendEmbed(message, {
       title: ICON.ok + ' Award Dibuat',
       color: dm.ok ? COLOR.ok : COLOR.warn,
-      description: 'Untuk <@' + targetId + '>',
-      fields: [
-        { name: 'Claim ID', value: '`' + award.claimId + '`', inline: true },
-        { name: 'Template', value: '`' + result.template.templateId + '`', inline: true },
-        { name: 'DM', value: dm.ok ? ICON.ok + ' terkirim' : ICON.warn + ' gagal — sampaikan claim ID manual', inline: false }
-      ],
+      description: 'Untuk <@' + targetId + '>. Penerima cukup menjalankan `' + prefix + ' r redeem ' + award.claimId + '`.',
+      fields,
       footer: dm.ok ? undefined : 'DM gagal: ' + dm.error
     });
     return true;
@@ -755,7 +816,8 @@ async function dmAward(client, recipientId, award, template, prefix) {
     const embed = new EmbedBuilder()
       .setColor(COLOR.panel)
       .setTitle('🎁 Kamu Menerima Custom Reminder!')
-      .setDescription('Template: **' + template.name + '**')
+      .setDescription('Template: **' + template.name + '**' +
+        (template.metadata?.autoActivate ? '\nSetelah diklaim, reminder langsung aktif.' : ''))
       .addFields(
         { name: 'Claim ID', value: '`' + award.claimId + '`', inline: true },
         { name: 'Kategori', value: cats.categoryLabel(template.category), inline: true },

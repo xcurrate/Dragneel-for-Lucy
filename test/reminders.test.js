@@ -1851,3 +1851,76 @@ describe('custom reminder — migrasi pengaturan server skema lama', () => {
     assert.equal(reloaded.getGuildReminderSetting('guild1', 'battle').message, 'teks');
   });
 });
+
+describe('custom reminder — give satu langkah (satu kode)', () => {
+  it('membuat template otomatis dan mengirim satu claim ID ke penerima', async () => {
+    const give = makeMessage('d r give <@111222333444555666> battle normal Halo {USER}, ayo battle!', { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+
+    const claimId = idOf(give, 'C');
+    assert.ok(claimId, 'claim ID dibuat');
+    assert.equal(idOf(give, 'T'), null, 'kode template tidak ditampilkan ke developer');
+    assert.equal(give.dms.length, 1, 'DM terkirim ke penerima');
+    assert.match(dmText(give), new RegExp(claimId));
+    assert.match(dmText(give), /langsung aktif/i);
+
+    const award = storage().getAward(claimId);
+    assert.equal(award.recipientId, '111222333444555666');
+    assert.equal(award.status, 'pending');
+    const template = storage().getTemplate(award.templateId);
+    assert.equal(template.category, 'HUNT_BATTLE');
+    assert.equal(template.format, 'NORMAL');
+    assert.equal(template.message, 'Halo {USER}, ayo battle!');
+    assert.equal(template.metadata.autoActivate, true);
+  });
+
+  it('penerima cukup redeem dan reminder langsung aktif', async () => {
+    const give = makeMessage('d r give <@111222333444555666> pray normal Halo {USER}, waktunya pray!', { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const claimId = idOf(give, 'C');
+
+    const redeem = makeMessage('d r redeem ' + claimId, { userId: '111222333444555666' });
+    await svc().handleMessage(redeem);
+    const reminderId = idOf(redeem, 'R');
+    assert.ok(reminderId);
+    const reminder = storage().getReminder(reminderId);
+    assert.equal(reminder.active, true);
+    assert.ok(reminder.activatedAt);
+    assert.match(textOf(redeem), /Diklaim & Aktif/);
+    assert.match(textOf(redeem), /Langsung aktif/);
+    assert.doesNotMatch(textOf(redeem), /r enable/);
+  });
+
+  it('menerima embed JSON pada give satu langkah', async () => {
+    const payload = JSON.stringify({ embeds: [{ title: 'Battle Reminder', description: '{USER_MENTION} ayo battle!' }] });
+    const give = makeMessage('d r give <@111222333444555666> battle embed ' + payload, { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    const claimId = idOf(give, 'C');
+    assert.ok(claimId);
+
+    const redeem = makeMessage('d r redeem ' + claimId, { userId: '111222333444555666' });
+    await svc().handleMessage(redeem);
+    const reminder = storage().getReminder(idOf(redeem, 'R'));
+    assert.equal(reminder.active, true);
+    assert.equal(reminder.embed.title, 'Battle Reminder');
+  });
+
+  it('menolak give satu langkah tanpa isi', async () => {
+    const give = makeMessage('d r give <@111222333444555666> battle normal', { userId: 'dev1', dev: true });
+    await svc().handleMessage(give);
+    assert.match(textOf(give), /Isi reminder wajib/);
+    assert.equal(storage().listAwards({ recipientId: '111222333444555666' }).length, 0);
+  });
+
+  it('menolak give satu langkah dari non-developer', async () => {
+    const give = makeMessage('d r give <@111222333444555666> battle normal Halo', { userId: 'user1' });
+    await svc().handleMessage(give);
+    assert.match(textOf(give), /Hanya developer/);
+    assert.equal(give.dms.length, 0);
+  });
+
+  it('alur lama r create + r give tetap nonaktif setelah redeem', async () => {
+    const { reminderId } = await awardAndRedeem();
+    assert.equal(storage().getReminder(reminderId).active, false);
+  });
+});
