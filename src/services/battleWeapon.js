@@ -356,17 +356,16 @@ const ABILITIES = {
     if (!target) return false;
     const allies = e.aliveOf(actor.team);
     if (!allies.length) return false;
-    // "Sekutu dengan buff terbanyak" milik tim musuh, bukan tim pemakai.
-    const receiver = target.team
-      .filter(u => e.isAlive(u) && u !== target)
-      .sort((a, b) => b.buffs.length - a.buffs.length)[0];
-    if (!receiver) return false;
+    // "the ally with the most buffs" = sekutu pemakai senjata, bukan sekutu
+    // lawan. Kalau yang dihitung tim musuh, debuff Frostbite justru menumpuk
+    // di lawan dan ability kehilangan penerima begitu tinggal satu lawan.
+    const receiver = allies.sort((a, b) => b.buffs.length - a.buffs.length)[0];
     e.useMana(actor, weapon.manaCost);
 
     const idx = target.buffs.findIndex(b => b.debuff);
     const [moved] = target.buffs.splice(idx, 1);
     moved.effectiveness = (moved.effectiveness ?? 1) * (1 - weapon.stats[0] / 100);
-    moved.from = actor; // stat caster asli tetap dipakai, hanya pemberinya berubah
+    // Stat caster asli tetap dipakai; hanya pemberinya yang berubah.
     e.bindBuff(ctx, receiver, moved);
 
     const raw = e.getDamage(actor.stats[ab.stat], weapon.stats[1] / 100, ctx.rng);

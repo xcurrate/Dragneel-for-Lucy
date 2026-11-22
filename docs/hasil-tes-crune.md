@@ -41,20 +41,40 @@ Diukur pada 100 pertarungan: **95% serangan musuh mendarat di tank**
 (1.095 dari 1.150). Frostbite menumpuk di penyerang sampai 19-82 stack.
 Rantai ini memang berjalan.
 
-Namun Conduit Claw **tidak memindahkan debuff ke tim kita**. Kode memilih
-penerima dari `target.team` — yaitu tim musuh:
+### Bug: penerima debuff diambil dari tim yang salah
+
+Deskripsi resmi Conduit Claw: "Move a **debuff** from an enemy to the ally
+with the most **buffs**." "Ally" adalah sekutu pemakai senjata, yaitu tim
+kita. Kode lama mengambil penerima dari `target.team` — tim musuh:
 
 ```js
-const receiver = target.team
+const receiver = target.team          // salah: tim musuh
   .filter(u => e.isAlive(u) && u !== target)
   .sort((a, b) => b.buffs.length - a.buffs.length)[0];
 ```
 
-Teks sumber senjata sendiri berbunyi "Move a **debuff** from an enemy to the
-ally with the most **buffs**" — ally milik pemakai senjata, jadi seharusnya
-tim kita. Terukur pada 200 pertarungan: **482 debuff dipindah ke tim lawan,
-0 ke tim kita**. Ini kemungkinan bug, belum saya ubah karena perlu kepastian
-arti "ally".
+Terukur pada 200 pertarungan: **482 debuff dipindah ke tim lawan, 0 ke tim
+kita**. Akibatnya Frostbite menumpuk di lawan (121 stack tersisa di akhir)
+dan ability kehilangan penerima begitu tinggal satu lawan, karena
+`target.team` tidak menyisakan unit lain.
+
+Sudah diperbaiki menjadi `e.aliveOf(actor.team)`, dan `moved.from` tidak lagi
+ditimpa ke pemakai claw agar sesuai "Moved buffs are calculated based on the
+original caster's stats". Damage Conduit Claw terukur **1.051 per cast**,
+masih dalam rentang 120-170% MAG (750 x 120-170% = 900-1.275).
+
+### Efek perbaikan pada komposisi
+
+| Konfigurasi | Sebelum | Sesudah |
+|---|---|---|
+| crune + pasif 5 | 174/200 | **200/200** |
+| crune + pasif 5+16 (asli) | 132/200, 42 seri | **200/200** |
+| tanpa senjata (acuan) | 200/200 | 200/200 |
+
+Pertarungan selesai rata-rata 3,3 turn (sebelumnya 9,9). gspider tidak lagi
+bertahan hidup di satu pun dari 200 pertarungan. Efek samping di tim kita
+kecil: 3,2 stack Frostbite dan 0,13 unit kena Freeze per pertarungan,
+karena tank menerima debuff dari Conduit Claw sendiri.
 
 ## Mekanisme: heal crune menjadi HP lawan
 
@@ -139,6 +159,9 @@ gspider tersisa, `receiver` tidak ada (tidak ada sekutu lain di tim musuh),
 sehingga ability gagal dan damage 120-170% MAG tidak keluar sama sekali.
 Damage yang tersisa hanya serangan dasar 88-148 per turn, jauh di bawah heal
 yang dicuri gspider per turn.
+
+Angka pada tabel di atas diukur **sebelum** bug penerima debuff diperbaiki.
+Setelah perbaikan, seluruh 200 seed menang; lihat bagian bug di atas.
 
 ## Bug Leech yang ditemukan dan diperbaiki
 

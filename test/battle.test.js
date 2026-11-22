@@ -1096,19 +1096,40 @@ describe('batch senjata baru: Bleeding Gaze, Conduit Claw, Corruption, Scepter',
     assert.strictEqual(them[0].stats.hp[0], 3000, '200% x 1000 MAG');
   });
 
-  it('Conduit Claw memindahkan debuff ke sekutu musuh dan melemahkannya', () => {
-    const me = [unit('me')];
-    const them = [unit('e1'), unit('e2')];
+  it('Conduit Claw memindahkan debuff ke sekutu sendiri dengan buff terbanyak', () => {
+    const me = [unit('me'), unit('ally1'), unit('ally2')];
+    const them = [unit('e1')];
     link(me, them);
     them[0].buffs.push(createBuff(15, { quality: [100], from: them[0], rng }));
-    them[1].buffs.push(createBuff(6, { quality: [100], from: them[1], rng }));
+    // ally2 punya buff terbanyak, jadi dialah penerimanya.
+    me[1].buffs.push(createBuff(6, { quality: [100], from: me[1], rng }));
+    me[2].buffs.push(createBuff(6, { quality: [100], from: me[2], rng }));
+    me[2].buffs.push(createBuff(7, { quality: [100], from: me[2], rng }));
     me[0].weapon = buildWeapon({ id: 124 }, rng, 100);
     assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0], me, them), true);
-    assert.strictEqual(them[0].buffs.some(b => b.id === 15), false, 'debuff pindah');
-    const moved = them[1].buffs.find(b => b.id === 15);
-    assert.ok(moved, 'debuff ada di sekutu dengan buff terbanyak');
+    assert.strictEqual(them[0].buffs.some(b => b.id === 15), false, 'debuff lepas dari musuh');
+    const moved = me[2].buffs.find(b => b.id === 15);
+    assert.ok(moved, 'debuff ada di sekutu kita dengan buff terbanyak');
+    assert.strictEqual(me[1].buffs.some(b => b.id === 15), false, 'bukan di sekutu dengan buff lebih sedikit');
     assert.strictEqual(moved.effectiveness, 0.5, 'efektivitas -50%');
+    assert.strictEqual(moved.from, them[0], 'stat caster asli dipertahankan');
     assert.strictEqual(them[0].stats.hp[0], 3300, '170% x 1000 MAG');
+  });
+
+  it('Conduit Claw tetap jalan saat hanya satu lawan tersisa', () => {
+    // Regresi: dulu penerima dicari di tim musuh, jadi dengan satu lawan
+    // tidak ada penerima dan ability gagal — damage 120-170% MAG hilang.
+    const me = [unit('me'), unit('ally1')];
+    const them = [unit('e1')];
+    link(me, them);
+    them[0].buffs.push(createBuff(15, { quality: [100], from: them[0], rng }));
+    me[1].buffs.push(createBuff(6, { quality: [100], from: me[1], rng }));
+    me[0].weapon = buildWeapon({ id: 124 }, rng, 100);
+    const wp0 = me[0].stats.wp[0];
+    assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0], me, them), true);
+    assert.ok(me[1].buffs.some(b => b.id === 15), 'debuff pindah ke sekutu kita');
+    assert.ok(me[0].stats.wp[0] < wp0, 'WP terpakai');
+    assert.strictEqual(them[0].stats.hp[0], 3300, 'damage tetap keluar');
   });
 
   it('Conduit Claw tidak memakai WP bila tidak ada debuff atau tidak ada sekutu', () => {
@@ -2758,16 +2779,17 @@ describe('update OwO: Wounding Crossbow, Frostbite, Pest, Exposed, Resonance, Li
   it('Conduit Claw memakai -20-50% efektivitas dan 120-170% MAG sesuai quality', () => {
     const { buildWeapon, weaponAbility } = weaponModule;
     for (const [quality, keep, dmgPct] of [[0, 0.8, 120], [100, 0.5, 170]]) {
-      const me = [fresh('me')];
-      const them = [fresh('e1'), fresh('e2')];
+      const me = [fresh('me'), fresh('ally1')];
+      const them = [fresh('e1')];
       link(me, them);
       them[0].buffs.push(createBuff(15, { quality: [100], from: them[0], rng: rngModule.createRng(1) }));
-      them[1].buffs.push(createBuff(6, { quality: [100], from: them[1], rng: rngModule.createRng(1) }));
+      me[1].buffs.push(createBuff(6, { quality: [100], from: me[1], rng: rngModule.createRng(1) }));
       me[0].weapon = buildWeapon({ id: 124, quality }, rngModule.createRng(1), quality);
       const mag = me[0].stats.mag[0] + me[0].stats.mag[1];
       const hpBefore = them[0].stats.hp[0];
       assert.strictEqual(weaponAbility(ctxOf(), me[0].weapon, me[0]), true, `quality ${quality}`);
-      const moved = them[1].buffs.find(b => b.id === 15);
+      const moved = me[1].buffs.find(b => b.id === 15);
+      assert.ok(moved, `quality ${quality}: debuff pindah ke sekutu kita`);
       assert.ok(Math.abs(moved.effectiveness - keep) < 1e-9, `efektivitas ${keep}, dapat ${moved.effectiveness}`);
       const dealt = hpBefore - them[0].stats.hp[0];
       // Damage MAG melewati resistensi MR sasaran, jadi bandingkan batas bawah.
