@@ -857,7 +857,11 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     : store.getActiveTeam(userId);
   if (!team) {
     if (sides.playerTokens.length) {
-      return send(message, errorEmbed(`Tim **${sides.playerTokens.join(' ')}** tidak ditemukan. Lihat \`${prefix} tm\`.`));
+      const query = sides.playerTokens.join(' ');
+      if (store.findForeignTeam(userId, query)) {
+        return send(message, errorEmbed('Kamu tidak memiliki tim tersebut.'));
+      }
+      return send(message, errorEmbed(`Tim **${query}** tidak ditemukan. Lihat \`${prefix} tm\`.`));
     }
     return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
   }
@@ -1110,13 +1114,25 @@ function resolveEnemy(userId, args, overrideLevel) {
   const level = options.level ? Number(options.level) : (overrideLevel ?? 60);
   const looksLikeStats = raw.includes('=') || /^[\d\s,-]+$/.test(raw);
   if (looksLikeStats) {
+    // Angka murni bisa berarti ID slot tim. Kalau slot itu bukan milik user,
+    // jangan jatuh ke parser stat manual yang membingungkan.
+    if (/^\d+$/.test(raw) && store.findForeignTeam(userId, raw)) {
+      return { error: 'Kamu tidak memiliki tim tersebut.' };
+    }
     const parsed = sim.parseCustomStats(raw);
     if (parsed.error) return { error: parsed.error };
     return { specs: [{ slot: 1, coeffs: parsed.custom, level, label: 'lawan' }], label: 'stat manual' };
   }
 
   const animal = dexStore.resolveAnimal(raw) || dexStore.searchAnimals(raw)[0];
-  if (!animal) return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim (lihat \`d team list\`), hewan dex, atau stat manual.` };
+  if (!animal) {
+    // Tim itu ada, tapi bukan milik user ini. Jangan jatuh ke "nama tidak
+    // dikenal" karena pesan yang benar adalah soal kepemilikan.
+    if (store.findForeignTeam(userId, raw)) {
+      return { error: 'Kamu tidak memiliki tim tersebut.' };
+    }
+    return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim (lihat \`d team list\`), hewan dex, atau stat manual.` };
+  }
   const coeffs = sim.dexStatsToCustom(animal);
   if (!coeffs) return { error: `Stat \`${animal.name}\` tidak lengkap di dex.` };
   return { specs: [{ slot: 1, coeffs, level, label: animal.name, animal }], label: animal.name };

@@ -751,3 +751,9 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   mengubah tim aktif pemilik. Satu-satunya pengecualian yang sah adalah tombol
   Lihat Kekalahan karena isinya sudah publik (senjata lawan disembunyikan);
   kalau suatu saat isi embed itu memuat data pribadi, kecualikan lagi.
+- **`d sim` hanya menerima tim milik user sendiri, di sisi pemain maupun lawan.**
+  Pencarian tim memakai `findTeam(userId, ...)` / `getActiveTeam(userId)`, bukan
+  `getTeamById` atau `listAllTeams`. `findForeignTeam` hanya dipakai untuk
+  membedakan "tim tidak ada" dari "tim ada, tapi bukan milikmu"; referensi nama
+  atau ID slot milik user lain dijawab "Kamu tidak memiliki tim tersebut."
+  Jangan mengganti lookup itu dengan pencarian lintas user untuk "memudahkan".

@@ -2054,6 +2054,37 @@ describe('lawan simulasi berupa tim', () => {
     assert.ok(enemy.error.includes('masih kosong'));
   });
 
+  it('menolak nama tim milik user lain dengan pesan kepemilikan', () => {
+    store.createTeam('v', 'milikv');
+    store.setSlot('v', 'milikv', 1, { custom: COEFFS_WEAK, level: 60 });
+    const enemy = resolveEnemy('u', ['milikv']);
+    assert.ok(enemy.error.includes('Kamu tidak memiliki tim tersebut.'), enemy.error);
+  });
+
+  it('menolak ID slot tim milik user lain dengan pesan kepemilikan', () => {
+    // `u` sudah menempati slot 1 dan 2; `v` diisi tiga tim supaya punya slot 3.
+    for (const name of ['v1', 'v2', 'v3']) {
+      store.createTeam('v', name);
+      store.setSlot('v', name, 1, { custom: COEFFS_WEAK, level: 60 });
+    }
+    const enemy = resolveEnemy('u', ['3']);
+    assert.ok(enemy.error.includes('Kamu tidak memiliki tim tersebut.'), enemy.error);
+  });
+
+  it('menolak tim milik user lain di sisi pemain', async () => {
+    store.createTeam('v', 'milikv');
+    store.setSlot('v', 'milikv', 1, { custom: COEFFS_WEAK, level: 60 });
+    const { handleSimCommand } = require(path.join(ROOT, 'src/commands/battleSim'));
+    const replies = [];
+    const msg = { guildId: 'g', author: { id: 'u' }, content: 'd sim milikv vs blitz' };
+    await handleSimCommand(msg, ['milikv', 'vs', 'blitz'], 'd', {
+      sendEmbed: (m, embed) => { replies.push(embed.toJSON()); return null; },
+      sendPayload: () => null,
+      isDeveloper: () => true,
+    });
+    assert.match(replies[0].description, /tidak memiliki tim tersebut/);
+  });
+
   it('stat manual tetap didahulukan saat berbentuk angka', () => {
     const enemy = resolveEnemy('u', ['hp=8,att=6,pr=2,wp=3,mag=5,mr=1']);
     assert.ok(!enemy.error, enemy.error);

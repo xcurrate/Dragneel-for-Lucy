@@ -268,6 +268,22 @@ function listOpponentTeams(userId, activeTeamId = null) {
   return listAllTeams().filter(team => team.id !== activeTeamId && team.slots.length);
 }
 
+// Tim dengan nama atau ID slot tertentu yang bukan milik `userId`. Dipakai
+// untuk membedakan "tidak dikenal" dari "tim itu ada, tapi bukan milikmu".
+function findForeignTeam(userId, query) {
+  const text = String(query == null ? '' : query).trim();
+  if (!text) return null;
+  const row = /^\d+$/.test(text)
+    ? getDb().prepare(
+      'SELECT * FROM teams WHERE slot_id = ? AND user_id <> ? LIMIT 1'
+    ).get(Number(text), String(userId))
+    : getDb().prepare(
+      'SELECT * FROM teams WHERE name_key = ? AND user_id <> ? LIMIT 1'
+    ).get(keyOf(text), String(userId));
+  if (!row) return null;
+  return rowToTeam(row, loadSlots(row.id));
+}
+
 // ID tim 1..MAX_TEAM_ID milik satu user. ID bebas terkecil dipakai lebih dulu,
 // jadi menghapus tim benar-benar mengosongkan slot ID-nya.
 function usedSlotIds(userId) {
@@ -617,6 +633,7 @@ module.exports = {
   listOpponentTeams,
   getTeam,
   findTeam,
+  findForeignTeam,
   getTeamById,
   nextFreeSlotId,
   isSlotIdTaken,
