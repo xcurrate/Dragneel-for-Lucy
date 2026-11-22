@@ -2503,6 +2503,59 @@ describe('Sacred Ward', () => {
   });
 });
 
+describe('Leech (Leeching Scythe)', () => {
+  function setup() {
+    const rng = rngModule.createRng(11);
+    const healer = engine.buildUnit({ label: 'healer', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const target = engine.buildUnit({ label: 'target', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const leecher = engine.buildUnit({ label: 'leecher', level: 50, coeffs: COEFFS_STRONG }, rng);
+    target.team = [target, healer]; healer.team = target.team;
+    target.foes = [leecher]; leecher.foes = target.team; leecher.team = [leecher];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    return { rng, healer, target, leecher, ctx };
+  }
+
+  it('hanya satu instance walau dipasang berkali-kali', () => {
+    const { rng, target, leecher, ctx } = setup();
+    for (let i = 0; i < 3; i++) {
+      engine.bindBuff(ctx, target, createBuff(11, { quality: 100, from: leecher, rng }));
+    }
+    assert.strictEqual(target.buffs.filter(b => b.id === 11).length, 1);
+  });
+
+  it('mencuri paling banyak sebesar heal yang benar-benar masuk', () => {
+    const { rng, healer, target, leecher, ctx } = setup();
+    engine.bindBuff(ctx, target, createBuff(11, { quality: 100, from: leecher, rng }));
+    // Sisa ruang HP hanya 10, jadi heal mentah 600 tidak boleh dicuri penuh.
+    target.stats.hp[0] = engine.maxHp(target) - 10;
+    leecher.stats.hp[0] = 100;
+
+    const landed = engine.heal(ctx, target, 600, healer);
+    assert.strictEqual(landed, 10, 'heal yang masuk dibatasi ruang HP');
+    const stolen = leecher.stats.hp[0] - 100;
+    assert.ok(stolen <= landed, `curian ${stolen} melebihi heal masuk ${landed}`);
+    assert.ok(stolen > 0, 'tetap mencuri sebagian');
+  });
+
+  it('dua pemasang berbeda tetap satu instance sehingga curian tidak melebihi heal', () => {
+    const { rng, healer, target, leecher, ctx } = setup();
+    const other = engine.buildUnit({ label: 'leecher2', level: 50, coeffs: COEFFS_STRONG }, rng);
+    other.team = [other]; other.foes = target.team;
+    engine.bindBuff(ctx, target, createBuff(11, { quality: 100, from: leecher, rng }));
+    engine.bindBuff(ctx, target, createBuff(11, { quality: 100, from: other, rng }));
+    assert.strictEqual(target.buffs.filter(b => b.id === 11).length, 1, 'satu instance saja');
+
+    target.stats.hp[0] = 100;
+    leecher.stats.hp[0] = 100;
+    other.stats.hp[0] = 100;
+    const landed = engine.heal(ctx, target, 600, healer);
+    const stolen = (leecher.stats.hp[0] - 100) + (other.stats.hp[0] - 100);
+    assert.ok(stolen <= landed, `curian ${stolen} melebihi heal masuk ${landed}`);
+    assert.strictEqual(target.stats.hp[0] - 100, landed - stolen, 'HP target = heal masuk dikurangi curian');
+    assert.ok(target.stats.hp[0] > 100, 'heal tidak boleh berubah jadi damage');
+  });
+});
+
 describe('Sacrifice', () => {
   it('memakai 50-75% Max HP dan WP sesuai qualityList OwO', () => {
     const rng = rngModule.createRng(5);

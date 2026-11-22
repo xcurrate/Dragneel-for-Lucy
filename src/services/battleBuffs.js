@@ -46,7 +46,9 @@ const STACK = {
   8: 'merge', // Attack Up++
   9: 'merge', // Mortality
   10: 'independent', // Celebration
-  11: 'independent', // Leech
+  // Leech: deskripsi "if Leech is already on the target, deal +40-60% more damage"
+  // berarti satu instance saja — pemasangan ulang menyegarkan, bukan menumpuk.
+  11: 'refresh',
   12: 'independent', // Stinky
   13: 'independent', // Sacred Ward: tiap stack instance terpisah
   14: 'merge', // Wither: durasi digabung, persennya tidak dijumlah
@@ -60,7 +62,7 @@ const STACK = {
 // `merge` berarti durasi digabung; `sameFrom` mempersempitnya ke pemberi sama.
 function stackOf(buff) {
   const rule = STACK[buff.id] || 'merge';
-  if (rule === 'independent' || rule === 'replace') return { kind: rule };
+  if (rule === 'independent' || rule === 'replace' || rule === 'refresh') return { kind: rule };
   if (typeof rule === 'object') return { kind: 'merge', sameFrom: rule.merge === 'sameFrom' };
   return { kind: 'merge', sameFrom: false };
 }
@@ -169,17 +171,30 @@ const FACTORIES = {
 
   11: (def, stats, from) => ({
     id: 11, name: def.name, debuff: true, stats, duration: 3, from,
-    healed(ctx, unit, healer, bucket) {
+    // Leech memotong heal yang BENAR-BENAR masuk ke target lalu memindahkannya
+    // ke pemasang. Menghitungnya di `healed` (sebelum cap HP) membuat pencurian
+    // tetap jalan saat target sudah penuh — heal mentah 600 bisa dicuri 360
+    // padahal target hanya menerima 10. Batas `healBudget` menjaga beberapa
+    // stack sekaligus tidak menjumlah melebihi heal yang masuk.
+    postHealed(ctx, unit, healer, total) {
       const e = engine();
-      const stolen = (bucket.amount * stats[0]) / 100;
-      bucket.bonus -= stolen;
-      if (stolen > 0) e.heal(ctx, from, stolen, from);
+      const budget = ctx.healBudget;
+      const cap = budget ? budget.remaining : total;
+      const stolen = Math.min(cap, (total * stats[0]) / 100);
+      if (stolen <= 0) return;
+      if (budget) budget.remaining -= stolen;
+      unit.stats.hp[0] -= stolen;
+      e.heal(ctx, from, stolen, from);
     },
-    replenished(ctx, unit, healer, bucket) {
+    postReplenished(ctx, unit, healer, total) {
       const e = engine();
-      const stolen = (bucket.amount * stats[1]) / 100;
-      bucket.bonus -= stolen;
-      if (stolen > 0) e.replenish(ctx, from, stolen, from);
+      const budget = ctx.replenishBudget;
+      const cap = budget ? budget.remaining : total;
+      const stolen = Math.min(cap, (total * stats[1]) / 100);
+      if (stolen <= 0) return;
+      if (budget) budget.remaining -= stolen;
+      unit.stats.wp[0] -= stolen;
+      e.replenish(ctx, from, stolen, from);
     },
   }),
 

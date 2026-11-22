@@ -156,12 +156,25 @@ function heal(ctx, target, amount, from, { overheal = false, revive = false } = 
   const room = cap - target.stats.hp[0];
   if (total > room) total = room;
 
-  for (const buff of target.buffs) buff.postHealed?.(ctx, target, from, total);
-  if (target.weapon) for (const p of target.weapon.passives) p.postHealed?.(ctx, target, from, total);
-  for (const buff of from.buffs) buff.postHeal?.(ctx, target, from, total);
-  if (from.weapon) for (const p of from.weapon.passives) p.postHeal?.(ctx, target, from, total);
-
   target.stats.hp[0] += total;
+
+  const prevHealBudget = ctx.healBudget;
+  // Hook postHealed menerima jumlah yang benar-benar masuk, bukan angka mentah:
+  // pencuri heal (Leech) tidak boleh mengambil lebih dari heal yang diterima target.
+  // `healBudget` membatasi total curian beberapa stack sekaligus — dua stack 60%
+  // tidak boleh menjumlah jadi 120% sehingga heal justru mengurangi HP.
+  ctx.healBudget = { remaining: total };
+  try {
+    for (const buff of target.buffs) buff.postHealed?.(ctx, target, from, total);
+    if (target.weapon) for (const p of target.weapon.passives) p.postHealed?.(ctx, target, from, total);
+    for (const buff of from.buffs) buff.postHeal?.(ctx, target, from, total);
+    if (from.weapon) for (const p of from.weapon.passives) p.postHeal?.(ctx, target, from, total);
+  } finally {
+    // Pencuri heal memanggil heal() lagi (bersarang); tanpa pemulihan ini budget
+    // milik heal luar ikut tertimpa dan batasnya hilang.
+    ctx.healBudget = prevHealBudget;
+  }
+
   return Math.round(total);
 }
 
@@ -182,12 +195,19 @@ function replenish(ctx, target, amount, from, { overreplenish = false } = {}) {
   const room = cap - target.stats.wp[0];
   if (total > room) total = room;
 
-  for (const buff of target.buffs) buff.postReplenished?.(ctx, target, from, total);
-  if (target.weapon) for (const p of target.weapon.passives) p.postReplenished?.(ctx, target, from, total);
-  for (const buff of from.buffs) buff.postReplenish?.(ctx, target, from, total);
-  if (from.weapon) for (const p of from.weapon.passives) p.postReplenish?.(ctx, target, from, total);
-
   target.stats.wp[0] += total;
+
+  const prevReplenishBudget = ctx.replenishBudget;
+  ctx.replenishBudget = { remaining: total };
+  try {
+    for (const buff of target.buffs) buff.postReplenished?.(ctx, target, from, total);
+    if (target.weapon) for (const p of target.weapon.passives) p.postReplenished?.(ctx, target, from, total);
+    for (const buff of from.buffs) buff.postReplenish?.(ctx, target, from, total);
+    if (from.weapon) for (const p of from.weapon.passives) p.postReplenish?.(ctx, target, from, total);
+  } finally {
+    ctx.replenishBudget = prevReplenishBudget;
+  }
+
   return Math.round(total);
 }
 
@@ -271,6 +291,20 @@ function bindBuff(ctx, target, buff) {
     for (const old of target.buffs.filter(same)) {
       old.explode?.(ctx, target, buff);
       target.buffs = target.buffs.filter(b => b !== old);
+    }
+    target.buffs.push(buff);
+    return;
+  }
+
+  // `refresh`: satu instance, durasi disetel ulang dan nilai buff ikut yang baru
+  // (Leech dipasang ulang = efek baru menggantikan yang lama, bukan menumpuk).
+  if (rule.kind === 'refresh') {
+    const existing = target.buffs.find(same);
+    if (existing) {
+      existing.duration = buff.duration;
+      existing.stats = buff.stats;
+      existing.from = buff.from;
+      return;
     }
     target.buffs.push(buff);
     return;

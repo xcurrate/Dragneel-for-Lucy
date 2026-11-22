@@ -2,7 +2,7 @@
 
 Tanggal: 2026-11-22
 Data: `archive-2026-11-22T052803Z.tar.gz` (dipulihkan ke `data/`)
-Perintah: `d sim`, 50 pertarungan per tes (sesuai permintaan)
+Perintah: `d sim`, 50 pertarungan per tes
 
 ## Tim
 
@@ -13,78 +13,78 @@ Perintah: `d sim`, 50 pertarungan per tes (sesuai permintaan)
 | 3 | ellie, L50, **weapon 18 (crune), pasif 5,16** | ellie, L50, **tanpa senjata** |
 
 Lawan: **[2] blitz** — feagle / gspider / gfish, L50, semua pasif 9.
-
 Satu-satunya perbedaan: slot 3.
 
-## Hasil 50 pertarungan
+## Hasil sebelum perbaikan
 
-| Tes | Menang | Kalah | Seri | Turns |
-|---|---|---|---|---|
-| [7] dengan crune vs [2] blitz | 27 (54%) | 23 (46%) | 0 | 3-12 |
-| [8] tanpa crune vs [2] blitz | 50 (100%) | 0 | 0 | 3-6 |
+| Tes | Menang | Kalah | Seri |
+|---|---|---|---|
+| [7] dengan crune vs [2] blitz | 27 (54%) | 23 (46%) | 0 |
+| [8] tanpa crune vs [2] blitz | 50 (100%) | 0 | 0 |
 
-Seed: 1017186874 dan 740270088.
+Konsisten di 5 seed (1, 7, 42, 99, 12345): 52-65% vs 100%.
+Crune yang seharusnya menambah heal justru **menurunkan** peluang menang.
 
-## Diulang di beberapa seed (100 pertarungan tiap seed)
+## Penyebab: tiga bug di pencurian heal Leech
 
-| Seed | dengan crune | tanpa crune |
+Leech (buff 11) dipasang Leeching Scythe milik gspider dan gfish.
+Deskripsi resmi: "The caster who applied this debuff steals -30-60% of
+incoming heals and -30-60% of incoming replenishes."
+
+### Bug 1: curian dihitung dari heal mentah, bukan heal yang masuk
+
+`heal()` memotong jumlah heal ke sisa ruang HP **setelah** hook `healed`
+dijalankan. Akibatnya Leech mencuri dari angka mentah.
+
+| Kondisi | Target dapat | Lawan curi |
 |---|---|---|
-| 1 | 103 menang / 97 kalah | 200 / 0 |
-| 7 | 130 / 70 | 200 / 0 |
-| 42 | 116 / 84 | 200 / 0 |
-| 99 | 115 / 85 | 200 / 0 |
-| 12345 | 104 / 96 | 200 / 0 |
+| ruang HP 10, heal 600, 1 stack 60% | 10 | **360** |
 
-Konsisten: crune menurunkan peluang menang dari 100% ke sekitar 50-57%.
+Lawan mendapat 360 HP padahal target hanya menerima 10.
 
-## Penyebab
+### Bug 2: dua stack Leech menjumlah jadi 120%
 
-Diisolasi satu per satu (500 pertarungan per baris):
+`STACK[11]` bernilai `independent`, jadi dua unit lawan memasang dua instance.
+Tiap instance memotong 60%, total 120% — heal berubah menjadi damage.
 
-| Varian | Menang |
-|---|---|
-| tanpa crune (acuan) | 100.0% |
-| crune penuh | 57.0% |
-| crune tanpa passives | 55.8% |
-| crune tanpa senjata | 100.0% |
-| ability crune dimatikan | 100.0% |
+Bukti di pertarungan nyata (seed 2, turn 7): `heal ellie +633` tetapi HP ellie
+berakhir **-31**.
 
-Yang menentukan hanya **ability `celebration`**, bukan passives dan bukan stat senjata
-(crune tidak punya stat sama sekali: `stats = []`).
+### Bug 3: Leech seharusnya tidak menumpuk
 
-### Mekanisme 1: heal dicuri Leech
+Deskripsi Leeching Scythe: "If Leech is already on the target, deal +40-60%
+more damage." Itu hanya masuk akal bila target punya **satu** instance Leech.
+Data sudah menyiapkan `bonusIfBuffed: 1`, tapi aturan penumpukan tidak cocok.
 
-Leech (buff 11) dipasang lawan. Setiap heal yang masuk ke unit ber-Leech
-dipotong, dan potongannya jadi heal untuk lawan.
+## Perbaikan
 
-| Stack Leech | heal 600 menjadi |
-|---|---|
-| 1 | 240 |
-| 2 | 0 |
-| 3 | 0 |
+1. `battleEngine.heal()` / `replenish()` — HP/WP ditambahkan lebih dulu, lalu
+   hook `postHealed` / `postReplenished` menerima jumlah yang benar-benar masuk.
+   Budget disimpan dan dipulihkan agar heal bersarang tidak menimpa batas.
+2. `battleBuffs` Leech — pencurian dipindah dari `healed` ke `postHealed`,
+   dibatasi `ctx.healBudget` sehingga total curian tidak melebihi heal masuk.
+3. `STACK[11]` diubah ke aturan baru `refresh`: satu instance, durasi disetel
+   ulang, nilai buff ikut yang terbaru.
 
-Pada pertarungan nyata, 2 unit lawan memasang Leech ke unit yang sama,
-jadi heal crune **100% hilang**. Heal yang hilang itu tidak jadi damage apa pun.
+## Hasil setelah perbaikan
 
-### Mekanisme 2: crune memakan giliran serang
+| Tes | Menang | Kalah | Seri |
+|---|---|---|---|
+| [8] tanpa crune vs [2] blitz | 50 (100%) | 0 | 0 |
+| [7] dengan crune vs [2] blitz | 35 (70%) | 8 (16%) | 7 (14%) |
 
-Ability `celebration` tidak menghasilkan damage. Saat dipakai, unit itu
-tidak melakukan basic attack pada turn tersebut.
+Lima seed x 100 pertarungan: tanpa crune 100%, dengan crune 64,6%.
 
-- Damage basic attack ellie tanpa crune: **±99 per turn**
-- Saat crune aktif dan heal-nya dicuri: **0 damage, 0 heal**
+Seri muncul karena pertarungan menembus batas `MAX_TURNS` = 24. Ini perilaku
+yang benar: heal yang bekerja membuat pertarungan lebih panjang, dan OwO
+memang membatasi 24 turn.
 
-Jadi tiap kali crune aktif dalam kondisi itu, tim kehilangan sekitar 99 damage
-dan tidak mendapat imbalan apa pun.
+## Catatan data
 
-### Mekanisme 3: heal hanya menyasar unit HP terendah
+`qualityList` Celebration di repo adalah `[[20,45],[15,35]]`, sedangkan
+deskripsi yang diberikan pengguna menyebut heal **20-50%** PR dan replenish
+**15-40%** MR. Nilai di repo lebih rendah. Belum diubah — perlu konfirmasi
+angka mana yang benar sebelum disesuaikan.
 
-`celebration` memilih target dengan HP terendah. Saat semua unit penuh,
-ability mengembalikan `false` dan unit itu basic attack seperti biasa.
-Itu sebabnya hasilnya tidak selalu 0%, tergantung urutan HP.
-
-## Catatan
-
-Perilaku Leech ini sesuai deskripsi buff di data (`Penyerang mencuri heal/WP yang masuk`),
-jadi ini bukan bug engine. Yang perlu diputuskan: apakah `celebration` sebaiknya
-melewati target yang sedang ber-Leech, atau tetap seperti sekarang.
+Leeching Scythe di repo: damage 50-80% STR, bonus 40-60% bila sudah ber-Leech,
+curian 30-60%. Cocok dengan deskripsi.
