@@ -481,6 +481,22 @@ describe('senjata', () => {
     assert.ok(low.manaCost >= high.manaCost, 'manaRange OwO menurun terhadap quality');
   });
 
+  it('passives: [] berarti tanpa pasif, bukan undi acak', () => {
+    // Regresi: dulu array kosong dianggap "belum dipilih" lalu diundi, jadi
+    // permintaan tanpa pasif diam-diam memakai pasif acak.
+    const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+    const none = buildWeapon({ id: 18, quality: 100, passives: [] }, rngModule.createRng(1));
+    assert.deepStrictEqual(none.passives, [], 'array kosong tidak memicu undian');
+
+    const explicit = buildWeapon({ id: 18, quality: 100, passives: [5] }, rngModule.createRng(1));
+    assert.deepStrictEqual(explicit.passives.map(p => p.id), [5]);
+
+    for (const kosong of [undefined, null]) {
+      const rolled = buildWeapon({ id: 18, quality: 100, passives: kosong }, rngModule.createRng(1));
+      assert.ok(rolled.passives.length > 0, `passives ${kosong} tetap diundi`);
+    }
+  });
+
   it('tanpa quality senjata memakai tier tertinggi', () => {
     const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
     const plain = buildWeapon({ id: 1 }, rngModule.createRng(1));

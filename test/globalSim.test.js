@@ -641,7 +641,8 @@ describe('kualitas senjata pada simulasi global', () => {
   const opponent = quality => [{
     teamId: 1,
     label: 'lawan',
-    specs: [{ slot: 1, label: 'lawan', level: 50, coeffs: COEFFS, weapon: { id: 1, quality, passives: [] } }],
+    // `passives: null` = undi acak seperti senjata tanpa pilihan pasif.
+    specs: [{ slot: 1, label: 'lawan', level: 50, coeffs: COEFFS, weapon: { id: 1, quality, passives: null } }],
   }];
 
   // Kualitas hanya mempengaruhi sebagian kecil stat, jadi arahnya diuji lewat
