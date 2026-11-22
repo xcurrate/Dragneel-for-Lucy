@@ -1,0 +1,52 @@
+▸ Atur level dan kualitas senjata
+```
+d sim 1 vs 2 lvl100          → kedua sisi level 100
+d sim 1 vs 2 lvl100/40       → kita 100, lawan 40
+d sim 1 vs 2 lvl/40          → kita tetap, lawan 40
+d sim 1 vs 2 -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
+```
+`-qp` untuk sisi kita, `-qe` untuk sisi lawan. Kualitas yang sudah terpasang di slot menang atas flag ini, jadi kalau hasilnya tidak berubah, cek dulu apakah slotnya punya `quality=` sendiri.
+
+▸ Ulangi hasil yang sama persis
+```
+d sim 1 vs 2 -m 100 -s 42
+```
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 4 — SIMULASI GLOBAL
+━━━━━━━━━━━━━━━━━━━━
+Kalau timmu sudah banyak, `d sim global` mengadu tim aktif melawan SEMUA tim tersimpan sekaligus.
+```
+d sim global
+```
+Opsinya sama seperti `d sim`:
+```
+d sim global -m 100          → 100 pertarungan per tim lawan
+d sim global -total 1000     → total 1000 pertarungan, dibagi rata
+d sim global lvl60           → semua lawan disamakan level 60
+d sim global -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
+```
+Batasnya 100 pertarungan per tim dan 10 juta pertarungan per perintah. Cooldown 10 detik.
+
+Tim yang sedang dipilih tidak ikut diadu, karena itulah timmu sendiri. Tim kosong dilewati dan jumlahnya dicatat di hasil.
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 5 — MEMBACA HASIL
+━━━━━━━━━━━━━━━━━━━━
+▸ Hasil `d sim`
+```
+🏆 37 menang (74%)      ← berapa kali menang + persentasenya
+   Turns: 6 (×13), ...  ← distribusi jumlah turn; makin panjang makin ketat
+💀 13 kalah (26%)       ← berapa kali kalah
+⚖️ 3 seri (6%)          ← hanya muncul kalau ada yang seri
+```
+
+Di atasnya ada komposisi kedua sisi. Arti ikonnya:
+• 🐾 hewan
+• 🔴 🟡 🟠 🟣 🔵 🟢 ⚪ peringkat kualitas senjata, dari tertinggi (fabled) ke terendah (common)
+• ⚔️ senjata
+• ✨ pasif
+• `100%` kualitas senjata
+
+Di footer ada jumlah simulasi dan seed. Seed itulah yang bisa dimasukkan lewat `-s` untuk mengulang hasil yang sama.
+
