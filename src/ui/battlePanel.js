@@ -292,10 +292,11 @@ function duelEmbed(battle, {
   const verdict = winner === 'player' ? 'Menang' : winner === 'enemy' ? 'Kalah' : 'Seri';
   const icon = winner === 'player' ? '🏆' : winner === 'enemy' ? '💀' : '⚖️';
 
+  // Footer tidak mendukung markdown: `**tebal**` akan tampil sebagai tanda bintang
+  // mentah di Discord, jadi teks footer sengaja tanpa penanda apa pun.
   const footer = stats
-    ? `${icon} kamu **${verdict.toLowerCase()}** dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`
+    ? `${icon} kamu ${verdict.toLowerCase()} dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`
       + ` | 🎲 ${stats.tally.player} win, ${stats.tally.enemy} lose, ${stats.tally.tie} tie`
-      + ` (dalam ${stats.runs.toLocaleString('id-ID')} pertarungan)`
     : `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`;
 
   return new EmbedBuilder()

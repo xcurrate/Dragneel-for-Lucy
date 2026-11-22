@@ -2904,8 +2904,10 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
     // Hasil satu pertarungan: sisa HP/WP tiap unit, bukan statistik agregat.
     // Footer memuat hasil pertarungan itu sekaligus rekap 50 pertarungan.
-    assert.match(replies[0].footer.text, /kamu \*\*(menang|kalah|seri)\*\* dalam \d+ turn/);
-    assert.match(replies[0].footer.text, /\d+ win, \d+ lose, \d+ tie \(dalam 50 pertarungan\)/);
+    assert.match(replies[0].footer.text, /kamu (menang|kalah|seri) dalam \d+ turn/);
+    // Footer embed tidak merender markdown; `**` akan tampil mentah di Discord.
+    assert.ok(!/[*_`~]/.test(replies[0].footer.text), replies[0].footer.text);
+    assert.match(replies[0].footer.text, /\d+ win, \d+ lose, \d+ tie$/);
     assert.ok(
       replies[0].fields.some(f => f.value.includes('/')),
       'memuat sisa HP/WP per unit',
