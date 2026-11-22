@@ -266,7 +266,9 @@ function startDashboard(client, tracker) {
           'Content-Type': 'text/html; charset=utf-8',
           'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'no-cache',
-          'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'"
+          // Gambar hewan berasal dari CDN Discord (emoji), jadi img-src harus
+          // mengizinkannya. Selain itu tetap ketat: tanpa script/style inline.
+          'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data: https://cdn.discordapp.com; base-uri 'none'; frame-ancestors 'none'"
         });
         return res.end(fs.readFileSync(file));
       }

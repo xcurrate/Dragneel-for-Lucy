@@ -411,6 +411,23 @@ siap untuk integrasi giveaway nanti.
 - Halaman meringkas kejadian identik berurutan menjadi `×N`. Ini bukan kosmetik: Frozen Armor
   menempelkan 10-20 stack Frostbite per serangan yang diterima, jadi satu turn bisa berisi 20
   baris yang sama persis (battle 7 turn bisa jadi 197 kejadian).
+- **Log versi 2 menyimpan snapshot state per aksi** (`log.actions[]`), bukan hanya daftar teks.
+  Setiap entri berisi `{ t, a, from, to, s }`: nomor turn, ref aktor, rentang event
+  (`log.events[from..to]`), dan `s` = HP/WP/buff **semua** unit saat itu. Inilah yang membuat
+  seekbar, tombol prev/next, dan animasi mungkin tanpa menjalankan ulang simulasi.
+- Snapshot diambil di `runTurn`: setelah tiap aktor selesai (`ctx.log.action(actor)`), termasuk
+  jalur `skip` dan `blocked`, ditambah `ctx.log.flush()` di akhir turn dan setelah pencatatan
+  kematian. Tanpa flush terakhir, baris "gugur" jadi event yatim yang tidak pernah tersorot.
+- **Buff diagregasi per snapshot** (`{ id, n, d, dur, c }` dengan `c` = jumlah stack). Tanpa ini
+  satu snapshot saja bisa membengkak puluhan entri identik. Batas `MAX_ACTIONS = 400` jauh di atas
+  maksimum teoretis (24 turn × 3 slot × 2 tim = 144); kasus terburuk terukur ~257 KB dari batas
+  512 KB penyimpanan.
+- Halaman (`battle-log.js`) punya dua mode: **player** bila `log.actions` ada, dan **teks saja**
+  untuk log versi 1 (tanpa `actions`) — log lama tidak boleh rusak. URL `#<id>/<aksi>` menunjuk
+  langsung ke satu aksi sehingga momen penting bisa dibagikan; `goTo()` memakai
+  `history.replaceState` agar tombol Back tidak menumpuk satu entri per aksi.
+- Gambar hewan diambil dari `imageUrl` di dex (CDN Discord). CSP halaman `/battle-log` karena itu
+  mengizinkan `img-src https://cdn.discordapp.com`, tetapi `script-src` tetap `'self'`.
 
 ## Mesin simulasi battle (`src/services/battle*.js`)
 Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena memang begitu di sumber:

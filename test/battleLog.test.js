@@ -36,7 +36,7 @@ describe('battle log recorder', () => {
   it('records units, turns, and events', () => {
     const battle = run(true);
     const log = battle.log;
-    assert.strictEqual(log.version, 1);
+    assert.strictEqual(log.version, 2);
     assert.strictEqual(log.seed, 7);
     assert.strictEqual(log.winner, battle.winner);
     assert.strictEqual(log.turns, battle.turns);
@@ -51,6 +51,62 @@ describe('battle log recorder', () => {
       for (const key of ['a', 'r', 's']) {
         if (event[key] != null) assert.ok(refs.has(event[key]), `ref ${event[key]} tidak dikenal`);
       }
+    }
+  });
+
+  it('records a full state snapshot for every action', () => {
+    const log = run(true).log;
+    assert.ok(Array.isArray(log.actions) && log.actions.length > 0);
+    assert.strictEqual(log.droppedActions, 0);
+
+    // Setiap aksi menunjuk rentang event yang sah dan tidak tumpang tindih.
+    let previousTo = 0;
+    for (const action of log.actions) {
+      assert.ok(action.from >= previousTo, 'rentang event aksi harus maju');
+      assert.ok(action.to >= action.from);
+      assert.ok(action.to <= log.events.length);
+      previousTo = action.to;
+
+      // Snapshot harus mencakup SEMUA unit, bukan hanya yang terlibat.
+      assert.strictEqual(action.s.length, log.units.length);
+      for (const snap of action.s) {
+        assert.ok(Number.isInteger(snap.hp) && snap.hp >= 0);
+        assert.ok(Number.isInteger(snap.wp) && snap.wp >= 0);
+        assert.ok(Array.isArray(snap.b));
+      }
+    }
+
+    // Snapshot terakhir harus sama dengan HP akhir yang dilaporkan `units`.
+    const last = log.actions[log.actions.length - 1].s;
+    log.units.forEach((unit, i) => assert.strictEqual(last[i].hp, unit.hp, `HP akhir ${unit.name}`));
+  });
+
+  it('covers every event with an action, including deaths', () => {
+    const log = run(true).log;
+    const last = log.actions[log.actions.length - 1];
+    // Tidak boleh ada event yatim: kalau ada, baris itu tidak akan pernah
+    // tersorot saat memutar log.
+    assert.strictEqual(last.to, log.events.length);
+
+    const deathEvents = log.events.filter(e => e.k === 'death');
+    assert.ok(deathEvents.length > 0, 'battle uji harus menghasilkan kematian');
+    for (const death of deathEvents) {
+      const owner = log.actions.find(a => a.from <= log.events.indexOf(death) && log.events.indexOf(death) < a.to);
+      assert.ok(owner, 'setiap event kematian harus punya aksi induk');
+    }
+  });
+
+  it('groups stacked buffs instead of repeating them per snapshot', () => {
+    const log = run(true).log;
+    const snap = log.actions[log.actions.length - 1].s;
+    for (const state of snap) {
+      for (const buff of state.b) {
+        // Frostbite menumpuk; snapshot harus melaporkannya sebagai satu entri
+        // dengan hitungan, bukan puluhan entri identik.
+        assert.ok(buff.c >= 1, 'setiap buff punya hitungan minimal 1');
+      }
+      const keys = state.b.map(b => `${b.id}|${b.n}|${b.d}|${b.dur}`);
+      assert.strictEqual(new Set(keys).size, keys.length, 'buff tidak boleh duplikat dalam satu snapshot');
     }
   });
 
@@ -168,6 +224,26 @@ describe('battle log page', () => {
 
     const missing = await fetch(baseUrl + '/api/battle-log/' + 'b'.repeat(32));
     assert.strictEqual(missing.status, 404);
+  });
+
+  it('allows animal images from the Discord CDN but nothing else', async () => {
+    const res = await fetch(baseUrl + '/battle-log');
+    const csp = res.headers.get('content-security-policy');
+    assert.match(csp, /img-src[^;]*https:\/\/cdn\.discordapp\.com/);
+    // Script tetap hanya dari origin sendiri: gambar boleh remote, kode tidak.
+    assert.match(csp, /script-src 'self'/);
+  });
+
+  it('ships a player page with seekbar and image support', async () => {
+    const html = await (await fetch(baseUrl + '/battle-log')).text();
+    for (const id of ['seek', 'btn-prev', 'btn-next', 'btn-play', 'side-player', 'side-enemy']) {
+      assert.match(html, new RegExp('id="' + id + '"'), `halaman harus punya #${id}`);
+    }
+
+    const js = await (await fetch(baseUrl + '/assets/battle-log.js')).text();
+    assert.match(js, /paintState/, 'player harus menggambar ulang state per aksi');
+    assert.match(js, /groupEvents/, 'event berulang harus diringkas');
+    assert.match(js, /cdn\.discordapp\.com|image/, 'player harus memakai gambar hewan');
   });
 
   it('keeps the rest of the API behind the token', async () => {

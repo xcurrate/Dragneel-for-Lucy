@@ -360,7 +360,7 @@ function runTurn(ctx, player, enemy) {
     if (!actor || !isAlive(actor)) continue;
     // OwO Shield.attackWeapon: setelah Taunt baru dipasang di preTurn, unit
     // melewati serangan pada turn itu.
-    if (actor.skippedAttack) { ctx.log?.act(actor, 'skip'); continue; }
+    if (actor.skippedAttack) { ctx.log?.act(actor, 'skip'); ctx.log?.action(actor); continue; }
     // OwO memanggil canAttack semua buff (tidak berhenti di yang pertama),
     // karena buff bisa mengubah durasinya sendiri di sini. Freeze hanya boleh
     // menghabiskan SATU stack per giliran ("remove a stack after triggering"),
@@ -378,8 +378,9 @@ function runTurn(ctx, player, enemy) {
       }
       if (buff.canAttack?.(ctx, actor, allies, foes) === false) blocked = true;
     }
-    if (blocked) { ctx.log?.act(actor, 'blocked'); continue; }
+    if (blocked) { ctx.log?.act(actor, 'blocked'); ctx.log?.action(actor); continue; }
     act(ctx, actor, allies, foes);
+    ctx.log?.action(actor);
   }
 
   for (const [team, foe] of [[player, enemy], [enemy, player]]) {
@@ -403,6 +404,10 @@ function runTurn(ctx, player, enemy) {
       return b.duration > 0;
     });
   }
+
+  // Efek postTurn (Frostbite -> Freeze, regen) mengubah state di luar aksi
+  // aktor; snapshot terpisah membuat perubahan itu tidak hilang dari seekbar.
+  ctx.log?.flush();
 }
 
 function act(ctx, actor, allies, foes) {
@@ -487,6 +492,9 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
           ctx.log.death(unit);
         }
       }
+      // Kematian dicatat di luar giliran aktor. Snapshot penutup ini membuat
+      // baris "gugur" tetap punya aksi induk dan HP 0 muncul di seekbar akhir.
+      ctx.log.flush();
     }
     const playerDead = isTeamDead(player);
     const enemyDead = isTeamDead(enemy);

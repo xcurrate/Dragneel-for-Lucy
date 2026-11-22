@@ -22,23 +22,48 @@
     </section>
 
     <div id="content" hidden>
-      <section class="card">
-        <div class="teams">
-          <div class="team" id="team-player"></div>
-          <div class="vs">VS</div>
-          <div class="team" id="team-enemy"></div>
+      <section class="card arena-card">
+        <div class="arena">
+          <div class="side" id="side-player"></div>
+          <div class="mid">
+            <div class="turn-badge" id="turn-badge">TURN 1</div>
+            <div class="vs">VS</div>
+          </div>
+          <div class="side" id="side-enemy"></div>
         </div>
-        <div class="meta" id="meta"></div>
+      </section>
+
+      <section class="card">
+        <div class="controls">
+          <button id="btn-prev" class="btn" type="button" title="Aksi sebelumnya">◀</button>
+          <button id="btn-play" class="btn primary" type="button">Putar</button>
+          <button id="btn-next" class="btn" type="button" title="Aksi berikutnya">▶</button>
+          <input id="seek" class="seek" type="range" min="0" max="0" value="0" step="1" aria-label="Posisi aksi">
+          <span class="counter" id="counter">0 / 0</span>
+          <label class="speed">
+            <span class="muted">Kecepatan</span>
+            <select id="speed">
+              <option value="1200">0,5×</option>
+              <option value="700" selected>1×</option>
+              <option value="400">1,5×</option>
+              <option value="220">2×</option>
+            </select>
+          </label>
+        </div>
+        <div class="now" id="now"></div>
       </section>
 
       <section class="card">
         <div class="toolbar">
-          <label class="check"><input type="checkbox" id="filter-all" checked> Tampilkan semua kejadian</label>
+          <label class="check"><input type="checkbox" id="filter-all"> Tampilkan semua kejadian</label>
           <span class="muted" id="count"></span>
         </div>
+        <div id="feed" class="feed"></div>
       </section>
 
-      <section id="turns" class="turns"></section>
+      <section class="card">
+        <div class="meta" id="meta"></div>
+      </section>
     </div>
   </main>
   <script src="/assets/battle-log.js"></script>
