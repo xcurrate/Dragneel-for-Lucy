@@ -3,7 +3,7 @@
 const { parentPort, workerData } = require('node:worker_threads');
 const { aggregateChunk } = require('./globalSimCore');
 
-const { playerSpecs, opponents, units, seed } = workerData;
+const { playerSpecs, opponents, units, seed, playerQuality, enemyQuality } = workerData;
 
 // Laporan kemajuan dikirim bertahap supaya embed progres bergerak sejak detik
 // pertama, bukan menunggu satu potong selesai. Pesan bertipe `progress`; hasil
@@ -11,6 +11,8 @@ const { playerSpecs, opponents, units, seed } = workerData;
 const result = aggregateChunk(playerSpecs, opponents, {
   seed,
   units,
+  playerQuality,
+  enemyQuality,
   onStep: step => parentPort.postMessage({ type: 'progress', ...step }),
 });
 parentPort.postMessage(result);

@@ -90,10 +90,10 @@ function splitWork(opponentCount, runs, parts) {
   return chunks;
 }
 
-function runChunkInWorker(playerSpecs, opponents, chunk, { seed, onProgress }) {
+function runChunkInWorker(playerSpecs, opponents, chunk, { seed, onProgress, playerQuality, enemyQuality }) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_FILE, {
-      workerData: { playerSpecs, opponents, units: chunk.units, seed },
+      workerData: { playerSpecs, opponents, units: chunk.units, seed, playerQuality, enemyQuality },
     });
     let settled = false;
     worker.on('message', message => {
@@ -207,17 +207,21 @@ function mergeChunks(chunks) {
 // `opponents` = [{ label, teamId, slotId, specs }]. Setiap lawan dijalankan
 // `runs` kali; urutannya tetap supaya streak bermakna.
 async function runGlobalSim(playerSpecs, opponents, {
-  runs = 100, seed = randomSeed(), workers = null, onProgress,
+  runs = 100, seed = randomSeed(), workers = null, onProgress, playerQuality, enemyQuality,
 } = {}) {
   await acquireSlot();
   try {
-    return await runSimulation(playerSpecs, opponents, { runs, seed, workers, onProgress });
+    return await runSimulation(playerSpecs, opponents, {
+      runs, seed, workers, onProgress, playerQuality, enemyQuality,
+    });
   } finally {
     releaseSlot();
   }
 }
 
-async function runSimulation(playerSpecs, opponents, { runs, seed, workers, onProgress }) {
+async function runSimulation(playerSpecs, opponents, {
+  runs, seed, workers, onProgress, playerQuality, enemyQuality,
+}) {
   const runCount = Math.max(1, Math.floor(Number(runs) || 1));
   const startedAt = Date.now();
   const total = runCount * opponents.length;
@@ -236,6 +240,8 @@ async function runSimulation(playerSpecs, opponents, { runs, seed, workers, onPr
     chunks = [aggregateChunk(playerSpecs, opponents, {
       seed,
       units: splitWork(opponents.length, runCount, 1)[0].units,
+      playerQuality,
+      enemyQuality,
     })];
     if (onProgress) {
       await onProgress({
@@ -295,6 +301,8 @@ async function runSimulation(playerSpecs, opponents, { runs, seed, workers, onPr
 
     await Promise.all(plan.map((chunk, i) => runChunkInWorker(playerSpecs, opponents, chunk, {
       seed,
+      playerQuality,
+      enemyQuality,
       onProgress: step => handleStep(i, step),
     }).then(result => {
       results[i] = result;

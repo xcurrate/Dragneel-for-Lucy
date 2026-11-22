@@ -68,6 +68,15 @@ function withLevel(specs, level) {
   return specs.map(spec => ({ ...spec, level }));
 }
 
+// Menulis kualitas efektif ke spec untuk ditampilkan. Urutannya sama dengan
+// `buildWeapon`: kualitas slot menang atas flag global.
+function withQuality(specs, quality) {
+  if (quality == null) return specs;
+  return specs.map(spec => (spec.weapon
+    ? { ...spec, displayQuality: spec.weapon.quality ?? quality }
+    : spec));
+}
+
 // Level untuk satu sisi: angka = pakai itu, kosong = pakai level yang sudah ada.
 function levelOf(value) {
   if (value == null || value === '') return undefined;
@@ -122,10 +131,9 @@ function parseFlags(args) {
 const GLOBAL_COOLDOWN_MS = 10000;
 const GLOBAL_COOLDOWN_ACTION = 'sim-global';
 
-// Default jauh lebih besar dari `dsim` karena tujuannya mengukur winrate yang
-// stabil. Dengan 5-11 tim lawan, 10.000 run per tim berarti puluhan ribu
-// pertarungan dan selesai dalam hitungan detik.
-const DEFAULT_GLOBAL_RUNS = 10000;
+// Default per tim, sama dengan batas bawaan developer. Angka ini bisa diubah
+// lewat `d sim global limit`, jadi yang dipakai selalu nilai tersimpan.
+const DEFAULT_GLOBAL_RUNS = store.DEFAULT_MAX_GLOBAL_RUNS;
 
 // Batas per perintah. Diukur ~240 ribu pertarungan/detik dengan 4 worker, jadi
 // 10 juta kira-kira 40 detik: masih di bawah batas waktu interaksi Discord dan
@@ -258,11 +266,16 @@ function globalUsage(prefix = 'd') {
     '(hanya terlihat olehmu, senjata lawan disembunyikan).',
     '',
     `Opsi:`,
-    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${DEFAULT_GLOBAL_RUNS.toLocaleString('id-ID')})`,
+    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
     `\`-total <jumlah>\` total pertarungan, dibagi rata ke semua tim lawan`,
+    `\`-qp <0-100>\` kualitas senjata tim kamu (menimpa kualitas slot)`,
+    `\`-qe <0-100>\` kualitas senjata semua tim lawan`,
+    `\`lvl100\` / \`lvl100/60\` / \`lvl/40\` samakan level, seperti \`${prefix} sim\``,
     `\`-s <seed>\` ulangi hasil yang sama`,
     '',
-    `Batas: **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}** pertarungan per perintah.`,
+    `Batas per tim: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}** pertarungan `
+      + `(diatur developer lewat \`${prefix} sim global limit\`).`,
+    `Batas keras: **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}** pertarungan per perintah.`,
     'Pertarungan dibagi ke beberapa worker, jadi jutaan pertarungan selesai',
     'dalam hitungan detik sampai puluhan detik.',
     `Cooldown: **${Math.round(GLOBAL_COOLDOWN_MS / 1000)} detik** untuk selain developer.`,
@@ -272,7 +285,7 @@ function globalUsage(prefix = 'd') {
 // Terima dua bentuk: `-m <per tim>` atau `-total <total pertarungan>`.
 // Keduanya dibatasi MAX_GLOBAL_BATTLES supaya satu perintah tidak menahan bot
 // terlalu lama.
-function resolveRunCount(flags, opponentCount) {
+function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = false } = {}) {
   const perTeam = flags['-m'] ?? flags['-n'] ?? flags['-runs'];
   const total = flags['-total'] ?? flags['-t'];
 
@@ -290,13 +303,31 @@ function resolveRunCount(flags, opponentCount) {
     }
     // Dibulatkan ke bawah supaya total tidak melebihi yang diminta; sisa
     // pembagian tidak dijalankan.
-    return { value: Math.max(1, Math.floor(value / opponentCount)), total: value };
+    const perTeamValue = Math.max(1, Math.floor(value / opponentCount));
+    // `-total` juga dibatasi lewat angka per tim, kalau tidak batas bisa
+    // dilewati hanya dengan mengganti nama flag.
+    if (!isDev && maxPerTeam != null && perTeamValue > maxPerTeam) {
+      return {
+        error: `Maksimum **${maxPerTeam.toLocaleString('id-ID')}** pertarungan per tim `
+          + `(≈ **${(maxPerTeam * opponentCount).toLocaleString('id-ID')}** total untuk `
+          + `${opponentCount} tim). Kamu meminta ${perTeamValue.toLocaleString('id-ID')} per tim.`,
+      };
+    }
+    return { value: perTeamValue, total: value };
   }
 
-  const runs = perTeam ?? DEFAULT_GLOBAL_RUNS;
+  const runs = perTeam ?? maxPerTeam ?? DEFAULT_GLOBAL_RUNS;
   const value = Number(runs);
   if (!Number.isSafeInteger(value) || value < 1) {
     return { error: 'Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim global -m 5000`.' };
+  }
+  // Batas per tim dari developer. Developer sendiri tidak dibatasi, sama
+  // seperti `d sim`.
+  if (!isDev && maxPerTeam != null && value > maxPerTeam) {
+    return {
+      error: `Maksimum **${maxPerTeam.toLocaleString('id-ID')}** pertarungan per tim. `
+        + `Kamu meminta ${value.toLocaleString('id-ID')} per tim.`,
+    };
   }
   if (value * opponentCount > MAX_GLOBAL_BATTLES) {
     const maxPerTeam = Math.floor(MAX_GLOBAL_BATTLES / opponentCount);
@@ -332,8 +363,24 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   const seed = flags['-s'] ?? flags['-seed'];
   if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
 
-  const player = resolveTeamSpecs(team);
-  if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
+  // Kualitas senjata: `-qp` untuk tim pemain, `-qe` untuk semua lawan.
+  const qualityOf = value => {
+    if (value == null) return undefined;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
+  };
+  const playerQuality = qualityOf(flags['-qp']);
+  const enemyQuality = qualityOf(flags['-qe']);
+
+  // Flag `lvl` sama artinya dengan `d sim`: menimpa level tanpa mengubah data.
+  const levels = parseLevels(flags.lvl);
+  if (levels.invalid || flags.lvl?.malformed) {
+    return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim global lvl100\`, \`${prefix} sim global lvl/40\`.`));
+  }
+
+  const rawPlayer = resolveTeamSpecs(team);
+  if (rawPlayer.error) return send(message, errorEmbed(`❌ ${rawPlayer.error}`));
+  const player = { specs: withLevel(withQuality(rawPlayer.specs, playerQuality), levels.player) };
 
   const opponents = [];
   // Simulasi global melawan semua tim tersimpan, termasuk tim lain milik user
@@ -358,7 +405,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
       teamId: other.id,
       slotId: other.slotId,
       label: teamLabel(other),
-      specs: specs.specs,
+      specs: withLevel(withQuality(specs.specs, enemyQuality), levels.enemy),
     });
   }
   if (!opponents.length) {
@@ -367,7 +414,9 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
 
   // Jumlah run baru bisa dihitung setelah jumlah lawan diketahui, karena
   // `-total` dibagi rata ke semua lawan.
-  const runCount = resolveRunCount(flags, opponents.length);
+  // Batas per tim mengikuti setting developer; developer bebas melewatinya.
+  const maxPerTeam = isDev ? null : store.globalRunLimitFor();
+  const runCount = resolveRunCount(flags, opponents.length, { maxPerTeam, isDev });
   if (runCount.error) return send(message, errorEmbed(runCount.error));
 
   // Gerbang cooldown dipasang setelah validasi supaya salah ketik tidak
@@ -405,6 +454,8 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     result = await globalSim.runGlobalSim(player.specs, opponents, {
       runs: runCount.value,
       seed: seed != null ? Number(seed) : undefined,
+      playerQuality,
+      enemyQuality,
       onProgress: publishProgress,
     });
   } catch (error) {
@@ -562,6 +613,60 @@ function handleLimitCommand(message, args, prefix, deps = {}) {
   ));
 }
 
+// `d sim global limit [per-tim] [per-user]` (khusus developer).
+// Dua angka terpisah: batas umum untuk semua user, dan batas khusus satu user
+// yang menimpa batas umum. Tanpa argumen hanya menampilkan nilai sekarang.
+function handleGlobalLimitCommand(message, args, prefix, deps = {}) {
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  const dev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+
+  const describe = () => [
+    `Per tim untuk semua user: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}**`,
+    `Batas khusus user: ${store.getMaxGlobalUser() == null
+      ? '_tidak ada_ (memakai batas umum)'
+      : `**${store.getMaxGlobalUser().toLocaleString('id-ID')}**`}`,
+    '',
+    `Ubah: \`${prefix} sim global limit <per-tim>\``,
+    `Batas khusus user: \`${prefix} sim global limit user <jumlah>\``,
+    `Hapus batas khusus user: \`${prefix} sim global limit user 0\``,
+    'Developer tidak dibatasi angka ini.',
+  ].join('\n');
+
+  if (!args.length) {
+    return send(message, usageEmbed('⚙️ Batas Simulasi Global', describe()));
+  }
+  if (!dev) {
+    return send(message, errorEmbed('Hanya developer bot yang bisa mengubah batas simulasi global.'));
+  }
+
+  const target = (args[0] || '').toLowerCase();
+  const parse = raw => {
+    const n = Number(raw);
+    return Number.isSafeInteger(n) && n >= 1 ? n : null;
+  };
+
+  if (target === 'user') {
+    // `0` menghapus batas khusus supaya user kembali mengikuti batas umum.
+    if (args[1] === '0') {
+      store.setMaxGlobalUser(null);
+      return send(message, usageEmbed('⚙️ Batas Simulasi Global', describe()));
+    }
+    const value = parse(args[1]);
+    if (value == null) {
+      return send(message, errorEmbed(`Batas harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim global limit user 500\`.`));
+    }
+    store.setMaxGlobalUser(value);
+    return send(message, usageEmbed('⚙️ Batas Simulasi Global', describe()));
+  }
+
+  const value = parse(args[0]);
+  if (value == null) {
+    return send(message, errorEmbed(`Batas harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim global limit 100\`.`));
+  }
+  store.setMaxGlobalRuns(value);
+  return send(message, usageEmbed('⚙️ Batas Simulasi Global', describe()));
+}
+
 async function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const userId = message.author.id;
@@ -582,6 +687,9 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     const rest = args.slice(1);
     if (['help', 'bantuan'].includes((rest[0] || '').toLowerCase())) {
       return send(message, usageEmbed('🌍 Simulasi Global', globalUsage(prefix)));
+    }
+    if ((rest[0] || '').toLowerCase() === 'limit') {
+      return handleGlobalLimitCommand(message, rest.slice(1), prefix, deps);
     }
     return handleGlobalSim(message, rest, prefix, deps);
   }
@@ -641,8 +749,10 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
   // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
-  const playerSpecs = withLevel(player.specs, levels.player);
-  const enemySpecs = withLevel(enemy.specs, levels.enemy);
+  // Kualitas efektif ikut ditulis ke spec supaya komposisi yang ditampilkan
+  // sama dengan tier yang benar-benar dipakai (dan sama saat tombol 🔁 dipakai).
+  const playerSpecs = withLevel(withQuality(player.specs, playerQuality), levels.player);
+  const enemySpecs = withLevel(withQuality(enemy.specs, enemyQuality), levels.enemy);
 
   // Simulasi besar bisa berjalan lama. Kirim pesan progres lebih dulu, perbarui
   // berkala, lalu timpa dengan hasil akhir di pesan yang sama supaya channel
@@ -768,6 +878,7 @@ function resolveEnemy(userId, args, overrideLevel) {
 
 module.exports = {
   handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleRepeatButton, handleLimitCommand,
+  handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
   parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,

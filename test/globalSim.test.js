@@ -269,11 +269,28 @@ describe('simulasi global', () => {
 });
 
 describe('jumlah pertarungan simulasi global', () => {
-  it('memakai default yang besar supaya winrate stabil', () => {
-    assert.ok(DEFAULT_GLOBAL_RUNS >= 1000, `default ${DEFAULT_GLOBAL_RUNS}`);
+  it('memakai default 100 pertarungan per tim', () => {
+    assert.strictEqual(DEFAULT_GLOBAL_RUNS, 100);
     const out = resolveRunCount({}, 5);
     assert.strictEqual(out.value, DEFAULT_GLOBAL_RUNS);
     assert.strictEqual(out.total, DEFAULT_GLOBAL_RUNS * 5);
+  });
+
+  it('menolak jumlah di atas batas per tim', () => {
+    const out = resolveRunCount({ '-m': '500' }, 4, { maxPerTeam: 100 });
+    assert.ok(out.error, 'harus error');
+    assert.ok(out.error.includes('100'), out.error);
+  });
+
+  it('developer boleh melewati batas per tim', () => {
+    const out = resolveRunCount({ '-m': '500' }, 4, { maxPerTeam: 100, isDev: true });
+    assert.strictEqual(out.value, 500);
+  });
+
+  it('batas juga berlaku untuk -total, bukan hanya -m', () => {
+    // 4 tim × 100 = 400; meminta 4000 total berarti 1000 per tim.
+    const out = resolveRunCount({ '-total': '4000' }, 4, { maxPerTeam: 100 });
+    assert.ok(out.error, 'tidak boleh lolos lewat -total');
   });
 
   it('menerima -m sebagai jumlah per tim', () => {
@@ -613,5 +630,42 @@ describe('pemaksaan jumlah worker', () => {
   it('simulasi besar memakai worker walau workers tidak diminta', async () => {
     const r = await globalSim.runGlobalSim(P, opps, { runs: 30000, seed: 7 });
     assert.strictEqual(r.workers, globalSim.MAX_WORKERS);
+  });
+});
+
+describe('kualitas senjata pada simulasi global', () => {
+  const globalSim = require(path.join(ROOT, 'src/services/globalSim'));
+
+  const COEFFS = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
+  const bare = [{ slot: 1, label: 'pemain', level: 50, coeffs: COEFFS, weapon: null }];
+  const opponent = quality => [{
+    teamId: 1,
+    label: 'lawan',
+    specs: [{ slot: 1, label: 'lawan', level: 50, coeffs: COEFFS, weapon: { id: 1, quality, passives: [] } }],
+  }];
+
+  // Kualitas hanya mempengaruhi sebagian kecil stat, jadi arahnya diuji lewat
+  // selisih kekalahan pada jumlah run yang cukup besar.
+  it('kualitas lawan sampai ke worker dan mempersulit pemain', async () => {
+    // Slot harus tanpa kualitas sendiri, kalau tidak nilai slot menang atas flag.
+    const weak = await globalSim.runGlobalSim(bare, opponent(null), {
+      runs: 400, seed: 3, enemyQuality: 0, workers: 1,
+    });
+    const strong = await globalSim.runGlobalSim(bare, opponent(null), {
+      runs: 400, seed: 3, enemyQuality: 100, workers: 1,
+    });
+    assert.ok(strong.tally.enemy > weak.tally.enemy,
+      `lawan q=100 harus lebih banyak menang (${strong.tally.enemy} vs ${weak.tally.enemy})`);
+  });
+
+  it('kualitas slot menang atas flag global', async () => {
+    const slot = await globalSim.runGlobalSim(bare, opponent(0), {
+      runs: 200, seed: 4, enemyQuality: 100, workers: 1,
+    });
+    const forcedZero = await globalSim.runGlobalSim(bare, opponent(null), {
+      runs: 200, seed: 4, enemyQuality: 0, workers: 1,
+    });
+    assert.strictEqual(slot.tally.player, forcedZero.tally.player,
+      'slot 0 harus menghasilkan hasil yang sama dengan flag 0');
   });
 });

@@ -66,7 +66,9 @@ const PROGRESS_STEP = 2000;
 // `maxInternal` tetap diperlukan karena streak yang terkurung di tengah potong
 // tidak pernah muncul sebagai head atau tail, sehingga tanpa field ini streak
 // terpanjang bisa hilang sama sekali.
-function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep = null } = {}) {
+function aggregateChunk(playerSpecs, opponents, {
+  seed = 1, units = null, onStep = null, playerQuality, enemyQuality,
+} = {}) {
   const work = units || opponents.map((_, i) => ({
     opponentIndex: i, from: 0, to: opponents[i].runs ?? 0,
   }));
@@ -101,7 +103,7 @@ function aggregateChunk(playerSpecs, opponents, { seed = 1, units = null, onStep
 
     for (let i = unit.from; i < unit.to; i++) {
       const rng = createRng(runSeed(seed, unit.opponentIndex, i));
-      const result = runBattle(playerSpecs, opponent.specs, { rng });
+      const result = runBattle(playerSpecs, opponent.specs, { rng, playerQuality, enemyQuality });
       tally[result.winner] += 1;
       bucket.tally[result.winner] += 1;
       entry.tally[result.winner] += 1;

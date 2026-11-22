@@ -507,6 +507,48 @@ function setMaxRuns(value) {
   return n;
 }
 
+// Batas simulasi global, dua angka terpisah:
+// - `max_global_runs`  : batas per tim untuk SEMUA user (default 100)
+// - `max_global_user`  : batas khusus satu user (opsional, menimpa yang di atas)
+const DEFAULT_MAX_GLOBAL_RUNS = 100;
+const MAX_GLOBAL_RUNS_KEY = 'max_global_runs';
+const MAX_GLOBAL_USER_KEY = 'max_global_user';
+
+function getMaxGlobalRuns() {
+  const raw = Number(getSetting(MAX_GLOBAL_RUNS_KEY));
+  return Number.isSafeInteger(raw) && raw >= 1 ? raw : DEFAULT_MAX_GLOBAL_RUNS;
+}
+
+function setMaxGlobalRuns(value) {
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1) return null;
+  setSetting(MAX_GLOBAL_RUNS_KEY, n);
+  return n;
+}
+
+// 0 / kosong berarti tidak ada batas khusus per user.
+function getMaxGlobalUser() {
+  const raw = Number(getSetting(MAX_GLOBAL_USER_KEY));
+  return Number.isSafeInteger(raw) && raw >= 1 ? raw : null;
+}
+
+function setMaxGlobalUser(value) {
+  if (value == null) {
+    getDb().prepare('DELETE FROM battle_settings WHERE key = ?').run(MAX_GLOBAL_USER_KEY);
+    return null;
+  }
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1) return null;
+  setSetting(MAX_GLOBAL_USER_KEY, n);
+  return n;
+}
+
+// Batas yang berlaku untuk satu user: batas khusus user bila ada, kalau tidak
+// batas umum.
+function globalRunLimitFor() {
+  return getMaxGlobalUser() ?? getMaxGlobalRuns();
+}
+
 function cooldownRemaining(userId, action, now = Date.now()) {
   const row = getDb().prepare(
     'SELECT ready_at FROM command_cooldowns WHERE user_id = ? AND action = ?'
@@ -560,6 +602,12 @@ module.exports = {
   setSetting,
   getMaxRuns,
   setMaxRuns,
+  DEFAULT_MAX_GLOBAL_RUNS,
+  getMaxGlobalRuns,
+  setMaxGlobalRuns,
+  getMaxGlobalUser,
+  setMaxGlobalUser,
+  globalRunLimitFor,
   setCooldown,
   clearCooldown,
   normalizeName,

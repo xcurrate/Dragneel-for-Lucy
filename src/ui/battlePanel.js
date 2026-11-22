@@ -230,7 +230,10 @@ function turnDistribution(histogram, limit = 12) {
 function sideLine(spec) {
   const icons = [emoji.animalEmoji(spec.animal)];
   if (spec.weapon) {
-    const quality = spec.weapon.quality ?? data.DEFAULT_QUALITY;
+    // `spec.displayQuality` = hasil akhir dari flag -qp/-qe yang menimpa
+    // kualitas slot. Tanpa ini komposisi menampilkan tier database, bukan tier
+    // yang benar-benar dipakai simulasi (dan tombol 🔁 jadi berbeda).
+    const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
     icons.push(emoji.rankEmoji(quality), emoji.weaponEmoji(spec.weapon.id, quality));
     for (const id of spec.weapon.passives || []) icons.push(emoji.passiveEmoji(id, quality));
     icons.push(`${quality}%`);

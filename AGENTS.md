@@ -640,6 +640,23 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   (`MAX_QUEUE = 3`); dua simulasi jutaan pertarungan bersamaan berebut core yang
   sama dan memakai memori dua kali. Antrean penuh bukan kesalahan user: command
   melepas cooldown dan menampilkan pesan agar bisa langsung dicoba lagi.
+- **Kualitas senjata di tampilan memakai `spec.displayQuality`, bukan
+  `spec.weapon.quality`.** `withQuality()` di `battleSim.js` menulis kualitas
+  efektif (slot → flag `-qp`/`-qe` → default) ke spec. Dulu `sideLine` membaca
+  kualitas dari database saja, jadi `d sim -qe 10` menampilkan tier 100% padahal
+  simulasi memakai 10%. Karena spec yang sama disimpan untuk tombol 🔁, hasil awal
+  dan hasil ulang kini identik; jangan kembali membaca `weapon.quality` langsung.
+- **Batas simulasi global dua lapis.** `max_global_runs` (default 100) adalah
+  batas per tim untuk semua user; `max_global_user` menimpanya bila diisi dan
+  tidak pernah mengubah batas umum. Keduanya diatur developer lewat
+  `d sim global limit [<per-tim>]` dan `d sim global limit user <jumlah|0>`.
+  `globalRunLimitFor()` yang memilih mana yang berlaku. Batas diterapkan di
+  `resolveRunCount` untuk `-m` DAN `-total`, karena kalau hanya `-m` yang dijaga
+  batas bisa dilewati cukup dengan mengganti nama flag. Developer tidak dibatasi.
+- **`-qp`/`-qe`/`lvl` harus diteruskan sampai ke worker.** Nilainya melewati
+  `runGlobalSim` → `runChunkInWorker` → `workerData` → `aggregateChunk` →
+  `runBattle`. Melewatkan satu mata rantai membuat flag tampak diterima tetapi
+  tidak berpengaruh apa pun.
 - **Batas `MAX_GLOBAL_BATTLES` = 10 juta** (~39 detik dengan 4 worker pada 4 vCPU;
   mesin uji punya 2 core fisik, jadi speedup praktis ~2x). Jangan naikkan tanpa
   mengukur ulang: batas waktu interaksi Discord dan memori VPS jadi taruhannya.

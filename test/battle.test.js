@@ -3128,3 +3128,152 @@ describe('d sim A vs B', () => {
     assert.ok(embed.description.includes('tidak ditemukan'), embed.description);
   });
 });
+
+describe('kualitas senjata di tampilan komposisi', () => {
+  const { handleSimCommand, handleRepeatButton } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+
+  const COEFFS = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
+
+  function seedTeams() {
+    for (const name of ['Satu', 'Dua']) {
+      store.createTeam('u', name);
+      store.setSlot('u', name, 1, { custom: COEFFS, level: 50 });
+      store.setWeapon('u', name, 1, { weaponId: 4, weaponQuality: null, passives: [] });
+    }
+    store.setActiveTeam('u', 'Satu');
+  }
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-quality-'));
+    process.chdir(tempDir);
+    store.getDb();
+    seedTeams();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  async function runSim(args) {
+    let payload = null;
+    await handleSimCommand({ guildId: 'g', author: { id: 'u' } }, args, 'd', {
+      sendEmbed: (m, embed) => { payload = { embeds: [embed], components: [] }; },
+      sendPayload: (m, p) => { payload = p; },
+    });
+    return payload;
+  }
+
+  it('-qe tampil di komposisi lawan, bukan tier database', async () => {
+    const payload = await runSim(['-qe', '10', '-m', '2']);
+    const body = payload.embeds[0].toJSON().description;
+    const [playerBlock, enemyBlock] = body.split('**[2] Dua**');
+    assert.ok(playerBlock.includes('⚔️100%'), 'sisi pemain tidak terpengaruh -qe');
+    assert.ok(enemyBlock.includes('⚪'), 'rank lawan mengikuti -qe 10');
+    assert.ok(enemyBlock.includes('10%'), 'persen lawan ikut berubah');
+  });
+
+  it('tombol ulang memakai kualitas yang sama dengan hasil awal', async () => {
+    const payload = await runSim(['-qe', '10', '-m', '2']);
+    const before = payload.embeds[0].toJSON().description;
+    const customId = payload.components[0].toJSON().components[0].custom_id;
+
+    let edited = null;
+    await handleRepeatButton({
+      customId,
+      user: { id: 'u' },
+      reply: async () => {},
+      deferReply: async () => {},
+      editReply: async p => { edited = p; },
+    });
+    assert.strictEqual(edited.embeds[0].toJSON().description, before,
+      'komposisi setelah 🔁 harus identik dengan hasil awal');
+  });
+
+  it('-qp dan -qe bisa dipakai bersamaan dengan nilai berbeda', async () => {
+    const payload = await runSim(['-qp', '100', '-qe', '0', '-m', '1']);
+    const body = payload.embeds[0].toJSON().description;
+    assert.ok(body.includes('🔴'), 'sisi pemain tier tertinggi');
+    assert.ok(body.includes('⚪'), 'sisi lawan tier terendah');
+  });
+
+  it('kualitas di slot menang atas flag', async () => {
+    store.setWeapon('u', 'Dua', 1, { weaponId: 4, weaponQuality: 40, passives: [] });
+    const payload = await runSim(['-qe', '100', '-m', '1']);
+    const body = payload.embeds[0].toJSON().description;
+    assert.ok(body.includes('40%'), 'kualitas slot dipertahankan');
+  });
+});
+
+describe('batas simulasi global', () => {
+  const { handleSimCommand } = require(path.join(ROOT, 'src/commands/battleSim'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+  let replies;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-global-limit-'));
+    process.chdir(tempDir);
+    store.getDb();
+    replies = [];
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const send = (m, embed) => { replies.push(embed.toJSON()); };
+
+  function msg(id = 'u') {
+    return { guildId: 'g', author: { id } };
+  }
+
+  it('default batas per tim adalah 100', () => {
+    assert.strictEqual(store.getMaxGlobalRuns(), 100);
+    assert.strictEqual(store.getMaxGlobalUser(), null);
+    assert.strictEqual(store.globalRunLimitFor(), 100);
+  });
+
+  it('developer bisa mengubah batas umum', async () => {
+    await handleSimCommand(msg('dev'), ['global', 'limit', '250'], 'd', {
+      sendEmbed: send, isDeveloper: () => true,
+    });
+    assert.strictEqual(store.getMaxGlobalRuns(), 250);
+    assert.ok(replies[0].description.includes('250'));
+  });
+
+  it('non-developer tidak bisa mengubah batas', async () => {
+    await handleSimCommand(msg(), ['global', 'limit', '250'], 'd', {
+      sendEmbed: send, isDeveloper: () => false,
+    });
+    assert.strictEqual(store.getMaxGlobalRuns(), 100, 'tetap default');
+    assert.ok(replies[0].description.includes('developer'));
+  });
+
+  it('batas khusus user tidak mengubah batas umum', async () => {
+    await handleSimCommand(msg('dev'), ['global', 'limit', 'user', '500'], 'd', {
+      sendEmbed: send, isDeveloper: () => true,
+    });
+    assert.strictEqual(store.getMaxGlobalUser(), 500);
+    assert.strictEqual(store.getMaxGlobalRuns(), 100, 'batas umum tidak tersentuh');
+    assert.strictEqual(store.globalRunLimitFor(), 500);
+  });
+
+  it('batas khusus user bisa dihapus dengan 0', async () => {
+    store.setMaxGlobalUser(500);
+    await handleSimCommand(msg('dev'), ['global', 'limit', 'user', '0'], 'd', {
+      sendEmbed: send, isDeveloper: () => true,
+    });
+    assert.strictEqual(store.getMaxGlobalUser(), null);
+    assert.strictEqual(store.globalRunLimitFor(), 100);
+  });
+
+  it('`d sim global limit` tanpa argumen hanya menampilkan nilai', async () => {
+    await handleSimCommand(msg(), ['global', 'limit'], 'd', { sendEmbed: send });
+    assert.ok(replies[0].description.includes('100'));
+    assert.strictEqual(store.getMaxGlobalRuns(), 100);
+  });
+});
