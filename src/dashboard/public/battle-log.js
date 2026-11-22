@@ -254,7 +254,21 @@ function focusFeed(from, to) {
       if (!first) first = row;
     }
   }
-  if (first) first.scrollIntoView({ block: 'nearest' });
+  if (first) scrollInsideFeed(first);
+}
+
+// Menggulir kotak feed saja. `scrollIntoView` tidak dipakai karena ikut
+// menggeser halaman, sehingga arena terdorong keluar layar tiap klik next.
+function scrollInsideFeed(row) {
+  const host = $('feed');
+  const rowBox = row.getBoundingClientRect();
+  const hostBox = host.getBoundingClientRect();
+  const margin = 8;
+  if (rowBox.top < hostBox.top + margin) {
+    host.scrollTop += rowBox.top - hostBox.top - margin;
+  } else if (rowBox.bottom > hostBox.bottom - margin) {
+    host.scrollTop += rowBox.bottom - hostBox.bottom + margin;
+  }
 }
 
 // ---------------------------------------------------------------- playback

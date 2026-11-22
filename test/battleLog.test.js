@@ -244,6 +244,21 @@ describe('battle log page', () => {
     assert.match(js, /paintState/, 'player harus menggambar ulang state per aksi');
     assert.match(js, /groupEvents/, 'event berulang harus diringkas');
     assert.match(js, /cdn\.discordapp\.com|image/, 'player harus memakai gambar hewan');
+
+    // Regresi: `scrollIntoView` menggeser seluruh halaman, sehingga arena dan
+    // gambar hewan terdorong keluar layar tiap klik next. Feed harus digulir
+    // sendiri lewat scrollTop kotaknya.
+    assert.doesNotMatch(js, /\.scrollIntoView\(/, 'jangan menggeser halaman saat menyorot feed');
+    assert.match(js, /host\.scrollTop/, 'feed harus digulir di dalam kotaknya sendiri');
+
+    // Regresi: arena sticky pernah menutupi tombol next (klik tidak sampai).
+    const css = await (await fetch(baseUrl + '/assets/battle-log.css')).text();
+    assert.doesNotMatch(css, /position:\s*sticky/, 'arena tidak boleh menutupi tombol kontrol');
+    assert.match(css, /#content\s*\{[^}]*grid-template-columns/, 'arena dan feed harus berdampingan');
+    // Gambar harus cukup besar untuk dilihat, bukan ikon 46 px.
+    assert.match(css, /\.avatar\s*\{[^}]*width:\s*(\d+)px/, 'avatar harus punya ukuran eksplisit');
+    const size = Number(/\.avatar\s*\{[^}]*width:\s*(\d+)px/.exec(css)[1]);
+    assert.ok(size >= 64, `avatar minimal 64px agar gambarnya jelas, dapat ${size}px`);
   });
 
   it('renders a v1 log (tanpa actions) tanpa memutar apa pun', async () => {
