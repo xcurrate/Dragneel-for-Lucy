@@ -394,6 +394,24 @@ siap untuk integrasi giveaway nanti.
   `GET/POST/PUT/DELETE /api/notes`. UI-nya panel `#notes` di dashboard (tambah/edit/hapus).
 - Test: `test/notes.test.js` (storage) dan `test/dashboardNotes.test.js` (API HTTP sungguhan).
 
+### Battle log yang bisa dibagikan
+- `d sim -log` merekam satu pertarungan lalu mengirim tautan `/battle-log#<id>` di embed.
+  Hanya berlaku untuk satu pertarungan; `-m` mengabaikan flag ini.
+- Tiga lapisan: `src/services/battleLog.js` (recorder di engine), `src/utils/battleLogStorage.js`
+  (SQLite `data/battle-logs.db`, ID 128-bit, kedaluwarsa 30 hari), dan
+  `src/dashboard/public/battle-log.{html,css,js}` (halaman render).
+- **Recorder bersifat opt-in.** `ctx.log` hanya diisi bila `runBattle({ log: true })`, dan semua
+  hook memakai `ctx.log?.` sehingga simulasi massal tidak membayar biaya apa pun. Hasil battle
+  tidak berubah dengan atau tanpa log — dijaga `test/battleLog.test.js`.
+- **Dua endpoint sengaja publik** (di luar gerbang token): `GET /battle-log` dan
+  `GET /api/battle-log/:id`. ID 128-bit berfungsi sebagai rahasia tautan; endpoint ini hanya bisa
+  membaca, tidak pernah menulis atau menghapus. Semua `/api/*` lain tetap butuh token.
+- **`BATTLE_LOG_BASE_URL` wajib diisi** agar tautan muncul. Tanpa itu log tetap tersimpan tetapi
+  embed tidak menampilkan tautan — jangan menebak domain, karena hasilnya link mati.
+- Halaman meringkas kejadian identik berurutan menjadi `×N`. Ini bukan kosmetik: Frozen Armor
+  menempelkan 10-20 stack Frostbite per serangan yang diterima, jadi satu turn bisa berisi 20
+  baris yang sama persis (battle 7 turn bisa jadi 197 kejadian).
+
 ## Mesin simulasi battle (`src/services/battle*.js`)
 Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena memang begitu di sumber:
 
