@@ -1477,11 +1477,11 @@
       "debuff": true,
       "qualityList": [
         [
-          40,
-          65
+          30,
+          50
         ]
       ],
-      "note": "TRUE damage 40-65% MAG di akhir turn, 3 turn."
+      "note": "TRUE damage 30-50% MAG di akhir turn, 3 turn."
     },
     {
       "id": 3,

@@ -440,6 +440,11 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
 - **Penumpukan buff tidak seragam.** Tiap buff OwO punya `bind()` sendiri; tabelnya ada di
   `STACK` (`battleBuffs.js`): `merge` (durasi ditambah), `replace` (Flame: instance lama meledak
   lalu dibuang), `independent` (selalu instance baru). `sameFrom` hanya untuk Poison.
+- **Angka buff mengikuti Discord, bukan repo OwO publik.** Repo
+  `ChristopherBThai/Discord-OwO-Bot` terakhir diperbarui 2023 dan sudah basi: Poison di sana
+  masih `qualityList = [[40, 65]]`, sedangkan deskripsi di Discord sekarang 30-50% MAG.
+  `src/data/owoBattle.json` memakai 30-50%. Kalau ragu, tanya user yang melihat langsung —
+  jangan menyamakan data dengan repo publik tanpa bukti.
 - **Flame meledak memakai buff BARU.** Di `Flame.js`, ledakan dihitung di `bind()` instance yang
   baru menempel (`this.stats[1]` dan `this.from`), bukan dari instance lama. Karena itu
   `bindBuff` mengoper buff baru ke `explode()`.
