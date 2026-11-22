@@ -259,6 +259,13 @@ describe('battle log page', () => {
     assert.match(css, /\.avatar\s*\{[^}]*width:\s*(\d+)px/, 'avatar harus punya ukuran eksplisit');
     const size = Number(/\.avatar\s*\{[^}]*width:\s*(\d+)px/.exec(css)[1]);
     assert.ok(size >= 64, `avatar minimal 64px agar gambarnya jelas, dapat ${size}px`);
+
+    // Regresi: turn 1 adalah "start battle" (roster HP penuh), bukan aksi.
+    // OwO menomori begitu — `logs[0]` baru terisi sesudah turn pertama jalan,
+    // dan battleDisplayUtil menampilkan "Turn 1" untuk state sebelum itu.
+    assert.match(js, /startStep/, 'pemutar harus punya langkah pembuka "mulai"');
+    assert.match(js, /displayTurn/, 'nomor turn tampilan harus digeser dari nomor mesin');
+    assert.match(js, /engineTurn \+ \(state\.playable \? 1 : 0\)/, 'turn mesin 1 ditampilkan sebagai TURN 2');
   });
 
   it('renders a v1 log (tanpa actions) tanpa memutar apa pun', async () => {

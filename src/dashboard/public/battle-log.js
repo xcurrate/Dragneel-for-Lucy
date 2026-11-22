@@ -12,7 +12,7 @@ const ACTION_TEXT = {
 };
 
 const $ = id => document.getElementById(id);
-const state = { log: null, id: null, actions: [], index: 0, playing: false, timer: null };
+const state = { log: null, id: null, actions: [], index: 0, playing: false, timer: null, playable: false };
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -221,15 +221,53 @@ function renderEventRow(info, count) {
 
 // ---------------------------------------------------------------- feed
 
-function buildFeed() {
+// OwO menomori turn tampilan mulai dari 1 = roster awal, SEBELUM ada aksi:
+// `BattleEvent.logs[0]` baru terisi sesudah turn pertama dieksekusi, dan
+// battleDisplayUtil menampilkan "Turn 1" untuk state sebelum itu. Jadi data
+// mesin (turn 1 = batch aksi pertama) digeser satu saat ditampilkan.
+const displayTurn = engineTurn => engineTurn + (state.playable ? 1 : 0);
+
+// Langkah pembuka: HP/WP penuh tanpa buff, persis kondisi buildUnit sebelum
+// `runTurn` pertama. Tanpa langkah ini pemutar langsung melompat ke serangan
+// pertama seolah turn 1 sudah berisi aksi.
+function startStep() {
+  return {
+    t: 0,
+    a: null,
+    start: true,
+    from: 0,
+    to: 0,
+    s: state.log.units.map(unit => ({ hp: unit.maxHp, wp: unit.maxWp, b: [] })),
+  };
+}
+
+// Jumlah aksi sebenarnya; langkah "mulai" tidak dihitung sebagai aksi.
+const actionTotal = () => state.actions.filter(a => !a.start).length;
+
+// `playable` false untuk log v1: baris "mulai" hanya masuk akal kalau ada
+// seekbar yang bisa memutarnya, dan tanpa itu label TURN 1 akan muncul dua kali.
+function buildFeed({ playable = true } = {}) {
   const host = $('feed');
   host.textContent = '';
+
+  if (playable) {
+    const startRow = el('div', 'ev start');
+    startRow.append(el('span', 'ev-tag', 'mulai'));
+    const startBody = el('div', 'ev-body');
+    startBody.append(el('span', null, 'Battle dimulai — semua hewan masih HP penuh.'));
+    startRow.append(startBody);
+    // Rentang kosong: focusFeed menanganinya lewat cabang khusus "mulai".
+    startRow.dataset.evFrom = '0';
+    startRow.dataset.evTo = '0';
+    host.append(el('div', 'turn-sep', 'TURN 1'), startRow);
+  }
+
   let turn = null;
   for (const group of groupEvents(state.log.events)) {
     const event = state.log.events[group.from];
     if (event.t !== turn) {
       turn = event.t;
-      host.append(el('div', 'turn-sep', `TURN ${turn}`));
+      host.append(el('div', 'turn-sep', `TURN ${displayTurn(turn)}`));
     }
     const row = renderEventRow(group.info, group.count);
     row.dataset.evFrom = String(group.from);
@@ -243,6 +281,12 @@ function focusFeed(from, to) {
   for (const node of document.querySelectorAll('.ev.current')) node.classList.remove('current');
   const all = $('filter-all').checked;
   let first = null;
+  // Langkah "mulai" tidak punya rentang kejadian, jadi disorot terpisah.
+  if (from === 0 && to === 0) {
+    const startRow = document.querySelector('#feed .ev.start');
+    if (startRow) startRow.classList.add('current');
+    return;
+  }
   for (const row of document.querySelectorAll('#feed .ev')) {
     const evFrom = Number(row.dataset.evFrom);
     const evTo = Number(row.dataset.evTo);
@@ -281,7 +325,13 @@ function renderNow() {
     host.append(el('div', 'now-empty', 'Akhir log.'));
     return;
   }
-  const head = el('div', 'now-head', `TURN ${action.t} · aksi ${state.index + 1}/${state.actions.length}`);
+  if (action.start) {
+    host.append(el('div', 'now-head', 'TURN 1 · mulai battle'));
+    host.append(el('div', 'now-empty', 'Kedua tim masuk arena dengan HP dan WP penuh. Tekan ▶ untuk aksi pertama.'));
+    return;
+  }
+
+  const head = el('div', 'now-head', `TURN ${displayTurn(action.t)} · aksi ${state.index}/${actionTotal()}`);
   host.append(head);
 
   const body = el('div', 'now-body');
@@ -303,9 +353,11 @@ function goTo(index, { animate = true } = {}) {
   const action = state.actions[clamped];
 
   paintState(action.s, action.a);
-  $('turn-badge').textContent = 'TURN ' + action.t;
+  $('turn-badge').textContent = 'TURN ' + displayTurn(action.t);
   $('seek').value = String(clamped);
-  $('counter').textContent = `${clamped + 1} / ${state.actions.length}`;
+  // Indeks 0 adalah langkah "mulai", bukan aksi, jadi penomoran aksi dimulai
+  // dari 1 pada indeks 1 supaya "aksi 1" memang aksi pertama.
+  $('counter').textContent = action.start ? 'mulai' : `${clamped} / ${actionTotal()}`;
   renderNow();
   focusFeed(action.from, action.to);
 
@@ -349,10 +401,15 @@ function tick() {
 
 function play() {
   if (state.playing) { stop(); return; }
-  if (state.index >= state.actions.length - 1) goTo(0, { animate: false });
+  const delay = Number($('speed').value) || 700;
+  const atEnd = state.index >= state.actions.length - 1;
+  if (atEnd) goTo(0, { animate: false });
   state.playing = true;
   $('btn-play').textContent = 'Jeda';
-  tick();
+  // Saat putar ulang dari akhir, beri satu jeda supaya langkah "mulai" sempat
+  // terlihat; kalau tidak, aksi pertama langsung menimpa frame pembuka.
+  if (atEnd) state.timer = setTimeout(tick, delay);
+  else tick();
 }
 
 // ---------------------------------------------------------------- main
@@ -391,12 +448,15 @@ async function main() {
   state.log = log;
   state.id = id;
   state.actions = Array.isArray(log.actions) ? log.actions : [];
+  // Hanya log yang punya snapshot yang bisa memutar; log v1 tetap mode teks.
+  if (state.actions.length) state.actions = [startStep(), ...state.actions];
 
   title.textContent = `${WINNER_TEXT[log.winner] || log.winner} · ${log.turns} turn`;
-  subtitle.textContent = `Seed ${log.seed ?? '-'} · ${log.events.length} kejadian · ${state.actions.length} aksi`;
+  subtitle.textContent = `Seed ${log.seed ?? '-'} · ${log.events.length} kejadian · ${actionTotal()} aksi`;
 
+  state.playable = state.actions.length > 0;
   buildArena();
-  buildFeed();
+  buildFeed({ playable: state.playable });
 
   const meta = $('meta');
   meta.textContent = '';

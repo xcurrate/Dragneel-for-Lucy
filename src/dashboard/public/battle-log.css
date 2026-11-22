@@ -258,6 +258,8 @@ body {
 .ev.buff .ev-tag { color: var(--blue); }
 .ev.debuff .ev-tag { color: var(--purple); }
 .ev.wp .ev-tag { color: var(--gold); }
+.ev.start .ev-tag { color: var(--text); }
+.ev.start .ev-body { color: var(--muted); }
 .ev-body { flex: 1 1 auto; min-width: 0; }
 .hint { color: var(--muted); font-size: 11.5px; }
 
