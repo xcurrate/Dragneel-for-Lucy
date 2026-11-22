@@ -47,6 +47,7 @@ function usage(prefix = 'd') {
     'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
     'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+    `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer; \`-tie\` opsional.`,
     '',
     'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
   ].join('\n');
@@ -114,6 +115,12 @@ function parseFlags(args) {
     if (['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe', '-total', '-t'].includes(arg)) {
       flags[arg] = args[i + 1];
       i++;
+      continue;
+    }
+    // Flag tanpa nilai. Dipisah supaya `-tie` tidak menelan argumen berikutnya
+    // (mis. `d sim 2 -tie` jangan sampai menjadikan `2` nilai flag).
+    if (['-tie', '--tie'].includes(arg)) {
+      flags.tie = true;
       continue;
     }
     // Token berawalan `lvl` selalu dianggap flag level, supaya bentuk yang
@@ -791,10 +798,21 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       ...playerSpecs.map(spec => spec.animal),
       ...enemySpecs.map(spec => spec.animal),
     ]);
+    // Rekap menang/seri/kalah di footer dihitung dari `DEFAULT_RUNS` pertarungan
+    // terpisah untuk matchup yang sama. Biayanya kecil (puluhan pertarungan)
+    // dan membuat satu `d sim` langsung menjawab "tim ini bagus atau tidak",
+    // tanpa perlu menjalankan `-m` lagi. `-tie` tetap diterima sebagai penegas.
+    const stats = await sim.simulate(playerSpecs, enemySpecs, {
+      runs: DEFAULT_RUNS,
+      seed: seed != null ? Number(seed) : undefined,
+      playerQuality,
+      enemyQuality,
+    });
     const embed = duelEmbed(battle, {
       ...labels,
       elapsedMs: Date.now() - startedAt,
       seed: seed != null ? Number(seed) : null,
+      stats,
     });
     // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
     // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.

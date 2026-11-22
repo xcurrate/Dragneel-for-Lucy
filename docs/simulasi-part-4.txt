@@ -1,3 +1,14 @@
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 5 — MEMBACA HASIL
+━━━━━━━━━━━━━━━━━━━━
+▸ Hasil `d sim`
+```
+🏆 37 menang (74%)      ← berapa kali menang + persentasenya
+   Turns: 6 (×13), ...  ← distribusi jumlah turn; makin panjang makin ketat
+💀 13 kalah (26%)       ← berapa kali kalah
+⚖️ 3 seri (6%)          ← hanya muncul kalau ada yang seri
+```
+
 Di atasnya ada komposisi kedua sisi. Arti ikonnya:
 • 🐾 hewan
 • 🔴 🟡 🟠 🟣 🔵 🟢 ⚪ peringkat kualitas senjata, dari tertinggi (fabled) ke terendah (common)

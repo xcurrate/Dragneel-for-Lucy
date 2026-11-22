@@ -28,7 +28,7 @@ Tim yang masih kosong tidak bisa dipakai simulasi; bot akan menolak.
 LANGKAH 3 — JALANKAN SIMULASI
 ━━━━━━━━━━━━━━━━━━━━
 `d sim` punya dua bentuk hasil:
-• TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn.
+• TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn. Footer-nya juga merangkum rekap 50 pertarungan untuk matchup itu, contoh: "🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie (dalam 50 pertarungan)".
 • DENGAN `-m <jumlah>` → statistik banyak pertarungan (menang/kalah/seri + distribusi turn). Default 50 kalau `-m` disebut tanpa angka.
 
 ▸ Lawan tim milikmu sendiri
@@ -41,10 +41,4 @@ d sim Rocket vs Blue   → memakai nama tim
 ```
 
 `mirror` artinya tim diadu dengan salinan persisnya. Berguna untuk melihat seberapa besar pengaruh RNG: kalau winrate jauh dari 50%, berarti urutan serangan ikut menentukan.
-
-▸ Lawan dari dex atau stat manual (tanpa perlu bikin tim lawan)
-```
-d sim snail level=60
-d sim hp=14,att=6,pr=2,wp=3,mag=0,mr=1 level=60
-```
 

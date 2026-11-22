@@ -2903,7 +2903,9 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
     // Hasil satu pertarungan: sisa HP/WP tiap unit, bukan statistik agregat.
-    assert.ok(replies[0].footer.text.includes('1 pertarungan'), replies[0].footer.text);
+    // Footer memuat hasil pertarungan itu sekaligus rekap 50 pertarungan.
+    assert.match(replies[0].footer.text, /kamu \*\*(menang|kalah|seri)\*\* dalam \d+ turn/);
+    assert.match(replies[0].footer.text, /\d+ win, \d+ lose, \d+ tie \(dalam 50 pertarungan\)/);
     assert.ok(
       replies[0].fields.some(f => f.value.includes('/')),
       'memuat sisa HP/WP per unit',

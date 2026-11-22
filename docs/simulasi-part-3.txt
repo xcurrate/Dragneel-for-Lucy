@@ -1,3 +1,9 @@
+▸ Lawan dari dex atau stat manual (tanpa perlu bikin tim lawan)
+```
+d sim snail level=60
+d sim hp=14,att=6,pr=2,wp=3,mag=0,mr=1 level=60
+```
+
 ▸ Atur jumlah pertarungan
 ```
 d sim -m 100
@@ -38,15 +44,4 @@ d sim global -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
 Batasnya 100 pertarungan per tim dan 10 juta pertarungan per perintah. Cooldown 10 detik.
 
 Tim yang sedang dipilih tidak ikut diadu, karena itulah timmu sendiri. Tim kosong dilewati dan jumlahnya dicatat di hasil.
-
-━━━━━━━━━━━━━━━━━━━━
-LANGKAH 5 — MEMBACA HASIL
-━━━━━━━━━━━━━━━━━━━━
-▸ Hasil `d sim`
-```
-🏆 37 menang (74%)      ← berapa kali menang + persentasenya
-   Turns: 6 (×13), ...  ← distribusi jumlah turn; makin panjang makin ketat
-💀 13 kalah (26%)       ← berapa kali kalah
-⚖️ 3 seri (6%)          ← hanya muncul kalau ada yang seri
-```
 

@@ -280,11 +280,23 @@ function duelTeamField(label, units) {
 }
 
 // Hasil satu pertarungan: kondisi akhir tiap unit, bukan statistik agregat.
-function duelEmbed(battle, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null } = {}) {
+//
+// `stats` = hasil agregat `sim.simulate` untuk matchup yang sama (opsional).
+// Kalau ada, footer menampilkan rekap menang/seri/kalah sekaligus supaya user
+// tidak perlu menjalankan `-m` terpisah hanya untuk tahu rasio akhirnya.
+function duelEmbed(battle, {
+  playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null, stats = null,
+} = {}) {
   const { units, winner, turns, timeout } = battle;
   const color = winner === 'player' ? COLOR.ok : winner === 'enemy' ? COLOR.error : COLOR.tie;
   const verdict = winner === 'player' ? 'Menang' : winner === 'enemy' ? 'Kalah' : 'Seri';
   const icon = winner === 'player' ? '🏆' : winner === 'enemy' ? '💀' : '⚖️';
+
+  const footer = stats
+    ? `${icon} kamu **${verdict.toLowerCase()}** dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`
+      + ` | 🎲 ${stats.tally.player} win, ${stats.tally.enemy} lose, ${stats.tally.tie} tie`
+      + ` (dalam ${stats.runs.toLocaleString('id-ID')} pertarungan)`
+    : `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`;
 
   return new EmbedBuilder()
     .setColor(color)
@@ -294,9 +306,7 @@ function duelEmbed(battle, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', ela
       duelTeamField(playerLabel, units.player),
       duelTeamField(enemyLabel, units.enemy),
     ])
-    .setFooter({
-      text: `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`,
-    });
+    .setFooter({ text: footer });
 }
 
 function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null } = {}) {

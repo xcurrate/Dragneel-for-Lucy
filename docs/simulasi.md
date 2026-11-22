@@ -117,6 +117,12 @@ Tim yang masih kosong **tidak bisa** dipakai simulasi; bot menolak dengan pesan
 
 - **Tanpa `-m`** → **satu** pertarungan. Hasilnya kondisi akhir tiap hewan:
   sisa HP/WP dan senjatanya, plus siapa yang menang dan dalam berapa turn.
+  Footer-nya merangkum dua hal sekaligus: hasil pertarungan itu, lalu rekap
+  50 pertarungan untuk matchup yang sama:
+
+  ```
+  🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie (dalam 50 pertarungan)
+  ```
 - **Dengan `-m <jumlah>`** → statistik dari banyak pertarungan (menang/kalah/seri,
   distribusi turn). Default-nya 50 kalau `-m` disebut tanpa angka.
 
