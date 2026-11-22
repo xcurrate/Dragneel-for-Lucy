@@ -238,7 +238,7 @@ describe('pasif senjata', () => {
     assert.doesNotThrow(() => engine.inflictDamage(ctx, attacker, target, 200, engine.TRUE));
   });
 
-  it('Thorns memantulkan damage ke penyerang', () => {
+  it('Thorns memantulkan 35% damage yang MASUK sebagai TRUE damage', () => {
     const rng = rngModule.createRng(6);
     const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
     const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
@@ -246,7 +246,51 @@ describe('pasif senjata', () => {
     const ctx = { rng, tags: new Set(), damageDealt: 0 };
     const before = attacker.stats.hp[0];
     engine.inflictDamage(ctx, attacker, target, 500, engine.TRUE);
-    assert.ok(attacker.stats.hp[0] < before, 'penyerang menerima pantulan');
+    assert.strictEqual(before - attacker.stats.hp[0], 175, '35% dari 500');
+  });
+
+  it('Thorns dihitung dari damage SETELAH mitigasi, bukan damage mentah', () => {
+    const rng = rngModule.createRng(6);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    target.weapon = { passives: [createPassive(8, 100, rng)] };
+    // Taunt 50% memotong damage dulu; OwO memanggil postAttacked dengan
+    // `totalDamage` yang sudah dimitigasi, jadi pantulan ikut mengecil.
+    engine.bindBuff({ rng, tags: new Set(), damageDealt: 0 }, target,
+      createBuff(1, { quality: 100, from: target, duration: 2, rng }));
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const before = attacker.stats.hp[0];
+    engine.inflictDamage(ctx, attacker, target, 500, engine.TRUE);
+    assert.strictEqual(before - attacker.stats.hp[0], 87.5, '35% dari 250 (500 - 50%)');
+  });
+
+  it('Thorns menembus PR penyerang karena bertipe TRUE', () => {
+    const rng = rngModule.createRng(6);
+    const attacker = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const target = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    attacker.stats.pr[0] = 90;
+    target.weapon = { passives: [createPassive(8, 100, rng)] };
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const before = attacker.stats.hp[0];
+    engine.inflictDamage(ctx, attacker, target, 500, engine.TRUE);
+    assert.strictEqual(before - attacker.stats.hp[0], 175, 'PR tidak memotong pantulan');
+  });
+
+  it('Thorns tidak memantul balik ke unit yang sama (tag thorns)', () => {
+    const rng = rngModule.createRng(6);
+    const a = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    const b = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40 }, rng);
+    a.weapon = { passives: [createPassive(8, 100, rng)] };
+    b.weapon = { passives: [createPassive(8, 100, rng)] };
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    const aBefore = a.stats.hp[0];
+    const bBefore = b.stats.hp[0];
+    engine.inflictDamage(ctx, a, b, 500, engine.TRUE);
+    // Tag `thorns` di OwO berlaku PER UNIT (`tags.has('thorns', animal)`), bukan
+    // global. Jadi rantainya dua arah lalu berhenti: B memantul 175 ke A, lalu A
+    // memantul 61,25 (35% x 175) ke B, lalu berhenti karena B sudah bertag.
+    assert.strictEqual(aBefore - a.stats.hp[0], 175, 'A kena pantulan 35% x 500');
+    assert.strictEqual(bBefore - b.stats.hp[0], 561.25, 'B kena 500 + 35% x 175, lalu berhenti');
   });
 
   it('Safeguard memakai WP untuk menahan damage', () => {
