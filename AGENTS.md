@@ -720,3 +720,20 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   Simulasi duel tetap memakai `simColor` (hijau/kuning/merah mengikuti winrate);
   untuk global warna itu berubah-ubah dan mengganggu. Embed progres memilih warna
   dari opsi `mode`, bukan dari ada/tidaknya `title`.
+- **Leech wajib bertag per unit.** `postHealed`/`postReplenished` (buff 11) mencuri
+  heal lalu memanggil `heal()`/`replenish()` untuk pemasangnya. Tanpa penanda
+  `tagged(ctx, 'leech', unit)`, dua unit yang sama-sama memakai Leeching Scythe
+  saling mencuri curian tanpa akhir → `RangeError: Maximum call stack size
+  exceeded` (proses Node mati). OwO memakai `tag.has('leech', animal)` untuk hal
+  yang sama. Tag disimpan per unit, jadi rantainya berhenti setelah dua lapis.
+  Reproduksi nyata: tim berisi Leeching Scythe melawan tim "DS rune" di
+  `data/battle-teams.db`.
+- **Rune of the Forgotten (id 4) `disabled: true` = tidak bisa di-roll baru, tapi
+  tetap berfungsi di battle.** Damage-nya `mixed_true` (ATT 65% + MAG 65% sebagai
+  TRUE damage) sehingga menembus PR/MR — satu-satunya senjata yang konsisten
+  membunuh tank level 50 ber-Taunt. Jangan buang dari data saat menyusun
+  komposisi; saring hanya kalau tujuannya "senjata yang bisa didapat sekarang".
+- **Seri (timeout 24 turn) sama buruknya dengan kalah untuk streak**, dan tim
+  sustain murni (Healing Staff/Vampiric/Resurrection) justru banyak seri. Saat
+  menguji klaim "sustain", selalu laporkan `winRate`/`lossRate`/`tieRate`
+  terpisah — `winRate` 0% bisa berarti seri 100%, bukan kalah.

@@ -2690,6 +2690,46 @@ describe('Leech (Leeching Scythe)', () => {
     assert.strictEqual(target.stats.hp[0] - 100, landed - stolen, 'HP target = heal masuk dikurangi curian');
     assert.ok(target.stats.hp[0] > 100, 'heal tidak boleh berubah jadi damage');
   });
+
+  it('dua unit saling Leech tidak rekursi tanpa akhir', () => {
+    const rng = rngModule.createRng(11);
+    const x = engine.buildUnit({ label: 'x', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const y = engine.buildUnit({ label: 'y', level: 50, coeffs: COEFFS_STRONG }, rng);
+    x.team = [x]; x.foes = [y]; y.team = [y]; y.foes = [x];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    // Dua unit sama-sama memakai Leeching Scythe lalu saling menyerang: masing
+    // masing membawa Leech milik lawannya. Curian X memicu heal ke Y, yang
+    // punya Leech dari X, begitu seterusnya.
+    engine.bindBuff(ctx, x, createBuff(11, { quality: 100, from: y, rng }));
+    engine.bindBuff(ctx, y, createBuff(11, { quality: 100, from: x, rng }));
+    x.stats.hp[0] = 500;
+    y.stats.hp[0] = 500;
+
+    // OwO menandai unit yang healnya sudah dicuri (`tag.has('leech', animal)`)
+    // sehingga curian tidak memicu curian balik. Tanpa itu, stack meledak.
+    assert.doesNotThrow(() => engine.heal(ctx, x, 300, x));
+  });
+
+  it('curian tidak memicu curian balik (tag leech)', () => {
+    const rng = rngModule.createRng(11);
+    const x = engine.buildUnit({ label: 'x', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const y = engine.buildUnit({ label: 'y', level: 50, coeffs: COEFFS_STRONG }, rng);
+    x.team = [x]; x.foes = [y]; y.team = [y]; y.foes = [x];
+    const ctx = { rng, tags: new Set(), damageDealt: 0 };
+    engine.bindBuff(ctx, x, createBuff(11, { quality: 100, from: y, rng }));
+    engine.bindBuff(ctx, y, createBuff(11, { quality: 100, from: x, rng }));
+    x.stats.hp[0] = 500;
+    y.stats.hp[0] = 500;
+
+    engine.heal(ctx, x, 300, x);
+    // Rantainya berhenti setelah dua lapis, sama seperti OwO: tag `leech`
+    // disimpan PER unit, jadi curian X tidak bisa dicuri X lagi, tetapi curian
+    // yang masuk ke Y masih bisa dicuri Y (Y belum bertag).
+    //   X: +300 - 180 (dicuri Y) + 108 (Y mencuri 60% dari 180) = +228
+    //   Y: +180 - 108                                            =  +72
+    assert.strictEqual(x.stats.hp[0], 728, 'X: heal 300, kena curian 180, dapat 108');
+    assert.strictEqual(y.stats.hp[0], 572, 'Y: mencuri 180 lalu kehilangan 108');
+  });
 });
 
 describe('Sacrifice', () => {

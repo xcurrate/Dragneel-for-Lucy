@@ -178,23 +178,28 @@ const FACTORIES = {
     // stack sekaligus tidak menjumlah melebihi heal yang masuk.
     postHealed(ctx, unit, healer, total) {
       const e = engine();
+      // OwO menandai unit yang healnya sudah dicuri (`tag.has('leech', animal)`)
+      // dan berhenti di situ. Tanpa penanda ini dua unit ber-Leeching Scythe yang
+      // saling menyerang akan saling mencuri curian tanpa akhir (stack overflow).
+      if (e.tagged(ctx, 'leech', unit)) return;
       const budget = ctx.healBudget;
       const cap = budget ? budget.remaining : total;
       const stolen = Math.min(cap, (total * stats[0]) / 100);
       if (stolen <= 0) return;
       if (budget) budget.remaining -= stolen;
       unit.stats.hp[0] -= stolen;
-      e.heal(ctx, from, stolen, from);
+      e.withTag(ctx, 'leech', unit, () => e.heal(ctx, from, stolen, from));
     },
     postReplenished(ctx, unit, healer, total) {
       const e = engine();
+      if (e.tagged(ctx, 'leech', unit)) return;
       const budget = ctx.replenishBudget;
       const cap = budget ? budget.remaining : total;
       const stolen = Math.min(cap, (total * stats[1]) / 100);
       if (stolen <= 0) return;
       if (budget) budget.remaining -= stolen;
       unit.stats.wp[0] -= stolen;
-      e.replenish(ctx, from, stolen, from);
+      e.withTag(ctx, 'leech', unit, () => e.replenish(ctx, from, stolen, from));
     },
   }),
 
