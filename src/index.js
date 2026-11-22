@@ -7,7 +7,7 @@ const battleSim = require('./commands/battleSim');
 const teamPanel = require('./ui/teamPanel');
 const battlePanel = require('./ui/battlePanel');
 const { BossTracker } = require('./services/bossTracker');
-const { getGuildSettings } = require('./utils/storage');
+const { getGuildSettings, DEFAULT_PREFIX } = require('./utils/storage');
 const logBuffer = require('./utils/logBuffer');
 const { startDashboard } = require('./dashboard/server');
 const lucyCounter = require('./services/lucyCounter');
@@ -31,6 +31,12 @@ const client = new Client({
 });
 const tracker = new BossTracker(client);
 animalDex.setClient(client);
+
+// Prefix berbeda per server; label bantuan pada tombol/panel harus memakai
+// prefix server tempat interaksi terjadi, bukan `d` bawaan.
+function prefixForGuild(guildId) {
+  return (guildId ? getGuildSettings(guildId).prefix : null) || DEFAULT_PREFIX;
+}
 
 // Emoji statistik milik Lucy perlu di-mirror ke aplikasi bot agar bisa dirender;
 // jalankan sekali saat start supaya dex langsung tampil lengkap.
@@ -117,8 +123,9 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   try {
     const result = await lucyTeamImport.handleReaction(reaction, user);
     if (result?.team && reaction.message?.channel?.send) {
+      const prefix = prefixForGuild(reaction.message.guildId);
       await reaction.message.channel.send({
-        content: `✅ Tim **${result.team.name}** berhasil diimpor (${result.imported} slot). Gunakan \`d team show ${result.team.name}\` untuk melihatnya.`,
+        content: `✅ Tim **${result.team.name}** berhasil diimpor (${result.imported} slot). Gunakan \`${prefix} team show ${result.team.name}\` untuk melihatnya.`,
         allowedMentions: { parse: [] },
       });
     } else if (result?.error && reaction.message?.channel?.send) {
@@ -143,11 +150,11 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && mathRace.isMathNav(i.customId)) { await mathRace.handleNavigation(i); return; }
     if (i.isButton() && lucyReminder.isReminderNav(i.customId)) { await lucyReminder.handleComponent(i); return; }
     if (i.isButton() && reminders.isPanelNav(i.customId)) { await reminders.handleComponent(i); return; }
-    if (i.isButton() && battleTeam.isTeamButton(i.customId)) { await battleTeam.handleTeamButton(i); return; }
-    if (i.isButton() && battlePanel.isGlobalLossButton(i.customId)) { await battleSim.handleGlobalLossButton(i); return; }
-    if (i.isButton() && battlePanel.isRepeatButton(i.customId)) { await battleSim.handleRepeatButton(i); return; }
+    if (i.isButton() && battleTeam.isTeamButton(i.customId)) { await battleTeam.handleTeamButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
+    if (i.isButton() && battlePanel.isGlobalLossButton(i.customId)) { await battleSim.handleGlobalLossButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
+    if (i.isButton() && battlePanel.isRepeatButton(i.customId)) { await battleSim.handleRepeatButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
     if ((i.isButton() || i.isStringSelectMenu()) && teamPanel.isTeamPanelNav(i.customId)) {
-      await battleTeam.handleTeamPanelNav(i);
+      await battleTeam.handleTeamPanelNav(i, { prefix: prefixForGuild(i.guildId) });
       return;
     }
     if (i.isButton() || i.isStringSelectMenu()) { await command.handleComponent(i, tracker); return; }

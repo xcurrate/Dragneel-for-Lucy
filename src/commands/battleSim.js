@@ -433,7 +433,7 @@ function globalUsage(prefix = 'd') {
 // Terima dua bentuk: `-m <per tim>` atau `-total <total pertarungan>`.
 // Keduanya dibatasi MAX_GLOBAL_BATTLES supaya satu perintah tidak menahan bot
 // terlalu lama.
-function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = false } = {}) {
+function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = false, prefix = 'd' } = {}) {
   const perTeam = flags['-m'] ?? flags['-n'] ?? flags['-runs'];
   const total = flags['-total'] ?? flags['-t'];
 
@@ -444,7 +444,7 @@ function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = fals
   if (total != null) {
     const value = Number(total);
     if (!Number.isSafeInteger(value) || value < 1) {
-      return { error: 'Total pertarungan harus bilangan bulat 1 atau lebih. Contoh: `d sim global -total 1000000`.' };
+      return { error: `Total pertarungan harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim global -total 1000000\`.` };
     }
     if (value > MAX_GLOBAL_BATTLES) {
       return { error: `Total pertarungan terlalu besar. Maksimum **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}**.` };
@@ -467,7 +467,7 @@ function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = fals
   const runs = perTeam ?? maxPerTeam ?? DEFAULT_GLOBAL_RUNS;
   const value = Number(runs);
   if (!Number.isSafeInteger(value) || value < 1) {
-    return { error: 'Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim global -m 5000`.' };
+    return { error: `Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim global -m 5000\`.` };
   }
   // Batas per tim dari developer. Developer sendiri tidak dibatasi, sama
   // seperti `d sim`.
@@ -565,7 +565,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   // `-total` dibagi rata ke semua lawan.
   // Batas per tim mengikuti setting developer; developer bebas melewatinya.
   const maxPerTeam = isDev ? null : store.globalRunLimitFor();
-  const runCount = resolveRunCount(flags, opponents.length, { maxPerTeam, isDev });
+  const runCount = resolveRunCount(flags, opponents.length, { maxPerTeam, isDev, prefix });
   if (runCount.error) return send(message, errorEmbed(runCount.error));
 
   // Gerbang cooldown dipasang setelah validasi supaya salah ketik tidak
@@ -647,15 +647,16 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
 // pemiliknya. Isinya sudah publik: nama tim, level, dan jumlah menang/kalah,
 // sementara senjata lawan sengaja disembunyikan. Jadi menekannya tidak
 // membuka data pribadi pemilik simulasi.
-async function handleGlobalLossButton(i) {
+async function handleGlobalLossButton(i, deps = {}) {
+  const prefix = deps.prefix || 'd';
   const parsed = parseGlobalLossButton(i.customId);
   if (!parsed.ok) {
-    return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `d sim global` lagi.', flags: MessageFlags.Ephemeral });
+    return i.reply({ content: `Tombol kedaluwarsa. Jalankan \`${prefix} sim global\` lagi.`, flags: MessageFlags.Ephemeral });
   }
   const entry = getGlobalResult(parsed.userId, parsed.token);
   if (!entry) {
     return i.reply({
-      content: 'Hasil simulasi ini sudah kedaluwarsa. Jalankan `d sim global` lagi.',
+      content: `Hasil simulasi ini sudah kedaluwarsa. Jalankan \`${prefix} sim global\` lagi.`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -672,20 +673,21 @@ async function handleGlobalLossButton(i) {
 // Tombol 🔁: jalankan ulang matchup yang sama sebagai `-m <DEFAULT_RUNS>`.
 // Balasannya ephemeral supaya hasil panjang tidak membanjiri channel.
 async function handleRepeatButton(i, deps = {}) {
+  const prefix = deps.prefix || 'd';
   const parsed = parseRepeatButton(i.customId);
   if (!parsed.ok) {
-    return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `d sim` lagi.', flags: MessageFlags.Ephemeral });
+    return i.reply({ content: `Tombol kedaluwarsa. Jalankan \`${prefix} sim\` lagi.`, flags: MessageFlags.Ephemeral });
   }
   if (parsed.userId !== i.user.id) {
     return i.reply({
-      content: 'Tombol ini milik orang lain. Jalankan `d sim` untuk hasilmu sendiri.',
+      content: `Tombol ini milik orang lain. Jalankan \`${prefix} sim\` untuk hasilmu sendiri.`,
       flags: MessageFlags.Ephemeral,
     });
   }
   const entry = getDuelResult(parsed.userId, parsed.token);
   if (!entry) {
     return i.reply({
-      content: 'Hasil ini sudah kedaluwarsa. Jalankan `d sim` lagi.',
+      content: `Hasil ini sudah kedaluwarsa. Jalankan \`${prefix} sim\` lagi.`,
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -877,7 +879,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? DEFAULT_RUNS;
   const runCount = Number(runs);
   if (!Number.isSafeInteger(runCount) || runCount < 1) {
-    return send(message, errorEmbed('Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: `d sim -m 500`.'));
+    return send(message, errorEmbed(`Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim -m 500\`.`));
   }
   // Batas per perintah: user biasa mengikuti setting developer, developer bebas.
   const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
@@ -902,7 +904,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const player = resolveTeamSpecs(team);
   if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
 
-  const enemy = resolveEnemy(userId, sides.enemyArgs, levels.enemy);
+  const enemy = resolveEnemy(userId, sides.enemyArgs, levels.enemy, prefix);
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
   // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
@@ -1072,7 +1074,7 @@ function teamLabel(team) {
 }
 
 // Menentukan lawan: tim lain, hewan dex, atau stat manual.
-function resolveEnemy(userId, args, overrideLevel) {
+function resolveEnemy(userId, args, overrideLevel, prefix = 'd') {
   const { options, rest } = parseOptions(args);
   const raw = rest.join(' ').trim();
 
@@ -1103,7 +1105,7 @@ function resolveEnemy(userId, args, overrideLevel) {
   const ownTeam = raw ? store.findTeam(userId, raw) : null;
   if (ownTeam) {
     if (!ownTeam.slots.length) {
-      return { error: `Tim **${teamLabel(ownTeam)}** masih kosong. Isi dulu dengan \`d team add 1 <hewan>\`.` };
+      return { error: `Tim **${teamLabel(ownTeam)}** masih kosong. Isi dulu dengan \`${prefix} team add 1 <hewan>\`.` };
     }
     const specs = resolveTeamSpecs(ownTeam);
     if (specs.error) return { error: specs.error };
@@ -1131,7 +1133,7 @@ function resolveEnemy(userId, args, overrideLevel) {
     if (store.findForeignTeam(userId, raw)) {
       return { error: 'Kamu tidak memiliki tim tersebut.' };
     }
-    return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim (lihat \`d team list\`), hewan dex, atau stat manual.` };
+    return { error: `Lawan \`${raw}\` tidak dikenal. Pakai nama tim (lihat \`${prefix} team list\`), hewan dex, atau stat manual.` };
   }
   const coeffs = sim.dexStatsToCustom(animal);
   if (!coeffs) return { error: `Stat \`${animal.name}\` tidak lengkap di dex.` };

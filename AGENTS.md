@@ -757,3 +757,9 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   membedakan "tim tidak ada" dari "tim ada, tapi bukan milikmu"; referensi nama
   atau ID slot milik user lain dijawab "Kamu tidak memiliki tim tersebut."
   Jangan mengganti lookup itu dengan pencarian lintas user untuk "memudahkan".
+- **Label perintah di panel dan tombol wajib memakai prefix server.** `index.js`
+  menurunkan `{ prefix }` dari `getGuildSettings(i.guildId)` ke handler tombol.
+  Fungsi yang tidak punya akses `message` (`resolveEnemy`, `resolveRunCount`,
+  `validatePassiveCount`, `createTeam`) menerima parameter prefix; default `'d'`
+  hanya untuk tes. Jangan menulis literal `d ...`, `dtm`, atau `dteam` di string
+  yang dilihat user — server bisa memakai prefix lain.

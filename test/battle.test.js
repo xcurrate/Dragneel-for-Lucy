@@ -3631,3 +3631,107 @@ describe('batas simulasi global', () => {
     assert.strictEqual(store.getMaxGlobalRuns(), 100);
   });
 });
+
+describe('label perintah memakai prefix server', () => {
+  const battleTeam = require(path.join(ROOT, 'src/commands/battleTeam'));
+  const battleSim = require(path.join(ROOT, 'src/commands/battleSim'));
+  const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
+  const teamPanel = require(path.join(ROOT, 'src/ui/teamPanel'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+
+  let tempDir;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-prefix-'));
+    process.chdir(tempDir);
+    store.getDb();
+    store.createTeam('u', 'Alpha');
+    store.setSlot('u', 'Alpha', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.createTeam('u', 'Kosong');
+    store.setActiveTeam('u', 'Alpha');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('teks bantuan tim dan sim memakai prefix server', () => {
+    const teamHelp = battleTeam.usage('!');
+    assert.ok(teamHelp.includes('`! team list`'), teamHelp);
+    assert.ok(teamHelp.includes('`! tm`'), teamHelp);
+    assert.ok(!/`d[ t]/.test(teamHelp), teamHelp);
+
+    const simHelp = battleSim.usage('!');
+    assert.ok(simHelp.includes('`! sim`'), simHelp);
+    assert.ok(!/`d[ t]/.test(simHelp), simHelp);
+
+    const globalHelp = battleSim.globalUsage('!');
+    assert.ok(globalHelp.includes('`! sim global`'), globalHelp);
+    assert.ok(!/`d[ t]/.test(globalHelp), globalHelp);
+  });
+
+  it('embed tim, daftar tim, dan panel memakai prefix server', () => {
+    const team = store.getActiveTeam('u');
+    const embed = JSON.stringify(panel.teamEmbed(team, { prefix: '!' }).toJSON());
+    assert.ok(embed.includes('! sim'), embed);
+    assert.ok(!embed.includes('d sim'), embed);
+
+    const list = JSON.stringify(panel.teamListEmbed(store.listTeams('u'), team, '!').toJSON());
+    assert.ok(list.includes('! tm'), list);
+    assert.ok(!list.includes('d tm'), list);
+
+    const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', { prefix: '!', active: team });
+    const panelJson = JSON.stringify(payload.embeds[0].toJSON());
+    assert.ok(panelJson.includes('! sim'), panelJson);
+    assert.ok(panelJson.includes('! team del'), panelJson);
+    assert.ok(!panelJson.includes('d sim'), panelJson);
+  });
+
+  it('error resolveEnemy memakai prefix server', () => {
+    const empty = battleSim.resolveEnemy('u', ['Kosong'], 60, '!');
+    assert.ok(empty.error.includes('`! team add'), empty.error);
+    const unknown = battleSim.resolveEnemy('u', ['tidak-ada'], 60, '!');
+    assert.ok(unknown.error.includes('`! team list`'), unknown.error);
+  });
+
+  it('batas simulasi global memakai prefix server di pesan error', () => {
+    const perTeam = battleSim.resolveRunCount({ '-m': '0' }, 2, { prefix: '!' });
+    assert.ok(perTeam.error.includes('`! sim global -m'), perTeam.error);
+    const total = battleSim.resolveRunCount({ '-total': '0' }, 2, { prefix: '!' });
+    assert.ok(total.error.includes('`! sim global -total'), total.error);
+  });
+
+  it('tombol kedaluwarsa memakai prefix server', async () => {
+    const loss = { customId: 'battle_global_losses:u:t', reply: async p => { loss.out = p; } };
+    await battleSim.handleGlobalLossButton(loss, { prefix: '!' });
+    assert.ok(loss.out.content.includes('`! sim global`'), loss.out.content);
+
+    const repeat = { customId: 'battle_sim_repeat:u:t', user: { id: 'u' }, reply: async p => { repeat.out = p; } };
+    await battleSim.handleRepeatButton(repeat, { prefix: '!' });
+    assert.ok(repeat.out.content.includes('`! sim`'), repeat.out.content);
+
+    const teamBtn = { customId: 'battle_team_pick', reply: async p => { teamBtn.out = p; } };
+    await battleTeam.handleTeamButton(teamBtn, { prefix: '!' });
+    assert.ok(teamBtn.out.content.includes('`! team list`'), teamBtn.out.content);
+
+    const nav = { customId: 'battle_tm_prev', reply: async p => { nav.out = p; } };
+    await battleTeam.handleTeamPanelNav(nav, { prefix: '!' });
+    assert.ok(nav.out.embeds[0].toJSON().description.includes('`! tm`'), JSON.stringify(nav.out.embeds[0].toJSON()));
+  });
+
+  it('contoh senjata di pesan error memakai prefix server', async () => {
+    const replies = [];
+    const msg = { guildId: 'g', author: { id: 'u' } };
+    await battleTeam.handleTeamCommand(msg, ['s', 'gs'], '!', {
+      sendEmbed: (m, embed) => { replies.push(embed.toJSON()); return null; },
+    });
+    assert.ok(replies[0].description.includes('`!tm s gsword crit`'), replies[0].description);
+  });
+
+  it('pesan penuh slot tim memakai prefix server', () => {
+    for (let i = 0; i < 19; i++) store.createTeam('u', `T${i}`);
+    const result = store.createTeam('u', 'kelebihan', '!');
+    assert.ok(result.error.includes('`! team del <id>`'), result.error);
+  });
+});
+

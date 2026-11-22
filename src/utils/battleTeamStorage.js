@@ -312,11 +312,11 @@ function uniqueName(userId, desired, limit = 50) {
   return null;
 }
 
-function createTeam(userId, name) {
+function createTeam(userId, name, prefix = 'd') {
   const clean = normalizeName(name);
   if (!clean) return { error: 'Nama tim tidak boleh kosong.' };
   if (countTeams(userId) >= MAX_TEAMS) {
-    return { error: `Semua slot ID 1-${MAX_TEAM_ID} sudah terpakai. Hapus salah satu tim dulu dengan \`d team del <id>\`.` };
+    return { error: `Semua slot ID 1-${MAX_TEAM_ID} sudah terpakai. Hapus salah satu tim dulu dengan \`${prefix} team del <id>\`.` };
   }
   if (getTeam(userId, clean)) return { error: `Tim **${clean}** sudah ada.` };
   const slotId = nextFreeSlotId(userId);
