@@ -190,10 +190,10 @@ const globalResults = new Map();
 // Hasil satu pertarungan disimpan sebentar supaya tombol 🔁 bisa mengulang
 // matchup yang sama tanpa user mengetik ulang perintahnya.
 const duelResults = new Map();
-// Batas percobaan saat `-win`/`-lose`/`-tie` dipakai. Tanpa batas, matchup
-// yang mustahil (mis. `-tie` pada tim yang selalu kalah) akan berputar
-// selamanya. 2000 cukup untuk hasil langka; di atas itu dianggap tidak ada.
-const OUTCOME_SEARCH_LIMIT = 2000;
+// Berapa pertarungan dicoba saat `-win`/`-lose`/`-tie` dipakai tanpa `-m`.
+// Memakai DEFAULT_RUNS, angka yang sudah dipakai rekap footer, supaya tidak
+// ada jumlah baru yang muncul tiba-tiba di pesan.
+const OUTCOME_SEARCH_LIMIT = DEFAULT_RUNS;
 
 // Cari satu pertarungan yang hasilnya cocok dengan filter `-win`/`-lose`/`-tie`.
 // RNG di-fork per percobaan supaya hasilnya tetap deterministik untuk seed yang
@@ -212,29 +212,24 @@ function findBattleWithOutcome(playerSpecs, enemySpecs, {
   return { battle: null, tried: OUTCOME_SEARCH_LIMIT };
 }
 
-// `-m N` bersama filter: berapa kali percobaan dijalankan per hasil yang
-// diminta. 20x memberi ruang untuk hasil langka (mis. 5%) tanpa membuat
-// perintah yang mustahil berjalan terlalu lama.
-const OUTCOME_ATTEMPT_FACTOR = 20;
-
-// Jalankan pertarungan sampai `runs` hasil yang cocok terkumpul. Statistik
-// yang dikembalikan dihitung HANYA dari pertarungan yang cocok, jadi angka
-// menang/kalah/seri selalu 100% sesuai filter. `runs` dilaporkan sebagai
-// jumlah pertarungan yang benar-benar dijalankan agar footer tidak menipu.
+// `-m N` bersama filter: jalankan tepat N pertarungan, lalu hitung hanya yang
+// cocok. Tanpa pengali tambahan — jumlah yang dijalankan persis yang diminta
+// user, jadi tidak ada angka lain yang muncul di pesan.
 async function simulateMatching(playerSpecs, enemySpecs, {
   wanted, runs, seed, playerQuality, enemyQuality,
 }) {
-  const wantedCount = Math.max(1, Math.floor(Number(runs) || 1));
-  const maxAttempts = wantedCount * OUTCOME_ATTEMPT_FACTOR;
+  const maxAttempts = Math.max(1, Math.floor(Number(runs) || 1));
   const startedAt = Date.now();
-  const base = createRng(seed == null ? randomSeed() : seed);
+  // Seed selalu konkret: footer menampilkannya, jadi `undefined` tidak boleh bocor.
+  const usedSeed = seed == null ? randomSeed() : Number(seed);
+  const base = createRng(usedSeed);
   const tally = { player: 0, enemy: 0, tie: 0 };
   const histogram = new Uint32Array(data.limits.maxTurns + 2);
   let matched = 0;
   let attempts = 0;
   let timeouts = 0;
 
-  while (matched < wantedCount && attempts < maxAttempts) {
+  while (attempts < maxAttempts) {
     attempts++;
     const battle = engine.runBattle(playerSpecs, enemySpecs, {
       rng: base.fork(), playerQuality, enemyQuality,
@@ -261,10 +256,11 @@ async function simulateMatching(playerSpecs, enemySpecs, {
   }
   const rate = n => Math.round((n / matched) * 1000) / 10;
 
+  // `runs` adalah jumlah pertarungan yang dijalankan, bukan yang cocok: itu
+  // yang ditampilkan footer ("Hasil dari N simulasi") dan memang N yang diminta.
   return {
-    runs: matched,
-    attempts,
-    seed: seed == null ? undefined : seed,
+    runs: attempts,
+    seed: usedSeed,
     tally,
     timeouts,
     turnHistogram,
@@ -273,7 +269,6 @@ async function simulateMatching(playerSpecs, enemySpecs, {
     winRate: rate(tally.player),
     lossRate: rate(tally.enemy),
     tieRate: rate(tally.tie),
-    filtered: wanted,
   };
 }
 
@@ -924,9 +919,11 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       }));
       if (!battle) {
         store.clearCooldown(userId, SIM_COOLDOWN_ACTION);
+        // Jujur soal batas: sebut jumlah yang benar-benar dicoba, dan jangan
+        // mengklaim hasil itu mustahil — sampel kecil tidak membuktikannya.
         return send(message, errorEmbed(
-          `Tidak ada hasil **${OUTCOME_LABEL[wanted]}** dalam ${OUTCOME_SEARCH_LIMIT.toLocaleString('id-ID')} pertarungan.`
-          + `\nMatchup ini mungkin memang tidak pernah ${OUTCOME_LABEL[wanted]}; coba tanpa \`-${wanted === 'player' ? 'win' : wanted === 'enemy' ? 'lose' : 'tie'}\` atau ubah timnya.`
+          `Tidak ada hasil **${OUTCOME_LABEL[wanted]}** dalam ${tried.toLocaleString('id-ID')} pertarungan yang dicoba.`
+          + `\nCoba lagi, atau ubah tim/lawan.`
         ));
       }
     } else {
@@ -956,7 +953,6 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       elapsedMs: Date.now() - startedAt,
       seed: seed != null ? Number(seed) : null,
       stats,
-      filter: wanted ? { wanted, tried } : null,
     });
     // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
     // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.
@@ -982,8 +978,8 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     if (!result) {
       store.clearCooldown(userId, SIM_COOLDOWN_ACTION);
       return send(message, errorEmbed(
-        `Tidak ada hasil **${OUTCOME_LABEL[wanted]}** dalam ${(runCount * OUTCOME_ATTEMPT_FACTOR).toLocaleString('id-ID')} pertarungan.`
-        + `\nCoba tanpa \`-${wanted === 'player' ? 'win' : wanted === 'enemy' ? 'lose' : 'tie'}\` atau ubah timnya.`
+        `Tidak ada hasil **${OUTCOME_LABEL[wanted]}** dalam ${runCount.toLocaleString('id-ID')} pertarungan.`
+        + `\nCoba lagi, atau ubah tim/lawan.`
       ));
     }
   } else {

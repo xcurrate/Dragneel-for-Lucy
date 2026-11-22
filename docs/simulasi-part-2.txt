@@ -29,15 +29,6 @@ LANGKAH 3 — JALANKAN SIMULASI
 ━━━━━━━━━━━━━━━━━━━━
 `d sim` punya dua bentuk hasil:
 • TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn. Footer-nya juga merangkum rekap 50 pertarungan untuk matchup itu, contoh: "🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie".
-• FILTER HASIL: `-win`, `-lose`, `-tie` mengulang pertarungan sampai hasilnya cocok, lalu hasil itu yang ditampilkan. Contoh: `d sim 2 -lose`, `d sim 2 -lose -m 20`. Kalau hasil itu mustahil untuk matchup-nya, perintah dilaporkan gagal (bukan menampilkan hasil lain).
+• FILTER HASIL: `-win`, `-lose`, `-tie` mengulang pertarungan sampai hasilnya cocok, lalu hasil itu yang ditampilkan. Contoh: `d sim 2 -lose`, `d sim 2 -lose -m 20`. Kalau tidak ada yang cocok, perintah dilaporkan gagal (bukan menampilkan hasil lain). Tanpa `-m` dicoba 50 pertarungan; dengan `-m N` dijalankan tepat N lalu dihitung yang cocok.
 • DENGAN `-m <jumlah>` → statistik banyak pertarungan (menang/kalah/seri + distribusi turn). Default 50 kalau `-m` disebut tanpa angka.
-
-▸ Lawan tim milikmu sendiri
-```
-d sim                  → tim aktif vs salinan dirinya sendiri (mirror)
-d sim 2                → tim aktif vs tim ID 2
-d sim Blue             → tim aktif vs tim bernama Blue
-d sim 1 vs 2           → tim ID 1 vs tim ID 2
-d sim Rocket vs Blue   → memakai nama tim
-```
 

@@ -1,0 +1,15 @@
+━━━━━━━━━━━━━━━━━━━━
+KALAU ADA YANG TIDAK JALAN
+━━━━━━━━━━━━━━━━━━━━
+`Belum ada tim aktif` → buat dulu: `d team new <nama>`
+`Tim ... masih kosong` → isi minimal satu slot: `d team add 1 <hewan>`
+`... butuh minimal 1 pasif` → tambahkan `passive=<id>` saat memasang senjata
+`Senjata ... tidak dikenal` → cek nama senjata yang tersedia atau pakai alias yang benar
+`Slot ... masih kosong` → isi hewannya dulu sebelum memasang senjata lewat `d tm s`
+`Tunggu 5.0 detik lagi` → cooldown `d sim` 5 detik
+`Simulasi global baru bisa dipakai lagi dalam ...` → cooldown `d sim global` 10 detik
+`Maksimum ... pertarungan per tim` → turunkan `-m`, atau minta developer menaikkan batasnya
+`Belum ada tim lawan yang bisa dipakai` → `d sim global` butuh minimal satu tim lain
+`Butuh 6 angka (hp,att,pr,wp,mag,mr)` → stat manual harus tepat 6 angka
+`Pesan tim Lucy ini sudah kamu impor sebelumnya` → pakai kartu baru
+

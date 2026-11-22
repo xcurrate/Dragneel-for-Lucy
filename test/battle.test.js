@@ -2928,12 +2928,12 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     store.clearCooldown('u', 'sim');
     const lose = await run([STRONG, '-lose', '-s', '7']);
     assert.ok(lose.title.includes('vs.'), 'bukan error: ' + JSON.stringify(lose.description));
-    assert.match(lose.footer.text, /filter lose/);
+    // Footer tetap format biasa: tidak ada tambahan angka karangan.
     assert.match(lose.footer.text, /kamu kalah dalam \d+ turn/);
+    assert.ok(!/percobaan|filter/i.test(lose.footer.text), lose.footer.text);
 
     store.clearCooldown('u', 'sim');
     const win = await run([WEAK, '-win', '-s', '7']);
-    assert.match(win.footer.text, /filter win/);
     assert.match(win.footer.text, /kamu menang dalam \d+ turn/);
   });
 
@@ -2947,12 +2947,10 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
   it('filter dihormati saat digabung `-m`', async () => {
     store.clearCooldown('u', 'sim');
     const embed = await run([STRONG, '-lose', '-m', '5', '-s', '11']);
-    assert.match(embed.footer.text, /Filter lose/);
-    assert.match(embed.footer.text, /5 cocok dari \d+ percobaan/);
-    // Hanya hasil yang cocok yang dihitung: 5 kalah, tanpa menang/seri.
+    // Persis 5 pertarungan dijalankan, tanpa pengali tambahan.
+    assert.ok(embed.footer.text.includes('5 simulasi'), embed.footer.text);
     const names = embed.fields.map(f => f.name).join(' | ');
     assert.ok(names.includes('5** kalah'), names);
-    assert.ok(!/\b\d+\*\* menang/.test(names.replace('0** menang', '')), names);
     assert.ok(!embed.fields.some(f => f.name.includes('seri')), names);
   });
 
