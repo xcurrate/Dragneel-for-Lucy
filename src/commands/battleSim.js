@@ -642,16 +642,15 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
 
 // Tombol "lihat kekalahan": balasan ephemeral berisi tim yang mengalahkan
 // pemain, dengan ikon senjata diganti tanda tanya.
+//
+// Ini satu-satunya tombol di lingkungan Simulasi yang boleh dipakai selain
+// pemiliknya. Isinya sudah publik: nama tim, level, dan jumlah menang/kalah,
+// sementara senjata lawan sengaja disembunyikan. Jadi menekannya tidak
+// membuka data pribadi pemilik simulasi.
 async function handleGlobalLossButton(i) {
   const parsed = parseGlobalLossButton(i.customId);
   if (!parsed.ok) {
     return i.reply({ content: 'Tombol kedaluwarsa. Jalankan `d sim global` lagi.', flags: MessageFlags.Ephemeral });
-  }
-  if (parsed.userId !== i.user.id) {
-    return i.reply({
-      content: 'Tombol ini milik orang lain. Jalankan `d sim global` untuk hasilmu sendiri.',
-      flags: MessageFlags.Ephemeral,
-    });
   }
   const entry = getGlobalResult(parsed.userId, parsed.token);
   if (!entry) {

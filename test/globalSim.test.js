@@ -196,15 +196,37 @@ describe('simulasi global', () => {
     assert.ok(reply.embeds[0].toJSON().title.includes('mengalahkan'));
   });
 
-  it('menolak membuka tombol milik user lain', async () => {
+  it('membuka tombol milik user lain (satu-satunya pengecualian)', async () => {
+    seedWorld();
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 5 -s 5'), ['global', '-m', '5', '-s', '5'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    const customId = payload.components[0].components[0].toJSON().custom_id;
+
+    // Bukan pemilik simulasi: tombol tetap menjawab, bukan menolak.
     let reply = null;
     await handleGlobalLossButton({
-      customId: `battle_global_losses:someone-else:abc`,
+      customId,
+      user: { id: 'orang-lain' },
+      reply: async p => { reply = p; },
+    });
+    assert.ok(!reply.content, 'tidak ada pesan penolakan');
+    assert.ok(reply.embeds[0].toJSON().title.includes('mengalahkan'), 'hasilnya tetap ditampilkan');
+    // Senjata lawan tetap tersembunyi, jadi tidak ada data yang bocor.
+    assert.ok(reply.embeds[0].toJSON().description.includes('Senjata lawan disembunyikan'));
+  });
+
+  it('menolak token yang tidak dikenal walau dibuka user lain', async () => {
+    let reply = null;
+    await handleGlobalLossButton({
+      customId: 'battle_global_losses:someone-else:abc',
       user: { id: 'u' },
       reply: async p => { reply = p; },
     });
-    assert.ok(reply.flags & 64);
-    assert.ok(reply.content.includes('milik orang lain'));
+    assert.ok(reply.content.includes('kedaluwarsa'), reply.content);
   });
 
   it('memberi cooldown 10 detik untuk selain developer', async () => {

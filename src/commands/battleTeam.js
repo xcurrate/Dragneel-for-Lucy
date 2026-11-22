@@ -409,7 +409,10 @@ async function handleTeamPanelNav(i) {
   const parsed = teamPanel.parsePanelNav(i.customId);
   const expired = { embeds: [errorEmbed('Panel kedaluwarsa. Jalankan `dtm` lagi.')], flags: MessageFlags.Ephemeral };
   if (!parsed.ok) return i.reply(expired);
-  if (parsed.kind !== 'pick' && parsed.userId !== i.user.id) {
+  // Semua komponen panel tim milik pembuatnya, termasuk select menu. Select
+  // menu sempat dikecualikan, padahal menekannya tetap mengubah data pemilik
+  // (tim aktif) dan menggambar ulang panel di pesan orang lain.
+  if (parsed.userId !== i.user.id) {
     return i.reply({ embeds: [errorEmbed('Panel ini milik orang lain. Jalankan `dtm` untuk panel kamu.')], flags: MessageFlags.Ephemeral });
   }
 

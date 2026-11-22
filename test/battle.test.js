@@ -3371,6 +3371,18 @@ describe('panel tim: tombol hapus', () => {
     assert.ok(i.out.embeds[0].toJSON().description.includes('milik orang lain'));
   });
 
+  it('select menu milik orang lain ditolak dan tidak mengubah tim aktif', async () => {
+    // Select menu sempat lolos dari pemeriksaan pemilik karena `kind`-nya
+    // 'pick'. Menekannya tetap mengubah tim aktif pemilik dan menggambar ulang
+    // panel di pesan orang lain, jadi sekarang ikut ditolak.
+    const i = interaction(`${teamPanel.NAV_PICK}:u`, 'orang-lain', ['1']);
+    await handleTeamPanelNav(i);
+    assert.ok(i.out.embeds[0].toJSON().description.includes('milik orang lain'));
+    assert.ok(!i.updated, 'panel milik orang lain tidak ditimpa');
+    const active = store.getActiveTeam('u');
+    assert.strictEqual(active.name, 'Alpha', 'tim aktif pemilik tidak berubah');
+  });
+
   it('indeks tim yang sudah tidak ada tidak menghapus tim lain', async () => {
     store.deleteTeam('u', 'Beta');
     const i = interaction(teamPanel.navId(teamPanel.NAV_DELETE, 'u', 1) + ':yes');

@@ -737,3 +737,11 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   sustain murni (Healing Staff/Vampiric/Resurrection) justru banyak seri. Saat
   menguji klaim "sustain", selalu laporkan `winRate`/`lossRate`/`tieRate`
   terpisah — `winRate` 0% bisa berarti seri 100%, bukan kalah.
+- **Tombol di lingkungan Tim dan Simulasi hanya untuk pemiliknya, kecuali tombol
+  "Lihat kekalahan" (🔍) di simulasi global.** Pemeriksaan pemilik harus ada di
+  handler, bukan hanya di customId: customId bisa ditekan siapa pun yang melihat
+  pesannya. Jangan mengecualikan satu jenis komponen tanpa alasan — select menu
+  panel tim pernah dilewatkan karena `kind`-nya `pick`, padahal menekannya tetap
+  mengubah tim aktif pemilik. Satu-satunya pengecualian yang sah adalah tombol
+  Lihat Kekalahan karena isinya sudah publik (senjata lawan disembunyikan);
+  kalau suatu saat isi embed itu memuat data pribadi, kecualikan lagi.
