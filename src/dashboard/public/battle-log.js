@@ -426,7 +426,16 @@ async function main() {
     const action = state.actions[state.index];
     if (action) focusFeed(action.from, action.to);
   });
+  // Shortcut hanya berlaku saat fokus bukan di kontrol interaktif. Tanpa
+  // penjagaan ini, Space di tombol Putar memicu klik native + shortcut
+  // sekaligus (dua toggle), dan panah di seekbar menggeser dua langkah.
+  const isTypingTarget = target =>
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(target.tagName));
+
   document.addEventListener('keydown', event => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (isTypingTarget(event.target)) return;
     if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
     if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
     if (event.key === ' ') { event.preventDefault(); play(); }
