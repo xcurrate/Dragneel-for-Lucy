@@ -195,6 +195,8 @@ Aturannya:
   memakai default **50** (sama dengan `d team add`).
 - Setelah senjata, daftar angka adalah quality senjata. Setelah pasif, daftar
   angka adalah quality pasif itu.
+- Rank/quality yang tampil adalah rata-rata semua angka quality yang disebut.
+  Contoh di atas: `(100 + 50 + 10 + 10) / 4 = 42,5%` → **Rare**.
 - Jumlah pasif harus sesuai senjata, sama seperti `d tm s`.
 
 ### Mengatur jumlah pertarungan

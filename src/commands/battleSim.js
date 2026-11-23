@@ -11,6 +11,7 @@ const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
 const engine = require('../services/battleEngine');
+const { averageQuality } = require('../services/battleWeapon');
 const { createRng, randomSeed } = require('../services/battleRng');
 const globalSim = require('../services/globalSim');
 const battleLogStore = require('../utils/battleLogStorage');
@@ -87,12 +88,17 @@ function withLevel(specs, level) {
 }
 
 // Menulis kualitas efektif ke spec untuk ditampilkan. Urutannya sama dengan
-// `buildWeapon`: kualitas slot menang atas flag global.
+// `buildWeapon`: kualitas slot menang atas flag global. Rank memakai rata-rata
+// quality senjata + pasif, mis. Aegis 100,50 + sac 10,10 = 42,5%.
 function withQuality(specs, quality) {
-  if (quality == null) return specs;
-  return specs.map(spec => (spec.weapon
-    ? { ...spec, displayQuality: spec.weapon.quality ?? quality }
-    : spec));
+  return specs.map(spec => {
+    if (!spec.weapon) return spec;
+    const effective = spec.weapon.quality ?? quality;
+    return {
+      ...spec,
+      displayQuality: averageQuality(effective, spec.weapon.passives),
+    };
+  });
 }
 
 // Level untuk satu sisi: angka = pakai itu, kosong = pakai level yang sudah ada.

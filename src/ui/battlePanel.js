@@ -26,19 +26,18 @@ function weaponName(id) {
 }
 
 // Quality bisa berupa satu angka atau daftar per-stat (mis. Aegis 100,50).
-// Rank memakai nilai tertinggi; teks menampilkan semua nilai agar tidak ada
-// informasi yang hilang.
+// Rank memakai rata-rata semua nilai, sama dengan quality efektif senjata.
 function qualityRank(quality) {
   if (Array.isArray(quality)) {
     const values = quality.filter(value => Number.isFinite(Number(value))).map(Number);
-    return values.length ? Math.max(...values) : data.DEFAULT_QUALITY;
+    if (!values.length) return data.DEFAULT_QUALITY;
+    return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
   }
   return quality ?? data.DEFAULT_QUALITY;
 }
 
 function qualityText(quality) {
-  if (Array.isArray(quality)) return quality.map(value => `${value}%`).join('/');
-  return `${quality ?? data.DEFAULT_QUALITY}%`;
+  return `${qualityRank(quality)}%`;
 }
 
 function bar(value, max, size = 12) {
@@ -294,7 +293,7 @@ function duelUnitLines(unit) {
   const head = `> ${emoji.statIcon('hp')} \`${hp}/${maxHpValue}\` ${emoji.statIcon('wp')} \`${wp}/${maxWpValue}\``;
   const body = `> **L.${unit.level}** ${emoji.animalEmoji(unit.animal)} ${unit.nickname}`;
   if (!unit.weapon) return `${body}\n${head}`;
-  const quality = unit.weapon.quality ?? data.DEFAULT_QUALITY;
+  const quality = unit.weapon.qualityAverage ?? unit.weapon.quality ?? data.DEFAULT_QUALITY;
   const rank = qualityRank(quality);
   const icons = [emoji.rankEmoji(rank), emoji.weaponEmoji(unit.weapon.id, rank)];
   return `${body}\n${head}\n> ${icons.join('')} ${qualityText(quality)}`;

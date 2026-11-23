@@ -3485,7 +3485,7 @@ describe('d sim A vs B', () => {
     ]);
     assert.ok(embed.title.includes('snail + snail'), embed.title);
     assert.ok(embed.description.includes('L.100'), 'level 100 di sisi lawan');
-    assert.ok(embed.description.includes('100%/50%'), 'quality Aegis tampil per-stat');
+    assert.ok(embed.description.includes('42.5%'), 'rata-rata quality Aegis + Sacrifice');
   });
 
   it('nama tim yang tidak ada memberi pesan jelas', async () => {

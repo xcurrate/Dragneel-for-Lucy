@@ -4,7 +4,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const parser = require(path.join(ROOT, 'src/utils/simParser'));
-const { buildWeapon } = require(path.join(ROOT, 'src/services/battleWeapon'));
+const { buildWeapon, averageQuality } = require(path.join(ROOT, 'src/services/battleWeapon'));
 const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
 const { createRng } = require(path.join(ROOT, 'src/services/battleRng'));
 
@@ -66,5 +66,12 @@ describe('quality per-stat di mesin battle', () => {
     }, createRng(1));
     assert.equal(weapon.manaCost, 200, 'quality 50 dari range 250-150');
     assert.deepEqual(weapon.passives[0].stats, [52.5, 52.5]);
+    assert.equal(weapon.qualityAverage, 42.5, '(100+50+10+10)/4');
+  });
+
+  it('averageQuality menghitung quality senjata dan pasif', () => {
+    assert.equal(averageQuality([100, 50], [{ quality: [10, 10] }]), 42.5);
+    assert.equal(averageQuality(80, [{ id: 12 }]), 80, 'pasif tanpa quality ikut scalar senjata');
+    assert.equal(averageQuality(undefined, [{ id: 12 }]), 100, 'default tier tertinggi');
   });
 });

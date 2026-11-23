@@ -63,6 +63,32 @@ function manaQuality(def, quality) {
   return quality[def.qualityList.length + buffSlots(def)];
 }
 
+function qualityValues(quality) {
+  if (Array.isArray(quality)) {
+    return quality.map(Number).filter(Number.isFinite);
+  }
+  if (quality == null) return [];
+  const value = Number(quality);
+  return Number.isFinite(value) ? [value] : [];
+}
+
+// Rank senjata memakai rata-rata semua quality yang menempel: quality senjata
+// (stat/buff/biaya WP) dan quality tiap pasif. Contoh `Aegis 100,50 sac 10,10`
+// = (100+50+10+10)/4 = 42,5% (Rare), bukan Fabled dari nilai tertinggi.
+function averageQuality(quality, passives = [], fallback = data.DEFAULT_QUALITY) {
+  const values = qualityValues(quality);
+  const passiveFallback = Array.isArray(quality)
+    ? data.DEFAULT_QUALITY
+    : (quality ?? fallback);
+  for (const passive of passives || []) {
+    const passiveQuality = passive && typeof passive === 'object' ? passive.quality : undefined;
+    const passiveValues = qualityValues(passiveQuality);
+    values.push(...(passiveValues.length ? passiveValues : qualityValues(passiveFallback)));
+  }
+  if (!values.length) return fallback;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
+}
+
 function buildWeapon(spec, rng, globalQuality) {
   const def = typeof spec === 'object' && spec.id ? data.weapons().find(w => w.id === spec.id) : data.findWeapon(spec);
   if (!def) return null;
@@ -107,6 +133,8 @@ function buildWeapon(spec, rng, globalQuality) {
       return createPassive(id, passiveQuality, rng);
     }).filter(Boolean)
     : rollPassives(def.passiveCount, rng, quality);
+
+  weapon.qualityAverage = averageQuality(quality, weapon.passives);
 
   // Stat bonus dari pasif + efek Rune of the Forgotten (persen dari stat dasar).
   // Rune memakai satu persen yang sama untuk semua stat (stats[0]); qualityList-nya
@@ -498,4 +526,4 @@ function weaponAbility(ctx, weapon, actor) {
   return handler(ctx, weapon, actor) === true;
 }
 
-module.exports = { buildWeapon, weaponAbility, weaponStats, buffQuality, manaQuality, statAt, ABILITIES, applyBuff };
+module.exports = { buildWeapon, weaponAbility, weaponStats, buffQuality, manaQuality, statAt, averageQuality, ABILITIES, applyBuff };
