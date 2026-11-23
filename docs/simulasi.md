@@ -172,6 +172,31 @@ d sim snail level=60
 d sim hp=14,att=6,pr=2,wp=3,mag=0,mr=1 level=60
 ```
 
+### Komposisi inline
+
+Kedua sisi juga bisa ditulis langsung sebagai komposisi, tanpa membuat tim:
+
+```
+d sim snail sword crit mtap, snail Aegis 100,50 sac 10,10 vs 100 snail
+```
+
+Artinya:
+
+- `snail sword crit mtap` — snail dengan **Great Sword**, pasif **Critical** dan **Mana Tap**.
+- `snail Aegis 100,50 sac 10,10` — snail dengan **Defender's Aegis**,
+  quality taunt **100** dan quality biaya WP **50**, pasif **Sacrifice** dengan
+  quality heal **10** dan replenish **10**.
+- `100 snail` — lawan snail level **100**.
+
+Aturannya:
+
+- Koma memisahkan unit. Koma di dalam angka adalah quality, mis. `100,50`.
+- Angka di depan hewan adalah level, mis. `100 snail`. Tanpa angka, level
+  memakai default **50** (sama dengan `d team add`).
+- Setelah senjata, daftar angka adalah quality senjata. Setelah pasif, daftar
+  angka adalah quality pasif itu.
+- Jumlah pasif harus sesuai senjata, sama seperti `d tm s`.
+
 ### Mengatur jumlah pertarungan
 
 ```

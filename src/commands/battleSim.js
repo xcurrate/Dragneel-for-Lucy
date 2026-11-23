@@ -21,6 +21,7 @@ const {
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
+const simParser = require('../utils/simParser');
 
 // Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
 // dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
@@ -50,7 +51,7 @@ function usage(prefix = 'd') {
     `\`${prefix} sim <nama-tim>\` — sama, tapi memakai nama tim`,
     `\`${prefix} sim hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60\` — lawan stat manual`,
     `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
-    `\`${prefix} sim A vs B\` — dua tim milikmu diadu langsung`,
+    `\`${prefix} sim A vs B\` — dua tim milikmu; inline: \`${prefix} sim snail sword crit mtap, snail Aegis 100,50 sac 10,10 vs 100 snail\``,
     `\`${prefix} sim global\` — tim aktif vs **semua** tim tersimpan (lihat \`${prefix} sim global help\`)`,
     '',
     'Tanpa `-m` hasilnya **satu** pertarungan (sisa HP/WP tiap hewan).',
@@ -852,23 +853,51 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   }
 
   // `d sim <tim> vs <lawan>` memilih kedua sisi. Tanpa `vs`, sisi pemain
-  // adalah tim aktif dan sisa argumen menjadi lawan.
+  // adalah tim aktif dan sisa argumen menjadi lawan. Sisi dengan `vs` juga
+  // boleh berupa komposisi inline, mis. `snail sword crit mtap`.
   const sides = splitVs(rest);
-  const team = sides.playerTokens.length
-    ? store.findTeam(userId, sides.playerTokens.join(' '))
-    : store.getActiveTeam(userId);
-  if (!team) {
-    if (sides.playerTokens.length) {
-      const query = sides.playerTokens.join(' ');
-      if (store.findForeignTeam(userId, query)) {
-        return send(message, errorEmbed('Kamu tidak memiliki tim tersebut.'));
+  let resolvedPlayerSpecs = null;
+  let playerLabel = null;
+
+  if (sides.playerTokens.length) {
+    const query = sides.playerTokens.join(' ');
+    const team = store.findTeam(userId, query);
+    if (team) {
+      if (!team.slots.length) {
+        return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
       }
-      return send(message, errorEmbed(`Tim **${query}** tidak ditemukan. Lihat \`${prefix} tm\`.`));
+      const player = resolveTeamSpecs(team);
+      if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
+      resolvedPlayerSpecs = player.specs;
+      playerLabel = teamLabel(team);
+    } else {
+      const inline = simParser.parseInlineSide(sides.playerTokens, {
+        defaultLevel: levels.player ?? data.DEFAULT_LEVEL,
+        prefix,
+      });
+      if (!inline.error) {
+        resolvedPlayerSpecs = inline.specs;
+        playerLabel = inline.label;
+      } else if (simParser.looksInline(sides.playerTokens) || data.findAnimal(query)) {
+        return send(message, errorEmbed(`❌ ${inline.error}`));
+      } else if (store.findForeignTeam(userId, query)) {
+        return send(message, errorEmbed('Kamu tidak memiliki tim tersebut.'));
+      } else {
+        return send(message, errorEmbed(`Tim **${query}** tidak ditemukan. Lihat \`${prefix} tm\`.`));
+      }
     }
-    return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
-  }
-  if (!team.slots.length) {
-    return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
+  } else {
+    const team = store.getActiveTeam(userId);
+    if (!team) {
+      return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
+    }
+    if (!team.slots.length) {
+      return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
+    }
+    const player = resolveTeamSpecs(team);
+    if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
+    resolvedPlayerSpecs = player.specs;
+    playerLabel = teamLabel(team);
   }
   // Tanpa `-m` hasilnya satu pertarungan (sisa HP/WP tiap hewan) sekaligus
   // tombol 🔁 untuk mengulanginya sebanyak `DEFAULT_RUNS`. Dengan `-m N`
@@ -901,22 +930,19 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const playerQuality = quality(flags['-qp']);
   const enemyQuality = quality(flags['-qe']);
 
-  const player = resolveTeamSpecs(team);
-  if (player.error) return send(message, errorEmbed(`❌ ${player.error}`));
-
   const enemy = resolveEnemy(userId, sides.enemyArgs, levels.enemy, prefix);
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
 
   // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
   // Kualitas efektif ikut ditulis ke spec supaya komposisi yang ditampilkan
   // sama dengan tier yang benar-benar dipakai (dan sama saat tombol 🔁 dipakai).
-  const playerSpecs = withLevel(withQuality(player.specs, playerQuality), levels.player);
+  const playerSpecs = withLevel(withQuality(resolvedPlayerSpecs, playerQuality), levels.player);
   const enemySpecs = withLevel(withQuality(enemy.specs, enemyQuality), levels.enemy);
 
   // Simulasi besar bisa berjalan lama. Kirim pesan progres lebih dulu, perbarui
   // berkala, lalu timpa dengan hasil akhir di pesan yang sama supaya channel
   // tidak dibanjiri pesan.
-  const labels = { playerLabel: teamLabel(team), enemyLabel: enemy.label };
+  const labels = { playerLabel, enemyLabel: enemy.label };
   const publishProgress = makeProgressPublisher(message, send, deps.sendPayload || null, labels, 'duel');
 
   // Gerbang cooldown dipasang setelah validasi: perintah yang salah ketik tetap
@@ -1124,6 +1150,15 @@ function resolveEnemy(userId, args, overrideLevel, prefix = 'd') {
     const parsed = sim.parseCustomStats(raw);
     if (parsed.error) return { error: parsed.error };
     return { specs: [{ slot: 1, coeffs: parsed.custom, level, label: 'lawan' }], label: 'stat manual' };
+  }
+
+  // Komposisi inline: `100 snail`, `snail sword crit mtap`, atau beberapa
+  // unit dipisah koma. Ini dicek setelah stat manual supaya `hp=8,att=6` tidak
+  // dianggap komposisi.
+  if (simParser.looksInline(rest)) {
+    const inline = simParser.parseInlineSide(rest, { defaultLevel: level, prefix });
+    if (inline.error) return { error: inline.error };
+    return { specs: inline.specs, label: inline.label };
   }
 
   const animal = dexStore.resolveAnimal(raw) || dexStore.searchAnimals(raw)[0];

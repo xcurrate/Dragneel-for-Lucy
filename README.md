@@ -316,6 +316,7 @@ Perintah:
 | `d team clear <slot>` | kosongkan slot |
 | `d sim [lawan] [-m n] [-s seed] [-qp q] [-qe q]` | simulasi; lawan bisa nama tim, hewan dex, atau stat manual |
 | `d sim 1 vs blitz` | bentuk `vs` juga diterima, memakai tim setelah kata `vs` sebagai lawan |
+| `d sim snail sword crit mtap, snail Aegis 100,50 sac 10,10 vs 100 snail` | komposisi inline: koma memisahkan unit, angka di depan hewan = level, angka setelah senjata/pasif = quality |
 
 Semua balasan `d team` dan `d sim` berupa embed. Ikon hewan, senjata, pasif, dan
 stat diambil dari emoji OwO; emoji itu di-mirror ke aplikasi bot sekali saat start

@@ -99,7 +99,13 @@ function buildWeapon(spec, rng, globalQuality) {
   // pasif tambahan.
   const chosen = explicit.passives;
   weapon.passives = Array.isArray(chosen)
-    ? chosen.map(id => createPassive(id, quality, rng)).filter(Boolean)
+    ? chosen.map(entry => {
+      const id = entry && typeof entry === 'object' ? entry.id : entry;
+      const passiveQuality = entry && typeof entry === 'object' && entry.quality != null
+        ? entry.quality
+        : (Array.isArray(quality) ? data.DEFAULT_QUALITY : quality);
+      return createPassive(id, passiveQuality, rng);
+    }).filter(Boolean)
     : rollPassives(def.passiveCount, rng, quality);
 
   // Stat bonus dari pasif + efek Rune of the Forgotten (persen dari stat dasar).

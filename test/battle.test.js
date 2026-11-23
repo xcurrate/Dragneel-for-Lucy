@@ -3477,6 +3477,17 @@ describe('d sim A vs B', () => {
     assert.ok(embed.title.includes('Tiga'), 'sisi lawan = argumen');
   });
 
+  it('menerima komposisi inline dengan quality per-stat', async () => {
+    const embed = await run([
+      'snail', 'sword', 'crit', 'mtap,',
+      'snail', 'Aegis', '100,50', 'sac', '10,10',
+      'vs', '100', 'snail', '-m', '1',
+    ]);
+    assert.ok(embed.title.includes('snail + snail'), embed.title);
+    assert.ok(embed.description.includes('L.100'), 'level 100 di sisi lawan');
+    assert.ok(embed.description.includes('100%/50%'), 'quality Aegis tampil per-stat');
+  });
+
   it('nama tim yang tidak ada memberi pesan jelas', async () => {
     const embed = await run(['TidakAda', 'vs', 'Tiga', '-m', '1']);
     assert.ok(embed.description.includes('tidak ditemukan'), embed.description);

@@ -25,6 +25,22 @@ function weaponName(id) {
   return weapon ? weapon.name : `#${id}`;
 }
 
+// Quality bisa berupa satu angka atau daftar per-stat (mis. Aegis 100,50).
+// Rank memakai nilai tertinggi; teks menampilkan semua nilai agar tidak ada
+// informasi yang hilang.
+function qualityRank(quality) {
+  if (Array.isArray(quality)) {
+    const values = quality.filter(value => Number.isFinite(Number(value))).map(Number);
+    return values.length ? Math.max(...values) : data.DEFAULT_QUALITY;
+  }
+  return quality ?? data.DEFAULT_QUALITY;
+}
+
+function qualityText(quality) {
+  if (Array.isArray(quality)) return quality.map(value => `${value}%`).join('/');
+  return `${quality ?? data.DEFAULT_QUALITY}%`;
+}
+
 function bar(value, max, size = 12) {
   if (!max) return '▱'.repeat(size);
   const filled = Math.max(0, Math.min(size, Math.round((value / max) * size)));
@@ -82,12 +98,13 @@ function slotStats(entry) {
 function weaponLine(entry) {
   if (!entry.weaponId) return '*tanpa senjata*';
   const quality = entry.weaponQuality ?? data.DEFAULT_QUALITY;
+  const rank = qualityRank(quality);
   const icons = [
-    emoji.rankEmoji(quality),
-    emoji.weaponEmoji(entry.weaponId, quality),
-    ...(entry.passives || []).map(id => emoji.passiveEmoji(id, quality)),
+    emoji.rankEmoji(rank),
+    emoji.weaponEmoji(entry.weaponId, rank),
+    ...(entry.passives || []).map(id => emoji.passiveEmoji(id, rank)),
   ].join('');
-  return `${icons} ${quality}%`;
+  return `${icons} ${qualityText(quality)}`;
 }
 
 // Nama field kosong: Discord menolak nama kosong, jadi pakai karakter tak
@@ -236,9 +253,16 @@ function sideLine(spec) {
     // kualitas slot. Tanpa ini komposisi menampilkan tier database, bukan tier
     // yang benar-benar dipakai simulasi (dan tombol 🔁 jadi berbeda).
     const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
-    icons.push(emoji.rankEmoji(quality), emoji.weaponEmoji(spec.weapon.id, quality));
-    for (const id of spec.weapon.passives || []) icons.push(emoji.passiveEmoji(id, quality));
-    icons.push(`${quality}%`);
+    const rank = qualityRank(quality);
+    icons.push(emoji.rankEmoji(rank), emoji.weaponEmoji(spec.weapon.id, rank));
+    for (const passive of spec.weapon.passives || []) {
+      const id = passive && typeof passive === 'object' ? passive.id : passive;
+      const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
+        ? passive.quality
+        : quality;
+      icons.push(emoji.passiveEmoji(id, qualityRank(passiveQuality)));
+    }
+    icons.push(qualityText(quality));
   }
   // Pet dari stat manual memakai statnya sebagai label (mis. `8.6.2.3.5.1`).
   const label = sim.slotLabel({
@@ -271,8 +295,9 @@ function duelUnitLines(unit) {
   const body = `> **L.${unit.level}** ${emoji.animalEmoji(unit.animal)} ${unit.nickname}`;
   if (!unit.weapon) return `${body}\n${head}`;
   const quality = unit.weapon.quality ?? data.DEFAULT_QUALITY;
-  const icons = [emoji.rankEmoji(quality), emoji.weaponEmoji(unit.weapon.id, quality)];
-  return `${body}\n${head}\n> ${icons.join('')} ${quality}%`;
+  const rank = qualityRank(quality);
+  const icons = [emoji.rankEmoji(rank), emoji.weaponEmoji(unit.weapon.id, rank)];
+  return `${body}\n${head}\n> ${icons.join('')} ${qualityText(quality)}`;
 }
 
 // Satu field per tim. Nama tim dipakai sebagai pemisah supaya jelas sisi mana

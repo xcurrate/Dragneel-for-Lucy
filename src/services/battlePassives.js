@@ -27,7 +27,10 @@ function statAt(range, quality) {
 }
 
 function statsFor(def, quality) {
-  return def.qualityList.map(range => statAt(range, quality));
+  return def.qualityList.map((range, index) => statAt(
+    range,
+    Array.isArray(quality) ? quality[index] : quality
+  ));
 }
 
 // Setiap pasif adalah factory: (stats, rng) → objek dengan hook.
