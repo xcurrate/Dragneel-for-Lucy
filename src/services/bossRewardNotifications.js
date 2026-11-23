@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const { readRewards } = require('./rewardOCR');
+const { messageTimestampSeconds, isBeforeScheduledBoss } = require('./bossTracker');
 const store = require('../utils/bossRewardStorage');
 const { getGuildSettings } = require('../utils/storage');
 
@@ -186,6 +187,15 @@ async function processMessage(message) {
   const raw = typeof message.toJSON === 'function' ? message.toJSON() : message;
   if (isBossEnded(raw)) {
     console.info('[BossRewards][skip:boss-ended] guild=' + message.guildId + ' message=' + message.id + ' status=defeated-or-escaped');
+    return;
+  }
+  // Pesan lama/lebih awal dari jadwal "Boss baru" tidak boleh memicu tag.
+  // Validasi timestamp dulu; notifikasi hanya untuk boss yang sudah jatuh tempo.
+  if (isBeforeScheduledBoss(messageTimestampSeconds(message), guildSettings.lastBossTimestamp)) {
+    console.info('[BossRewards][skip:stale-boss] guild=' + message.guildId
+      + ' message=' + message.id
+      + ' messageAt=' + messageTimestampSeconds(message)
+      + ' scheduled=' + guildSettings.lastBossTimestamp);
     return;
   }
   const topTypes = (raw?.components || []).map(component => component?.type ?? 'unknown');

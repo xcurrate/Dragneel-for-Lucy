@@ -10,6 +10,14 @@ const BOSS_SPAWN = /boss\s+telah\s+muncul/i;
 // Prediksi "Boss baru" dan spawn nyata hanya berbeda beberapa detik. Notifikasi
 // yang jatuh dalam jendela ini dianggap peristiwa yang sama agar tidak dobel.
 const NOTIFY_DEDUPE_WINDOW_SECONDS = 900;
+// Toleransi clock/rounding: spawn yang lebih awal dari jadwal dalam batas ini
+// masih dianggap jatuh tempo. Di luar batas ini pesan spawn lama diabaikan.
+const SPAWN_EARLY_GRACE_SECONDS = 60;
+
+function isBeforeScheduledBoss(timestamp, scheduledTimestamp) {
+  if (!timestamp || !scheduledTimestamp) return false;
+  return timestamp + SPAWN_EARLY_GRACE_SECONDS < scheduledTimestamp;
+}
 
 function collect(value, out = []) {
   if (typeof value === 'string') out.push(value);
@@ -90,6 +98,12 @@ class BossTracker {
       const settings = getGuildSettings(id);
       if (!settings.enabled) return;
       if (settings.lastBossTimestamp === event.appearAt) return;
+      // Pesan spawn bisa datang dari pesan lama yang diedit. Jangan langsung
+      // tag/notif: bandingkan dulu dengan jadwal "Boss baru" yang tersimpan.
+      if (isBeforeScheduledBoss(event.appearAt, settings.lastBossTimestamp)) {
+        console.log('[BossTracker] Spawn lama diabaikan:', event.appearAt, 'jadwal:', settings.lastBossTimestamp, 'guild:', id);
+        return;
+      }
       // Boss sudah muncul sekarang, jadi jadwalkan notifikasi tepat waktu.
       updateGuildSettings(id, s => ({ ...s, lastBossTimestamp: event.appearAt }));
       this.scheduleGuild(id, event.appearAt);
@@ -157,8 +171,17 @@ class BossTracker {
   async notifyBoss(id, ts) {
     const s = getGuildSettings(id);
     if (!s.enabled) return;
+    // Timer lama bisa selesai setelah jadwal diganti. Jangan kirim notifikasi
+    // untuk timestamp yang bukan jadwal aktif.
+    if (s.lastBossTimestamp !== ts) return;
     const guild = this.client.guilds.cache.get(id);
     if (!guild) return;
+    // Jangan tag/notif sebelum waktunya tiba; pasang timer ulang bila masih
+    // ada selisih (mis. timer terbangun sedikit lebih awal).
+    if (Date.now() < ts * 1000) {
+      this.scheduleGuild(id, ts);
+      return;
+    }
     // Abaikan bila notifikasi untuk peristiwa boss yang sama (jarak waktu dekat)
     // sudah pernah dikirim, sehingga prediksi dan spawn nyata tidak dobel.
     if (s.lastNotifiedTimestamp && Math.abs(s.lastNotifiedTimestamp - ts) <= NOTIFY_DEDUPE_WINDOW_SECONDS) return;
@@ -196,5 +219,5 @@ class BossTracker {
     this.stopWarns(id);
   }
 }
-module.exports = { BossTracker, extractNextBossTimestamp, parseBossMessage };
+module.exports = { BossTracker, extractNextBossTimestamp, parseBossMessage, messageTimestampSeconds, isBeforeScheduledBoss, NOTIFY_DEDUPE_WINDOW_SECONDS, SPAWN_EARLY_GRACE_SECONDS };
   
