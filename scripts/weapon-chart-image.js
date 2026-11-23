@@ -254,54 +254,75 @@ function passiveToken(p) {
   return emojiToken(raw);
 }
 
-const BUFF_ICON_SOURCE = {
-  1: { kind: 'weapon', id: 5 },
-  2: { kind: 'weapon', id: 8 },
-  3: { kind: 'weapon', id: 10 },
-  4: { kind: 'weapon', id: 12 },
-  5: { kind: 'weapon', id: 15 },
-  6: { kind: 'weapon', id: 16 },
-  7: { kind: 'weapon', id: 16 },
-  8: { kind: 'weapon', id: 16 },
-  9: { kind: 'weapon', id: 17 },
-  10: { kind: 'weapon', id: 18 },
-  11: { kind: 'weapon', id: 20 },
-  12: { kind: 'weapon', id: 21 },
-  13: { kind: 'weapon', id: 19 },
-  14: { kind: 'weapon', id: 132 },
-  15: { kind: 'weapon', id: 133 },
-  16: { kind: 'weapon', id: 131 },
-  17: { kind: 'passive', id: 24 },
-  18: { kind: 'passive', id: 25 },
-  19: { kind: 'weapon', id: 129 },
+// Emoji efek asli OwO. 16 dari 19 punya token publik; 3 efek baru memakai
+// Twemoji sebagai fallback supaya tidak meminjam ikon senjata.
+const BUFF_EMOJI = {
+  1: '<:taunt:546615322598440960>',
+  2: '<:poison:572311805704273920>',
+  3: '<:flame:572915106854469633>',
+  4: '<:dfup:572988965838258176>',
+  5: '<:freeze:618621661486514176>',
+  6: '<:attup:618734436506140675>',
+  7: '<:attupp:619405867543953408>',
+  8: '<:attuppp:619405867548147712>',
+  9: '<:mortality:619458869730476042>',
+  10: '<:celebration:1080450615806803968>',
+  11: '<:leech:1107927378816159754>',
+  12: '<:stinky:1154636430937698364>',
+  13: '<:sacredward:1478918468182212758>',
+  17: '<:frostbite:1478912393299103947>',
+  18: '<:pest:1478913440541179904>',
+  19: '<:exposed:1478945223072551004>',
 };
 
-function buffToken(b) {
-  const source = BUFF_ICON_SOURCE[b.id];
-  if (!source) return null;
-  if (source.kind === 'weapon') {
-    const w = battle.weapons().find(x => x.id === source.id);
-    return w ? weaponToken(w) : null;
+const BUFF_TWEMOJI = {
+  14: '1f940', // Wither — wilted flower
+  15: '1f319', // Midnight Curse — crescent moon
+  16: '1f389', // Anniversary Blessing — party popper
+};
+
+function discordIcon(token) {
+  return token
+    ? { id: token.id, url: `https://cdn.discordapp.com/emojis/${token.id}.png?size=96&quality=lossless` }
+    : null;
+}
+
+function weaponIcon(w) {
+  return discordIcon(weaponToken(w));
+}
+
+function passiveIcon(p) {
+  return discordIcon(passiveToken(p));
+}
+
+function buffIcon(b) {
+  const token = emojiToken(BUFF_EMOJI[b.id]);
+  if (token) return discordIcon(token);
+  const code = BUFF_TWEMOJI[b.id];
+  if (code) {
+    return {
+      id: `twemoji-${code}`,
+      url: `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${code}.png`,
+    };
   }
-  const p = allPassives().find(x => x.id === source.id);
-  return p ? passiveToken(p) : null;
+  return null;
 }
 
 const iconCache = new Map();
 let iconFailures = 0;
 
-async function fetchIcon(token) {
-  if (!token) return null;
-  if (iconCache.has(token.id)) return iconCache.get(token.id);
+async function fetchIcon(icon) {
+  if (!icon) return null;
+  if (iconCache.has(icon.id)) return iconCache.get(icon.id);
   try {
-    const res = await fetch(`https://cdn.discordapp.com/emojis/${token.id}.png?size=96&quality=lossless`);
+    const res = await fetch(icon.url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const img = await loadImage(Buffer.from(await res.arrayBuffer()));
-    iconCache.set(token.id, img);
+    iconCache.set(icon.id, img);
     return img;
   } catch {
     iconFailures += 1;
-    iconCache.set(token.id, null);
+    iconCache.set(icon.id, null);
     return null;
   }
 }
@@ -354,7 +375,7 @@ function drawBuffIcons(ctx, ids, rightX, y) {
     const b = buffOf(ids[i]);
     if (!b) continue;
     const x = rightX - (n - i) * (size + gap);
-    drawIcon(ctx, iconCache.get(buffToken(b)?.id) || null, x, y, size, b.name, b.debuff ? C.debuff : C.buff);
+    drawIcon(ctx, iconCache.get(buffIcon(b)?.id) || null, x, y, size, b.name, b.debuff ? C.debuff : C.buff);
   }
 }
 
@@ -452,7 +473,7 @@ function drawWeaponRow(ctx, row, x, y, index) {
   ctx.lineTo(x + WEAPON_W, y + row.height);
   ctx.stroke();
 
-  const icon = weaponToken(w);
+  const icon = weaponIcon(w);
   drawIcon(ctx, iconCache.get(icon?.id) || null, x + 12, y + 12, row.iconSize, w.name, C.weapon);
 
   let cy = y + 12;
@@ -494,7 +515,7 @@ function drawPassiveRow(ctx, row, x, y, index) {
   ctx.lineTo(x + PASSIVE_W, y + row.height);
   ctx.stroke();
 
-  const icon = passiveToken(p);
+  const icon = passiveIcon(p);
   drawIcon(ctx, iconCache.get(icon?.id) || null, x + 12, y + 10, row.iconSize, p.name, C.passive);
 
   let cy = y + 10;
@@ -534,7 +555,7 @@ function drawBuffRow(ctx, row, x, y, index) {
   ctx.lineTo(x + BUFF_W, y + row.height);
   ctx.stroke();
 
-  const icon = buffToken(b);
+  const icon = buffIcon(b);
   drawIcon(ctx, iconCache.get(icon?.id) || null, x + 12, y + 10, row.iconSize, b.name, b.debuff ? C.debuff : C.buff);
 
   let cy = y + 10;
@@ -685,6 +706,7 @@ function drawStats(ctx, x, y, width) {
     `Resistance: ${battle.formulas.resistance}.`,
     'Tanpa senjata: serangan dasar 100% STR ke musuh acak.',
     'Status disabled: Rune of the Forgotten, Rune of Celebration, Rune of Luck.',
+    'Ikon efek: 16 emoji OwO; Wither, Midnight Curse, dan Anniversary Blessing memakai Twemoji fallback.',
   ];
   setFont(ctx, F_SMALL);
   ctx.fillStyle = C.dim;
@@ -732,11 +754,11 @@ async function main() {
   drawColumnHeader(ctx, X_BUFF, HEADER_H, BUFF_W, 'BUFF / DEBUFF', `${buffs.length} efek`, C.buff);
 
   // Ikon: kumpulkan semua token unik lalu unduh paralel.
-  const tokens = [];
-  for (const w of weapons) { const t = weaponToken(w); if (t) tokens.push(t); }
-  for (const p of passives) { const t = passiveToken(p); if (t) tokens.push(t); }
-  for (const b of buffs) { const t = buffToken(b); if (t) tokens.push(t); }
-  const unique = [...new Map(tokens.map(t => [t.id, t])).values()];
+  const icons = [];
+  for (const w of weapons) { const i = weaponIcon(w); if (i) icons.push(i); }
+  for (const p of passives) { const i = passiveIcon(p); if (i) icons.push(i); }
+  for (const b of buffs) { const i = buffIcon(b); if (i) icons.push(i); }
+  const unique = [...new Map(icons.map(i => [i.id, i])).values()];
   await Promise.all(unique.map(fetchIcon));
 
   let y = rowsTop;
@@ -750,17 +772,18 @@ async function main() {
 
   drawStats(ctx, MARGIN, statsY, WIDTH - MARGIN * 2);
 
+  const twemojiEffects = buffs.filter(b => !emojiToken(BUFF_EMOJI[b.id]) && BUFF_TWEMOJI[b.id]).length;
   setFont(ctx, F_SMALL);
   ctx.fillStyle = C.dim;
   ctx.textBaseline = 'top';
   ctx.fillText(
-    `Dibuat sekali pakai oleh scripts/weapon-chart-image.js · ikon dari token emoji data · ${iconFailures} ikon gagal dimuat`,
+    `Dibuat sekali pakai oleh scripts/weapon-chart-image.js · ${twemojiEffects} efek pakai Twemoji fallback · ${iconFailures} ikon gagal dimuat`,
     MARGIN,
     totalH - 48
   );
 
   fs.writeFileSync(OUT, canvas.toBuffer('image/png'));
-  console.log(`Wrote ${OUT} (${WIDTH}x${totalH}) · ${iconFailures} icon fallback`);
+  console.log(`Wrote ${OUT} (${WIDTH}x${totalH}) · ${twemojiEffects} Twemoji fallback · ${iconFailures} icon gagal`);
 }
 
 main().catch(err => {
