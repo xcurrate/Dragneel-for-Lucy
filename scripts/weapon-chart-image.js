@@ -254,8 +254,8 @@ function passiveToken(p) {
   return emojiToken(raw);
 }
 
-// Emoji efek asli OwO. 16 dari 19 punya token publik; 3 efek baru memakai
-// Twemoji sebagai fallback supaya tidak meminjam ikon senjata.
+// Emoji efek asli OwO. 18 dari 19 punya token; Anniversary Blessing masih
+// memakai Twemoji sampai token emoji publiknya tersedia.
 const BUFF_EMOJI = {
   1: '<:taunt:546615322598440960>',
   2: '<:poison:572311805704273920>',
@@ -270,14 +270,14 @@ const BUFF_EMOJI = {
   11: '<:leech:1107927378816159754>',
   12: '<:stinky:1154636430937698364>',
   13: '<:sacredward:1478918468182212758>',
+  14: '<:wither:1571819762739187722>',
+  15: '<:mcurse:1559091907588522054>',
   17: '<:frostbite:1478912393299103947>',
   18: '<:pest:1478913440541179904>',
   19: '<:exposed:1478945223072551004>',
 };
 
 const BUFF_TWEMOJI = {
-  14: '1f940', // Wither — wilted flower
-  15: '1f319', // Midnight Curse — crescent moon
   16: '1f389', // Anniversary Blessing — party popper
 };
 
@@ -706,7 +706,7 @@ function drawStats(ctx, x, y, width) {
     `Resistance: ${battle.formulas.resistance}.`,
     'Tanpa senjata: serangan dasar 100% STR ke musuh acak.',
     'Status disabled: Rune of the Forgotten, Rune of Celebration, Rune of Luck.',
-    'Ikon efek: 16 emoji OwO; Wither, Midnight Curse, dan Anniversary Blessing memakai Twemoji fallback.',
+    'Ikon efek: 18 emoji OwO; Anniversary Blessing memakai Twemoji fallback.',
   ];
   setFont(ctx, F_SMALL);
   ctx.fillStyle = C.dim;
