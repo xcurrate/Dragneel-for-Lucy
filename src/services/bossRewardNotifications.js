@@ -48,14 +48,6 @@ function isBossEnded(message) {
     || /boss\s+kabur\b/i.test(combined);
 }
 
-// Pesan kemunculan boss memuat "Berakhir <t:...>" dan bukan pesan reward.
-// Tolak sebelum OCR/tag supaya spawn tidak memicu notifikasi reward.
-function isBossSpawnMessage(message) {
-  const combined = messageText(message);
-  return /boss\s+telah\s+muncul/i.test(combined)
-    && /Berakhir\s*<t:\d{9,12}(?::[tTdDfFR])?>/i.test(combined);
-}
-
 function findRewardImage(message) {
   const raw = typeof message?.toJSON === 'function' ? message.toJSON() : message;
   const containers = (raw?.components || []).filter(component => Number(component?.type) === 17);
@@ -201,10 +193,9 @@ async function processMessage(message) {
     console.info('[BossRewards][skip:boss-ended] guild=' + message.guildId + ' message=' + message.id + ' status=defeated-or-escaped');
     return;
   }
-  if (isBossSpawnMessage(raw)) {
-    console.info('[BossRewards][skip:boss-spawn] guild=' + message.guildId + ' message=' + message.id + ' reason=Berakhir-timestamp');
-    return;
-  }
+  // Pesan spawn dengan "Berakhir" tetap diproses di sini: reward 3+ yang
+  // memenuhi target harus tetap dinotifikasikan. Hanya notifikasi boss di
+  // BossTracker yang menolak pesan spawn tersebut.
   const topTypes = (raw?.components || []).map(component => component?.type ?? 'unknown');
   console.info('[BossRewards][message:lucy] guild=' + message.guildId + ' message=' + message.id + ' components=' + JSON.stringify(topTypes));
   const url = findRewardImage(message);
@@ -270,4 +261,4 @@ function enqueue(message) {
   queue.push(message);
   setImmediate(() => drain().catch(error => console.error('[BossRewards] Queue error:', error)));
 }
-module.exports = { enqueue, processMessage, findRewardImage, downloadRewardImage, reached, isRewardSourceChannel, isBossEnded, isBossSpawnMessage };
+module.exports = { enqueue, processMessage, findRewardImage, downloadRewardImage, reached, rewardLines, isRewardSourceChannel, isBossEnded };

@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { parseAmount, parseTargets } = require('../src/commands/bossRewardNotify');
-const { findRewardImage, reached, isRewardSourceChannel, isBossEnded, isBossSpawnMessage, processMessage } = require('../src/services/bossRewardNotifications');
+const { findRewardImage, reached, rewardLines, isRewardSourceChannel, isBossEnded, processMessage } = require('../src/services/bossRewardNotifications');
 const { cooldownRemaining, NOTIFICATION_COOLDOWN_MS } = require('../src/utils/bossRewardStorage');
 
 describe('boss reward target parser', () => {
@@ -61,6 +61,19 @@ describe('reward threshold evaluation', () => {
     assert.equal(reached(101, { target: 100, operator: '>' }), true);
     assert.equal(reached(null, { target: 100, operator: '>=' }), false);
   });
+
+  it('matches only categories that meet their targets', () => {
+    const targets = {
+      weapon_shards: { target: 100, operator: '>=' },
+      weapon_crate: { target: 1, operator: '>=' },
+      fabled_lootbox: { target: 1, operator: '>=' },
+      experience: { target: 1000, operator: '>=' }
+    };
+    const three = { weapon_shards: 100, weapon_crate: 1, fabled_lootbox: 1, experience: 999 };
+    const two = { weapon_shards: 99, weapon_crate: 1, fabled_lootbox: 1, experience: 999 };
+    assert.equal(rewardLines(three, targets).length, 3);
+    assert.equal(rewardLines(two, targets).length, 2);
+  });
 });
 
 describe('Lucy reward source channel filter', () => {
@@ -98,31 +111,6 @@ describe('Lucy boss end-state filter', () => {
       { type: 10, content: '⏳ Berakhir dalam 20 menit' }
     ] }] };
     assert.equal(isBossEnded(message), false);
-  });
-});
-
-describe('boss spawn message filter', () => {
-  it('rejects a spawn message that carries a Berakhir timestamp', () => {
-    const message = { components: [{ type: 17, components: [
-      { type: 10, content: '## Guild Boss Telah Muncul!' },
-      { type: 10, content: '⏳ Berakhir <t:1795442319:R>' }
-    ] }] };
-    assert.equal(isBossSpawnMessage(message), true);
-  });
-
-  it('accepts a reward message without a spawn title', () => {
-    const message = { components: [{ type: 17, components: [
-      { type: 10, content: '## Hadiah' },
-      { type: 10, content: '⏳ Berakhir <t:1795442319:R>' }
-    ] }] };
-    assert.equal(isBossSpawnMessage(message), false);
-  });
-
-  it('accepts a spawn message without a Berakhir timestamp', () => {
-    const message = { components: [{ type: 17, components: [
-      { type: 10, content: '## Guild Boss Telah Muncul!' }
-    ] }] };
-    assert.equal(isBossSpawnMessage(message), false);
   });
 });
 
