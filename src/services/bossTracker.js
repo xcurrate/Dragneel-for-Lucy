@@ -6,18 +6,13 @@ const { warnLabel } = require('../ui/panel');
 // berikutnya. Keduanya diperiksa sebelum pola spawn agar tidak salah klasifikasi.
 const BOSS_ENDED = /boss\s+(?:telah\s+dikalahkan|kabur)/i;
 const BOSS_SPAWN = /boss\s+telah\s+muncul/i;
+// Pesan kemunculan boss memuat batas waktu "Berakhir <t:...>". Pesan seperti
+// ini bukan jadwal "Boss baru", jadi tidak boleh memicu notifikasi.
+const BOSS_END_TIMESTAMP = /Berakhir\s*<t:\d{9,12}(?::[tTdDfFR])?>/i;
 
 // Prediksi "Boss baru" dan spawn nyata hanya berbeda beberapa detik. Notifikasi
 // yang jatuh dalam jendela ini dianggap peristiwa yang sama agar tidak dobel.
 const NOTIFY_DEDUPE_WINDOW_SECONDS = 900;
-// Toleransi clock/rounding: spawn yang lebih awal dari jadwal dalam batas ini
-// masih dianggap jatuh tempo. Di luar batas ini pesan spawn lama diabaikan.
-const SPAWN_EARLY_GRACE_SECONDS = 60;
-
-function isBeforeScheduledBoss(timestamp, scheduledTimestamp) {
-  if (!timestamp || !scheduledTimestamp) return false;
-  return timestamp + SPAWN_EARLY_GRACE_SECONDS < scheduledTimestamp;
-}
 
 function collect(value, out = []) {
   if (typeof value === 'string') out.push(value);
@@ -61,7 +56,13 @@ function parseBossMessage(message) {
     const match = line && line.match(/<t:(\d{9,12})(?::[tTdDfFR])?>/);
     return { kind: 'ended', nextAt: match ? Number(match[1]) : null };
   }
-  if (BOSS_SPAWN.test(text)) return { kind: 'spawn', appearAt: messageTimestampSeconds(message) };
+  if (BOSS_SPAWN.test(text)) {
+    // Pesan "Boss Telah Muncul" dengan "Berakhir <t:...>" adalah pengumuman
+    // boss yang sedang aktif, bukan jadwal boss baru. Tolak agar tidak
+    // langsung tag/notif.
+    if (BOSS_END_TIMESTAMP.test(text)) return null;
+    return { kind: 'spawn', appearAt: messageTimestampSeconds(message) };
+  }
   return null;
 }
 
@@ -98,12 +99,6 @@ class BossTracker {
       const settings = getGuildSettings(id);
       if (!settings.enabled) return;
       if (settings.lastBossTimestamp === event.appearAt) return;
-      // Pesan spawn bisa datang dari pesan lama yang diedit. Jangan langsung
-      // tag/notif: bandingkan dulu dengan jadwal "Boss baru" yang tersimpan.
-      if (isBeforeScheduledBoss(event.appearAt, settings.lastBossTimestamp)) {
-        console.log('[BossTracker] Spawn lama diabaikan:', event.appearAt, 'jadwal:', settings.lastBossTimestamp, 'guild:', id);
-        return;
-      }
       // Boss sudah muncul sekarang, jadi jadwalkan notifikasi tepat waktu.
       updateGuildSettings(id, s => ({ ...s, lastBossTimestamp: event.appearAt }));
       this.scheduleGuild(id, event.appearAt);
@@ -219,5 +214,5 @@ class BossTracker {
     this.stopWarns(id);
   }
 }
-module.exports = { BossTracker, extractNextBossTimestamp, parseBossMessage, messageTimestampSeconds, isBeforeScheduledBoss, NOTIFY_DEDUPE_WINDOW_SECONDS, SPAWN_EARLY_GRACE_SECONDS };
+module.exports = { BossTracker, extractNextBossTimestamp, parseBossMessage, messageTimestampSeconds, NOTIFY_DEDUPE_WINDOW_SECONDS };
   

@@ -1,6 +1,5 @@
 const crypto = require('node:crypto');
 const { readRewards } = require('./rewardOCR');
-const { messageTimestampSeconds, isBeforeScheduledBoss } = require('./bossTracker');
 const store = require('../utils/bossRewardStorage');
 const { getGuildSettings } = require('../utils/storage');
 
@@ -22,7 +21,7 @@ function isRewardSourceChannel(message, settings) {
 }
 
 
-function isBossEnded(message) {
+function messageText(message) {
   const raw = typeof message?.toJSON === 'function' ? message.toJSON() : message;
   const texts = [];
   const seen = new Set();
@@ -35,13 +34,26 @@ function isBossEnded(message) {
     }
     for (const child of Object.values(value)) walk(child);
   }
+  if (typeof raw?.content === 'string') texts.push(raw.content);
   walk(raw?.components || []);
-  walk(raw?.content || '');
-  const combined = texts.join('\n').normalize('NFKC');
+  walk(raw?.embeds || []);
+  return texts.join('\n').normalize('NFKC');
+}
+
+function isBossEnded(message) {
+  const combined = messageText(message);
   return /guild\s*boss\s+telah\s+dikalahkan/i.test(combined)
     || /guild\s*boss\s+kabur\b/i.test(combined)
     || /boss\s+(?:telah\s+)?dikalahkan/i.test(combined)
     || /boss\s+kabur\b/i.test(combined);
+}
+
+// Pesan kemunculan boss memuat "Berakhir <t:...>" dan bukan pesan reward.
+// Tolak sebelum OCR/tag supaya spawn tidak memicu notifikasi reward.
+function isBossSpawnMessage(message) {
+  const combined = messageText(message);
+  return /boss\s+telah\s+muncul/i.test(combined)
+    && /Berakhir\s*<t:\d{9,12}(?::[tTdDfFR])?>/i.test(combined);
 }
 
 function findRewardImage(message) {
@@ -189,13 +201,8 @@ async function processMessage(message) {
     console.info('[BossRewards][skip:boss-ended] guild=' + message.guildId + ' message=' + message.id + ' status=defeated-or-escaped');
     return;
   }
-  // Pesan lama/lebih awal dari jadwal "Boss baru" tidak boleh memicu tag.
-  // Validasi timestamp dulu; notifikasi hanya untuk boss yang sudah jatuh tempo.
-  if (isBeforeScheduledBoss(messageTimestampSeconds(message), guildSettings.lastBossTimestamp)) {
-    console.info('[BossRewards][skip:stale-boss] guild=' + message.guildId
-      + ' message=' + message.id
-      + ' messageAt=' + messageTimestampSeconds(message)
-      + ' scheduled=' + guildSettings.lastBossTimestamp);
+  if (isBossSpawnMessage(raw)) {
+    console.info('[BossRewards][skip:boss-spawn] guild=' + message.guildId + ' message=' + message.id + ' reason=Berakhir-timestamp');
     return;
   }
   const topTypes = (raw?.components || []).map(component => component?.type ?? 'unknown');
@@ -263,4 +270,4 @@ function enqueue(message) {
   queue.push(message);
   setImmediate(() => drain().catch(error => console.error('[BossRewards] Queue error:', error)));
 }
-module.exports = { enqueue, processMessage, findRewardImage, downloadRewardImage, reached, isRewardSourceChannel, isBossEnded };
+module.exports = { enqueue, processMessage, findRewardImage, downloadRewardImage, reached, isRewardSourceChannel, isBossEnded, isBossSpawnMessage };

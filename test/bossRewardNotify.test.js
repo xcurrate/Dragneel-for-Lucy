@@ -1,10 +1,7 @@
-const { describe, it, beforeEach, afterEach } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const os = require('node:os');
-const fs = require('node:fs');
-const path = require('node:path');
 const { parseAmount, parseTargets } = require('../src/commands/bossRewardNotify');
-const { findRewardImage, reached, isRewardSourceChannel, isBossEnded, processMessage } = require('../src/services/bossRewardNotifications');
+const { findRewardImage, reached, isRewardSourceChannel, isBossEnded, isBossSpawnMessage, processMessage } = require('../src/services/bossRewardNotifications');
 const { cooldownRemaining, NOTIFICATION_COOLDOWN_MS } = require('../src/utils/bossRewardStorage');
 
 describe('boss reward target parser', () => {
@@ -104,6 +101,31 @@ describe('Lucy boss end-state filter', () => {
   });
 });
 
+describe('boss spawn message filter', () => {
+  it('rejects a spawn message that carries a Berakhir timestamp', () => {
+    const message = { components: [{ type: 17, components: [
+      { type: 10, content: '## Guild Boss Telah Muncul!' },
+      { type: 10, content: '⏳ Berakhir <t:1795442319:R>' }
+    ] }] };
+    assert.equal(isBossSpawnMessage(message), true);
+  });
+
+  it('accepts a reward message without a spawn title', () => {
+    const message = { components: [{ type: 17, components: [
+      { type: 10, content: '## Hadiah' },
+      { type: 10, content: '⏳ Berakhir <t:1795442319:R>' }
+    ] }] };
+    assert.equal(isBossSpawnMessage(message), false);
+  });
+
+  it('accepts a spawn message without a Berakhir timestamp', () => {
+    const message = { components: [{ type: 17, components: [
+      { type: 10, content: '## Guild Boss Telah Muncul!' }
+    ] }] };
+    assert.equal(isBossSpawnMessage(message), false);
+  });
+});
+
 describe('reward notification cooldown', () => {
   it('holds notification for 30 minutes after successful send timestamp', () => {
     const sentAt = 1000000;
@@ -136,54 +158,3 @@ describe('reward source channel gating', () => {
   });
 });
 
-describe('boss reward timestamp gate', () => {
-  let tempDir;
-  let previousLucyId;
-
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'boss-reward-timing-'));
-    process.chdir(tempDir);
-    for (const key of Object.keys(require.cache)) {
-      if (key.includes('utils' + path.sep + 'storage.js')) delete require.cache[key];
-      if (key.includes('services' + path.sep + 'bossRewardNotifications.js')) delete require.cache[key];
-    }
-    previousLucyId = process.env.LUCY_BOT_ID;
-    process.env.LUCY_BOT_ID = 'lucy';
-  });
-
-  afterEach(() => {
-    if (previousLucyId == null) delete process.env.LUCY_BOT_ID;
-    else process.env.LUCY_BOT_ID = previousLucyId;
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it('skips an old boss message before downloading or tagging', async () => {
-    const { updateGuildSettings } = require('../src/utils/storage');
-    const { processMessage: freshProcessMessage } = require('../src/services/bossRewardNotifications');
-    const now = Math.floor(Date.now() / 1000);
-    updateGuildSettings('guild-reward', s => ({
-      ...s,
-      channelId: 'channel',
-      lastBossTimestamp: now + 3600,
-    }));
-
-    const logs = [];
-    const original = console.info;
-    console.info = (...args) => logs.push(args.join(' '));
-    try {
-      await freshProcessMessage({
-        id: 'message-old',
-        guildId: 'guild-reward',
-        channelId: 'channel',
-        author: { id: 'lucy' },
-        createdTimestamp: now * 1000,
-        components: [],
-      });
-    } finally {
-      console.info = original;
-    }
-
-    assert.ok(logs.some(line => line.includes('skip:stale-boss')), logs.join('\n'));
-    assert.ok(!logs.some(line => line.includes('download:start')), 'tidak boleh mengunduh gambar lama');
-  });
-});

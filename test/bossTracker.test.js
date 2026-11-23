@@ -4,7 +4,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  extractNextBossTimestamp, parseBossMessage, isBeforeScheduledBoss,
+  extractNextBossTimestamp, parseBossMessage,
 } = require('../src/services/bossTracker');
 
 const TS = 1750000000;
@@ -73,20 +73,26 @@ describe('parseBossMessage', () => {
     return { content: '', components: [{ type: 17, components: lines.map(content => ({ type: 10, content })) }] };
   }
 
-  it('classifies a spawn message and uses the message time', () => {
+  it('rejects a spawn message with a Berakhir timestamp', () => {
     const m = componentsMessage([
       '## <:lucy_think:1> Guild Boss Telah Muncul!',
       '⏳ Berakhir <t:1793615870:R>'
     ]);
     m.createdTimestamp = TS * 1000;
-    assert.deepStrictEqual(parseBossMessage(m), { kind: 'spawn', appearAt: TS });
+    assert.strictEqual(parseBossMessage(m), null);
   });
 
-  it('classifies a global raid spawn message', () => {
+  it('rejects a global raid spawn message with a Berakhir timestamp', () => {
     const m = componentsMessage([
       '## <:lucy_think:1> Global Raid Boss Telah Muncul!',
       '⏳ Berakhir <t:1793719068:R>'
     ]);
+    m.createdTimestamp = TS * 1000;
+    assert.strictEqual(parseBossMessage(m), null);
+  });
+
+  it('classifies a spawn message without a Berakhir timestamp', () => {
+    const m = componentsMessage(['## Guild Boss Telah Muncul!']);
     m.createdTimestamp = TS * 1000;
     assert.deepStrictEqual(parseBossMessage(m), { kind: 'spawn', appearAt: TS });
   });
@@ -131,24 +137,6 @@ describe('parseBossMessage', () => {
 
   it('returns null for unrelated messages', () => {
     assert.strictEqual(parseBossMessage({ content: 'halo dunia' }), null);
-  });
-});
-
-describe('timestamp validation', () => {
-  it('treats a spawn older than the schedule as stale', () => {
-    assert.strictEqual(isBeforeScheduledBoss(TS, TS + 3600), true);
-    assert.strictEqual(isBeforeScheduledBoss(TS, TS + 61), true);
-  });
-
-  it('allows a spawn within the clock-skew grace window', () => {
-    assert.strictEqual(isBeforeScheduledBoss(TS, TS + 60), false);
-    assert.strictEqual(isBeforeScheduledBoss(TS, TS), false);
-    assert.strictEqual(isBeforeScheduledBoss(TS, TS - 1), false);
-  });
-
-  it('does not compare when there is no schedule or message time', () => {
-    assert.strictEqual(isBeforeScheduledBoss(null, TS), false);
-    assert.strictEqual(isBeforeScheduledBoss(TS, null), false);
   });
 });
 
@@ -203,26 +191,28 @@ describe('boss tracker notification timing', () => {
     return { guildId, tracker: new BossTracker(client), sends };
   }
 
-  function spawnMessage(guildId, appearAt) {
-    return {
+  it('ignores a spawn message that carries a Berakhir timestamp', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const scheduled = now + 3600;
+    const { guildId, tracker, sends } = setup({ lastBossTimestamp: scheduled });
+    const message = {
       id: '1',
       guildId,
       channelId: 'channel',
       author: { id: 'lucy' },
-      createdTimestamp: appearAt * 1000,
-      content: '## Guild Boss Telah Muncul!',
-      components: [],
+      createdTimestamp: now * 1000,
+      components: [{
+        type: 17,
+        components: [
+          { type: 10, content: '## Guild Boss Telah Muncul!' },
+          { type: 10, content: '⏳ Berakhir <t:' + (now + 1200) + ':R>' },
+        ],
+      }],
     };
-  }
 
-  it('ignores a stale spawn message instead of tagging immediately', async () => {
-    const now = Math.floor(Date.now() / 1000);
-    const scheduled = now + 3600;
-    const { guildId, tracker, sends } = setup({ lastBossTimestamp: scheduled });
+    await tracker.handleMessage(message);
 
-    await tracker.handleMessage(spawnMessage(guildId, now));
-
-    assert.strictEqual(sends.length, 0, 'spawn lama tidak boleh mengirim tag');
+    assert.strictEqual(sends.length, 0, 'spawn dengan Berakhir tidak boleh mengirim tag');
     const { getGuildSettings } = require('../src/utils/storage');
     assert.strictEqual(getGuildSettings(guildId).lastBossTimestamp, scheduled, 'jadwal aktif tidak ditimpa');
     tracker.stopGuild(guildId);
