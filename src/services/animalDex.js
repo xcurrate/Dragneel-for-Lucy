@@ -526,12 +526,13 @@ function formatCompactTable(animals, emojiMap) {
 const MAX_DETAIL_EMBEDS = 6;
 
 // Pisahkan flag di akhir perintah. `-c` / `--compact` = tampilan ringkas.
-// Token emoji diubah jadi nama hewanya, kecuali emoji dekoratif yang dibuang.
-// Sebelumnya mention dibuang agar `<@id>` tidak ikut jadi query.
+// Token emoji diubah jadi nama hewanya, kecuali emoji dekoratif dan tier yang
+// dibuang. Sebelumnya mention dibuang agar `<@id>` tidak ikut jadi query.
 function extractFlags(input) {
   const raw = (Array.isArray(input) ? input.join(' ') : String(input || ''))
     .replace(/<@[!&]?\d+>/g, ' ')
-    .replace(/<a?:(\w+):\d+>/g, (token, name) => (isDecorativeEmoji(name) ? ' ' : ' ' + name + ' '));
+    .replace(/<a?:(\w+):\d+>/g, (token, name) => (isIgnoredEmoji(name) ? ' ' : ' ' + name + ' '))
+    .replace(/:(\w+):/g, (token, name) => (isIgnoredEmoji(name) ? ' ' : token));
   const compact = /(^|\s)-{1,2}c(ompact)?(\s|$)/i.test(raw);
   return { compact, rest: raw.replace(/(^|\s)-{1,2}c(ompact)?(\s|$)/gi, ' ') };
 }
@@ -540,8 +541,17 @@ function extractFlags(input) {
 // kartu dex, emoji seperti ini ikut terbawa dan harus diabaikan sebagai query.
 const DECORATIVE_EMOJI = new Set(['blank']);
 
-function isDecorativeEmoji(name) {
-  return DECORATIVE_EMOJI.has(String(name || '').toLowerCase());
+// Tier/rank OwO juga tersalin sebagai emoji saat user menempel zoo. Token tier
+// bukan nama hewan: satu `:hidden:` dulu memunculkan semua hewan hidden.
+// Rank tetap bisa dicari lewat kata biasa, mis. `d dex fabled`.
+const TIER_EMOJI = new Set([
+  'common', 'uncommon', 'rare', 'epic', 'legendary', 'fabled',
+  'mythic', 'hidden', 'event', 'cpatreon', 'patreon', 'god',
+]);
+
+function isIgnoredEmoji(name) {
+  const key = String(name || '').toLowerCase();
+  return DECORATIVE_EMOJI.has(key) || TIER_EMOJI.has(key);
 }
 
 // Nama emoji Discord maksimal 32 karakter [A-Za-z0-9_]. Token yang melewati

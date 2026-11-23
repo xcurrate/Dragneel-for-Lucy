@@ -153,6 +153,19 @@ describe('animal dex storage', () => {
     assert.strictEqual(store.searchAnimals('').length, 2);
     assert.strictEqual(store.searchAnimals('nope').length, 0);
   });
+
+  it('tidak mencari lewat rank hidden, tapi nama hewannya tetap bisa dicari', () => {
+    const { captureMessage } = require('../src/services/animalDex');
+    const store = require('../src/utils/animalDexStorage');
+    captureMessage(makeMessage(card({
+      name: 'hkoala',
+      emoji: 'hkoala',
+      info: '- **Informasi animal:**\n  - **Rank:** <a:hidden:1> hidden',
+    })));
+
+    assert.strictEqual(store.searchAnimals('hidden').length, 0);
+    assert.strictEqual(store.searchAnimals('hkoala').length, 1);
+  });
 });
 
 describe('dex prefix command', () => {
@@ -477,6 +490,45 @@ describe('dex prefix command', () => {
     assert.doesNotMatch(res.embeds[0].data.description, /blank/);
   });
 
+  it('mengabaikan tier :hidden: dari zoo yang ditempel', async () => {
+    const { captureMessage, buildDexResponse } = require('../src/services/animalDex');
+    captureMessage(makeMessage(card({ name: 'lawliet', emoji: 'lawliet' })));
+    captureMessage(makeMessage(card({
+      name: 'hkoala',
+      emoji: 'hkoala',
+      info: '- **Informasi animal:**\n  - **Rank:** <a:hidden:1> hidden',
+    }), { id: 'm2' }));
+
+    const res = await buildDexResponse(':hidden: lawliet -c');
+    const desc = res.embeds[0].data.description;
+    assert.match(desc, /lawliet/, desc);
+    assert.doesNotMatch(desc, /hkoala/, desc);
+
+    const onlyTier = await buildDexResponse('hidden');
+    assert.strictEqual(onlyTier.embeds[0].data.title, '📖 Animal Dex — cara pakai');
+  });
+
+  it('hanya menampilkan hewan yang tercantum di zoo, bukan seluruh tier', async () => {
+    const { captureMessage, buildDexResponse } = require('../src/services/animalDex');
+    const ranked = (name, rank, id) => captureMessage(makeMessage(card({
+      name,
+      emoji: name,
+      info: `- **Informasi animal:**\n  - **Rank:** <a:${rank}:1> ${rank}`,
+    }), { id }));
+    ranked('feagle', 'fabled', 'm1');
+    ranked('ffrog', 'fabled', 'm2');
+    ranked('hlizard', 'hidden', 'm3');
+    ranked('hkoala', 'hidden', 'm4');
+
+    const pasted = '<a:fabled:1> <a:feagle:2>⁰⁰⁰ <a:hidden:3> <a:hlizard:4>⁰⁰⁰ -c';
+    const res = await buildDexResponse(pasted);
+    const desc = res.embeds[0].data.description;
+    assert.match(desc, /feagle/, desc);
+    assert.match(desc, /hlizard/, desc);
+    assert.doesNotMatch(desc, /ffrog/, desc);
+    assert.doesNotMatch(desc, /hkoala/, desc);
+  });
+
   it('recovers names from a block whose emoji tokens are cut off', async () => {
     const { captureMessage, buildDexResponse, extractFlags, toQueries } = require('../src/services/animalDex');
     const { parseDexInput } = require('../src/commands/prefix');
@@ -490,9 +542,9 @@ describe('dex prefix command', () => {
     const args = parseDexInput(pasted, '!').args;
     const flags = extractFlags(args);
 
-    // Nama yang masih terbaca diambil; penanda jumlah dibuang.
+    // Nama yang masih terbaca diambil; penanda jumlah dan tier dibuang.
     assert.strictEqual(flags.compact, true);
-    assert.deepStrictEqual(toQueries(flags.rest), ['cpatreon', 'sakurafate', 'fiona', 'snorlaxdoingafk']);
+    assert.deepStrictEqual(toQueries(flags.rest), ['sakurafate', 'fiona', 'snorlaxdoingafk']);
 
     const res = await buildDexResponse(args);
     const { title, description } = res.embeds[0].data;

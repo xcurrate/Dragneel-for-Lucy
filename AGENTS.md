@@ -487,6 +487,11 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   Token hewan memakai `emojiName || name` yang dipotong ke 32 karakter, karena nama emoji
   Discord tidak wajib terbaca dari judul kartu. Konsekuensinya handler tersebut `async`, jadi
   pemanggil dan tesnya harus `await` (tanpa itu asersi jalan sebelum balasan terkirim).
+- **Token tier/rank yang tersalin dari zoo bukan query hewan.** `extractFlags` membuang
+  emoji tier (`<a:hidden:...>`, `:hidden:`, `:cpatreon:`) sebelum `toQueries`, jadi menempel
+  satu blok zoo hanya mencari hewan yang tercantum, bukan seluruh isi tier. Rank `hidden`
+  juga tidak lagi dicocokkan oleh `searchAnimals`; hewan hidden tetap bisa dibuka lewat
+  namanya. Rank lain tetap bisa dicari dengan kata biasa (`d dex fabled`).
 - **Jangan pakai `getAnimal()` untuk membaca `animal_key` slot.** Kunci slot bisa berasal dari
   versi dex sebelumnya — nama emoji (`feagle`), alias, atau kapitalisasi berbeda — sedangkan
   `d dex` tetap menemukannya karena memakai pencarian longgar. `getAnimal()` menuntut cocok

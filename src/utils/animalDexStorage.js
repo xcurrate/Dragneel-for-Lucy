@@ -215,12 +215,20 @@ function listAnimals() {
 }
 
 // Pencarian sederhana: cocokkan nama, alias, nickname, atau rank (case-insensitive).
+// Rank `hidden` sengaja tidak ikut dicari: token tier `:hidden:` ikut tersalin
+// saat user menempel zoo, dan dulu query itu memunculkan semua hewan hidden.
+// Hewan hidden tetap bisa dibuka lewat namanya sendiri.
 function searchAnimals(query) {
   const q = String(query || '').trim().toLowerCase();
   const all = listAnimals();
   if (!q) return all;
-  return all.filter(a => [a.name, a.alias, a.nickname, a.rank, a.emojiName]
-    .some(field => typeof field === 'string' && field.toLowerCase().includes(q)));
+  return all.filter(a => {
+    const named = [a.name, a.alias, a.nickname, a.emojiName]
+      .some(field => typeof field === 'string' && field.toLowerCase().includes(q));
+    if (named) return true;
+    if (String(a.rank || '').toLowerCase() === 'hidden') return false;
+    return typeof a.rank === 'string' && a.rank.toLowerCase().includes(q);
+  });
 }
 
 function countAnimals() {
