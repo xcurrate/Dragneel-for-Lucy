@@ -254,8 +254,8 @@ function passiveToken(p) {
   return emojiToken(raw);
 }
 
-// Emoji efek asli OwO. 18 dari 19 punya token; Anniversary Blessing masih
-// memakai Twemoji sampai token emoji publiknya tersedia.
+// Emoji efek asli OwO. Semua 19 efek punya token; BUFF_TWEMOJI disiapkan
+// sebagai cadangan bila nanti ada efek baru tanpa token publik.
 const BUFF_EMOJI = {
   1: '<:taunt:546615322598440960>',
   2: '<:poison:572311805704273920>',
@@ -272,14 +272,13 @@ const BUFF_EMOJI = {
   13: '<:sacredward:1478918468182212758>',
   14: '<:wither:1571819762739187722>',
   15: '<:mcurse:1559091907588522054>',
+  16: '<:annivblessing:1570881262728781854>',
   17: '<:frostbite:1478912393299103947>',
   18: '<:pest:1478913440541179904>',
   19: '<:exposed:1478945223072551004>',
 };
 
-const BUFF_TWEMOJI = {
-  16: '1f389', // Anniversary Blessing — party popper
-};
+const BUFF_TWEMOJI = {};
 
 function discordIcon(token) {
   return token
@@ -706,7 +705,7 @@ function drawStats(ctx, x, y, width) {
     `Resistance: ${battle.formulas.resistance}.`,
     'Tanpa senjata: serangan dasar 100% STR ke musuh acak.',
     'Status disabled: Rune of the Forgotten, Rune of Celebration, Rune of Luck.',
-    'Ikon efek: 18 emoji OwO; Anniversary Blessing memakai Twemoji fallback.',
+    'Ikon efek: 19 emoji OwO.',
   ];
   setFont(ctx, F_SMALL);
   ctx.fillStyle = C.dim;
@@ -777,7 +776,7 @@ async function main() {
   ctx.fillStyle = C.dim;
   ctx.textBaseline = 'top';
   ctx.fillText(
-    `Dibuat sekali pakai oleh scripts/weapon-chart-image.js · ${twemojiEffects} efek pakai Twemoji fallback · ${iconFailures} ikon gagal dimuat`,
+    `Dibuat sekali pakai oleh scripts/weapon-chart-image.js · ${iconFailures} ikon gagal dimuat`,
     MARGIN,
     totalH - 48
   );
