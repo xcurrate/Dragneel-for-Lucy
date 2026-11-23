@@ -314,10 +314,17 @@ async function deliverReminder(client, reminder) {
   // (mis. teks diawali `{mention}`), supaya tidak muncul dua kali.
   const alreadyTagged = new RegExp('<@!?' + userId + '>').test(text);
   const content_ = allowPing && !alreadyTagged ? `<@${userId}> ` + text : text;
-  const payload = { content: content_, allowedMentions };
+  const payload = { allowedMentions };
 
-  // Format EMBED: pesan dirender sebagai embed. Deskripsi embed juga dibersihkan
-  // dari mention bila tag tidak diminta.
+  // Format EMBED: isi pesan hanya ada di embed. `content` dipakai khusus untuk
+  // mention saat mode tag/both; tanpa itu teks yang sama tampil di luar embed.
+  if (resolved.format !== 'EMBED') {
+    payload.content = content_;
+  } else if (allowPing) {
+    payload.content = `<@${userId}>`;
+  }
+
+  // Deskripsi embed juga dibersihkan dari mention bila tag tidak diminta.
   if (resolved.format === 'EMBED') {
     const config = resolved.renderedEmbed || {};
     if (!allowPing) {

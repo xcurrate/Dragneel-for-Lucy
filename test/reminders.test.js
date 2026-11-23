@@ -1102,6 +1102,7 @@ describe('custom reminder — engine integration (no second scheduler)', () => {
     });
     assert.equal(sent.length, 1);
     assert.ok(Array.isArray(sent[0].embeds) && sent[0].embeds.length === 1, 'dikirim sebagai embed');
+    assert.equal(sent[0].content, undefined, 'tidak ada teks di luar embed saat mode none');
     assert.match(sent[0].embeds[0].data.description, /Pesan lucy/);
   });
 
@@ -1348,27 +1349,27 @@ describe('custom reminder — tag, duplikat, dan jam harian WIB', () => {
     const client = { channels: { fetch: async () => ({ isTextBased: () => true, send: async p => { sent.push(p); } }) } };
     const base = { guildId: 'guild1', channelId: 'chan1', userId: owner, name: 'Ani', kind: 'battle', action: 'battle', messageId: 'm1' };
 
-    // Mode `none`: teks DAN embed harus bersih dari mention.
+    // Mode `none`: tanpa content di luar embed; teks DAN embed bersih dari mention.
     prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'none' });
     await engine.deliverReminder(client, { ...base });
     const none = sent.at(-1);
-    assert.doesNotMatch(none.content, /<@/, 'teks tanpa tag saat mode none');
+    assert.equal(none.content, undefined, 'tanpa content di luar embed saat mode none');
     assert.doesNotMatch(JSON.stringify(none.embeds[0].data), /<@/, 'embed tanpa tag saat mode none');
     assert.deepEqual(none.allowedMentions, { parse: [], users: [] }, 'tidak ada user yang diizinkan');
     assert.equal(none.reply, undefined, 'tidak me-reply');
 
-    // Mode `reply`: me-reply, tetap tanpa tag.
+    // Mode `reply`: me-reply, tetap tanpa tag dan tanpa content di luar embed.
     prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'reply' });
     await engine.deliverReminder(client, { ...base });
     const reply = sent.at(-1);
     assert.equal(reply.reply.messageReference, 'm1');
-    assert.doesNotMatch(reply.content, /<@/, 'mode reply tidak menandai');
+    assert.equal(reply.content, undefined, 'mode reply tanpa content di luar embed');
 
-    // Mode `tag`: boleh menandai, dan diizinkan.
+    // Mode `tag`: content hanya mention, bukan body; tag diizinkan.
     prefStore.setPref(owner, 'battle', { enabled: true, pingMode: 'tag' });
     await engine.deliverReminder(client, { ...base });
     const tag = sent.at(-1);
-    assert.match(tag.content, new RegExp('<@' + owner + '>'));
+    assert.equal(tag.content, `<@${owner}>`, 'content hanya mention');
     assert.deepEqual(tag.allowedMentions, { parse: [], users: [owner] });
     assert.equal(tag.reply, undefined, 'mode tag tidak me-reply');
   });
@@ -1460,16 +1461,18 @@ describe('custom reminder — tag tunggal dan token {mention} di embed', () => {
     const payload = await deliver(clientOf(sent), sent, owner, 'tag');
     const tags = payload.content.match(/<@!?\d+>/g) || [];
     assert.equal(tags.length, 1, 'tepat satu tag, tidak dobel');
+    assert.equal(payload.content, `<@${owner}>`, 'content hanya mention, bukan body');
     assert.equal(payload.reply, undefined, 'mode tag tidak me-reply');
   });
 
-  it('mode none mengganti mention dengan nama, tanpa tag dan tanpa reply', async () => {
+  it('mode none mengganti mention dengan nama di embed, tanpa content dan reply', async () => {
     const owner = '111222333444555666';
     await setupBattleReminder(owner);
     const sent = [];
     const payload = await deliver(clientOf(sent), sent, owner, 'none');
-    assert.doesNotMatch(payload.content, /<@/, 'tanpa tag');
-    assert.match(payload.content, /Ani jangan lupa battle!/, 'mention diganti nama');
+    assert.equal(payload.content, undefined, 'tanpa content di luar embed');
+    assert.doesNotMatch(JSON.stringify(payload.embeds[0].data), /<@/, 'embed tanpa tag');
+    assert.match(payload.embeds[0].data.description, /Ani jangan lupa battle!/, 'mention diganti nama di embed');
     assert.deepEqual(payload.allowedMentions, { parse: [], users: [] });
     assert.equal(payload.reply, undefined);
   });
@@ -1479,6 +1482,7 @@ describe('custom reminder — tag tunggal dan token {mention} di embed', () => {
     await setupBattleReminder(owner);
     const sent = [];
     const payload = await deliver(clientOf(sent), sent, owner, 'both');
+    assert.equal(payload.content, `<@${owner}>`, 'content hanya mention');
     assert.equal((payload.content.match(/<@!?\d+>/g) || []).length, 1);
     assert.equal(payload.reply.messageReference, 'm1');
   });
