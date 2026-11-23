@@ -60,7 +60,7 @@ function usage(prefix = 'd') {
     'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
     'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
-    '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (satu pertarungan).',
+    '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (satu pertarungan; khusus developer).',
     'Filter hasil: `-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok,',
     '  lalu hasil itu yang ditampilkan. Bisa digabung `-m`, mis. `' + prefix + ' sim 2 -lose -m 20`.',
     `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
@@ -853,6 +853,10 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   const { flags, rest, unknown } = parseFlags(args);
   if (unknown.length) return send(message, unknownFlagsError(unknown, prefix));
+  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  if (flags.log && !isDev) {
+    return send(message, errorEmbed('Opsi `-log` khusus developer bot.'));
+  }
   const levels = parseLevels(flags.lvl);
   if (levels.invalid || flags.lvl?.malformed) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim lvl100\`, \`${prefix} sim lvl100/60\`, \`${prefix} sim lvl/40\`.`));
@@ -917,7 +921,6 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     return send(message, errorEmbed(`Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim -m 500\`.`));
   }
   // Batas per perintah: user biasa mengikuti setting developer, developer bebas.
-  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
   const maxRuns = isDev ? Infinity : store.getMaxRuns();
   if (runCount > maxRuns) {
     return send(message, errorEmbed(

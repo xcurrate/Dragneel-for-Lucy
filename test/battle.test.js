@@ -3449,11 +3449,12 @@ describe('d sim A vs B', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  async function run(args) {
+  async function run(args, deps = {}) {
     replies = [];
     await handleSimCommand({ guildId: 'g', author: { id: 'u' } }, args, 'd', {
       sendEmbed: (m, embed) => { replies.push(embed.toJSON()); },
       sendPayload: (m, payload) => { replies.push(payload.embeds[0].toJSON()); },
+      ...deps,
     });
     store.clearCooldown('u', 'sim');
     return replies[0];
@@ -3486,6 +3487,25 @@ describe('d sim A vs B', () => {
     assert.ok(embed.title.includes('snail + snail'), embed.title);
     assert.ok(embed.description.includes('L.100'), 'level 100 di sisi lawan');
     assert.ok(embed.description.includes('42.5%'), 'rata-rata quality Aegis + Sacrifice');
+  });
+
+  it('menolak `-log` untuk non-developer', async () => {
+    const embed = await run(['1', 'vs', '3', '-log'], { isDeveloper: () => false });
+    assert.ok(embed.description.includes('khusus developer'), embed.description);
+  });
+
+  it('mengizinkan `-log` untuk developer', async () => {
+    const previous = process.env.BATTLE_LOG_BASE_URL;
+    process.env.BATTLE_LOG_BASE_URL = 'https://example.test';
+    try {
+      const embed = await run(['1', 'vs', '3', '-log'], { isDeveloper: () => true });
+      const field = (embed.fields || []).find(f => f.name.includes('Battle log'));
+      assert.ok(field, 'embed developer harus punya tautan log');
+      assert.ok(field.value.includes('https://example.test/battle-log#'), field.value);
+    } finally {
+      if (previous == null) delete process.env.BATTLE_LOG_BASE_URL;
+      else process.env.BATTLE_LOG_BASE_URL = previous;
+    }
   });
 
   it('nama tim yang tidak ada memberi pesan jelas', async () => {

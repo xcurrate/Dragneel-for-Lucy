@@ -232,6 +232,9 @@ berubah, cek dulu apakah slotnya sudah punya `quality=` sendiri.
 d sim 1 vs 2 -m 100 -s 42
 ```
 
+`-log` menyimpan jalannya satu pertarungan dan mengirim tautan log lengkap.
+Opsi ini **khusus developer bot**; user biasa yang memakainya mendapat error.
+
 ---
 
 ## Langkah 4 — Simulasi global (melawan semua tim)
