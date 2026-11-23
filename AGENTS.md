@@ -488,10 +488,12 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   Discord tidak wajib terbaca dari judul kartu. Konsekuensinya handler tersebut `async`, jadi
   pemanggil dan tesnya harus `await` (tanpa itu asersi jalan sebelum balasan terkirim).
 - **Token tier/rank yang tersalin dari zoo bukan query hewan.** `extractFlags` membuang
-  emoji tier (`<a:hidden:...>`, `:hidden:`, `:cpatreon:`) sebelum `toQueries`, jadi menempel
-  satu blok zoo hanya mencari hewan yang tercantum, bukan seluruh isi tier. Rank `hidden`
-  juga tidak lagi dicocokkan oleh `searchAnimals`; hewan hidden tetap bisa dibuka lewat
-  namanya. Rank lain tetap bisa dicari dengan kata biasa (`d dex fabled`).
+  emoji tier (`<a:hidden:...>`, `:hidden:`, `:cpatreon:`) sebelum `toQueries`, dan
+  `buildDexResponse` mendeteksi blok salinan sebagai `pastedBlock`. Dalam mode itu
+  `searchAnimals(q, { namesOnly: true })` hanya mencocokkan `name`/`emojiName`, bukan
+  alias, nickname, atau rank — jadi kata seperti `Zoo`/`Poin` tidak menarik hewan lain.
+  Rank `hidden` juga tidak lagi dicocokkan di pencarian biasa; hewan hidden tetap bisa
+  dibuka lewat namanya. Rank lain tetap bisa dicari dengan kata biasa (`d dex fabled`).
 - **Jangan pakai `getAnimal()` untuk membaca `animal_key` slot.** Kunci slot bisa berasal dari
   versi dex sebelumnya — nama emoji (`feagle`), alias, atau kapitalisasi berbeda — sedangkan
   `d dex` tetap menemukannya karena memakai pencarian longgar. `getAnimal()` menuntut cocok

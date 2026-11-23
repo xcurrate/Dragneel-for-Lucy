@@ -529,6 +529,21 @@ describe('dex prefix command', () => {
     assert.doesNotMatch(desc, /hkoala/, desc);
   });
 
+  it('salinan zoo tidak menarik hewan lewat alias atau rank', async () => {
+    const { captureMessage, buildDexResponse } = require('../src/services/animalDex');
+    captureMessage(makeMessage(card({
+      name: 'dragon',
+      emoji: 'dragon',
+      info: '- **Informasi animal:**\n  - **Alias:** kimiywell\n  - **Rank:** <a:zoo:1> zoo',
+    }), { id: 'm1' }));
+    captureMessage(makeMessage(card({ name: 'lawliet', emoji: 'lawliet' }), { id: 'm2' }));
+
+    const res = await buildDexResponse('<a:kimiywell:1> <a:lawliet:2> Zoo -c');
+    const desc = res.embeds[0].data.description;
+    assert.match(desc, /lawliet/, desc);
+    assert.doesNotMatch(desc, /dragon/, desc);
+  });
+
   it('recovers names from a block whose emoji tokens are cut off', async () => {
     const { captureMessage, buildDexResponse, extractFlags, toQueries } = require('../src/services/animalDex');
     const { parseDexInput } = require('../src/commands/prefix');

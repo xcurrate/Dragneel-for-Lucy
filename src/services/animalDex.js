@@ -614,13 +614,18 @@ function unionMatches(perQuery) {
 // embed dibiarkan tanpa deskripsi dan `handlePrefixCommand` memakai pesan
 // bantuan sebagai gantinya.
 async function buildDexResponse(input, { prefix } = {}) {
+  const rawInput = Array.isArray(input) ? input.join(' ') : String(input || '');
   const { compact, rest } = extractFlags(input);
   const queries = toQueries(rest);
 
   // Tanpa nama sama sekali → tampilkan panduan agar user tahu cara pakai.
   if (!queries.length) return { embeds: [formatDexUsage(prefix)] };
 
-  const perQuery = queries.map(q => ({ q, matches: store.searchAnimals(q) }));
+  // Blok zoo membawa emoji hewan dan teks dekoratif. Untuk input seperti itu,
+  // hanya nama/emoji hewan yang boleh dicocokkan; alias, nickname, dan rank
+  // tidak, supaya kata seperti "zoo" atau "poin" tidak menambah hewan lain.
+  const pastedBlock = /<a?:\w+:\d+>|:\w+:/.test(rawInput);
+  const perQuery = queries.map(q => ({ q, matches: store.searchAnimals(q, { namesOnly: pastedBlock }) }));
   const results = unionMatches(perQuery);
   // Tidak ada hewan yang cocok → tampilkan panduan, bukan embed kosong.
   if (!results.length) return { embeds: [formatDexUsage(prefix)] };

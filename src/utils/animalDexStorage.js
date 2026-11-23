@@ -218,16 +218,21 @@ function listAnimals() {
 // Rank `hidden` sengaja tidak ikut dicari: token tier `:hidden:` ikut tersalin
 // saat user menempel zoo, dan dulu query itu memunculkan semua hewan hidden.
 // Hewan hidden tetap bisa dibuka lewat namanya sendiri.
-function searchAnimals(query) {
+// `namesOnly` dipakai untuk blok zoo yang ditempel: token hewan hanya boleh
+// cocok lewat nama/emoji, bukan alias/nickname/rank, supaya satu kata seperti
+// "zoo" atau "poin" tidak menarik hewan lain yang kebetulan punya field itu.
+function searchAnimals(query, { namesOnly = false } = {}) {
   const q = String(query || '').trim().toLowerCase();
   const all = listAnimals();
   if (!q) return all;
   return all.filter(a => {
-    const named = [a.name, a.alias, a.nickname, a.emojiName]
+    const named = [a.name, a.emojiName]
       .some(field => typeof field === 'string' && field.toLowerCase().includes(q));
     if (named) return true;
+    if (namesOnly) return false;
     if (String(a.rank || '').toLowerCase() === 'hidden') return false;
-    return typeof a.rank === 'string' && a.rank.toLowerCase().includes(q);
+    return [a.alias, a.nickname, a.rank]
+      .some(field => typeof field === 'string' && field.toLowerCase().includes(q));
   });
 }
 
