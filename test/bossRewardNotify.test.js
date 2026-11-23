@@ -12,8 +12,9 @@ describe('boss reward target parser', () => {
     assert.deepEqual(parseAmount('10k++'), { target: 10000, operator: '>' });
   });
   it('parses multiple category/value pairs without separators', () => {
-    assert.deepEqual(parseTargets(['ws', '100', 'xp', '10k++', 'flb', '5']), {
+    assert.deepEqual(parseTargets(['ws', '100', 'bc', '3', 'xp', '10k++', 'flb', '5']), {
       weapon_shards: { target: 100, operator: '>=' },
+      boss_crate: { target: 3, operator: '>=' },
       experience: { target: 10000, operator: '>' },
       fabled_lootbox: { target: 5, operator: '>=' }
     });
@@ -66,11 +67,12 @@ describe('reward threshold evaluation', () => {
     const targets = {
       weapon_shards: { target: 100, operator: '>=' },
       weapon_crate: { target: 1, operator: '>=' },
+      boss_crate: { target: 1, operator: '>=' },
       fabled_lootbox: { target: 1, operator: '>=' },
       experience: { target: 1000, operator: '>=' }
     };
-    const three = { weapon_shards: 100, weapon_crate: 1, fabled_lootbox: 1, experience: 999 };
-    const two = { weapon_shards: 99, weapon_crate: 1, fabled_lootbox: 1, experience: 999 };
+    const three = { weapon_shards: 100, weapon_crate: 1, boss_crate: 1, fabled_lootbox: 0, experience: 999 };
+    const two = { weapon_shards: 99, weapon_crate: 1, boss_crate: 1, fabled_lootbox: 0, experience: 999 };
     assert.equal(rewardLines(three, targets).length, 3);
     assert.equal(rewardLines(two, targets).length, 2);
   });

@@ -58,6 +58,7 @@ function renderBossRewards(settings) {
   const targets = settings.targets || {};
   $('reward-ws').value = targets.weapon_shards?.target ?? '';
   $('reward-wc').value = targets.weapon_crate?.target ?? '';
+  $('reward-bc').value = targets.boss_crate?.target ?? '';
   $('reward-flb').value = targets.fabled_lootbox?.target ?? '';
   $('reward-xp').value = targets.experience?.target ?? '';
 }
@@ -69,6 +70,7 @@ function collectBossRewards() {
     targets: {
       weapon_shards: $('reward-ws').value,
       weapon_crate: $('reward-wc').value,
+      boss_crate: $('reward-bc').value,
       fabled_lootbox: $('reward-flb').value,
       experience: $('reward-xp').value
     }

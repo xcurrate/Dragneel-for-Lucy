@@ -6,6 +6,7 @@ const { getGuildSettings } = require('../utils/storage');
 const LABELS = {
   weapon_shards: '💎 Weapon Shards',
   weapon_crate: '🗃️ Weapon Crate',
+  boss_crate: '🧊 Boss Crate',
   fabled_lootbox: '📦 Fabled Lootbox',
   experience: '⭐ Experience'
 };
@@ -223,6 +224,7 @@ async function processMessage(message) {
     + ' message=' + message.id
     + ' weapon_shards=' + (rewards.weapon_shards ?? 'unreadable')
     + ' weapon_crate=' + (rewards.weapon_crate ?? 'unreadable')
+    + ' boss_crate=' + (rewards.boss_crate ?? 'unreadable')
     + ' fabled_lootbox=' + (rewards.fabled_lootbox ?? 'unreadable')
     + ' experience=' + (rewards.experience ?? 'unreadable'));
 

@@ -17,15 +17,16 @@ const DIGITS = {
 };
 
 function makeLucyRewardFixture() {
-  const image = new PNG({ width: 1536, height: 208 });
+  const image = new PNG({ width: 1913, height: 208 });
   for (let i = 0; i < image.data.length; i += 4) {
     image.data[i] = 39; image.data[i + 1] = 43; image.data[i + 2] = 52; image.data[i + 3] = 255;
   }
   const regions = [
-    [0.08, 0.245, '99'],
-    [0.32, 0.493, '4'],
-    [0.57, 0.738, '6'],
-    [0.82, 0.984, '10174']
+    [0.078, 0.165, '99'],
+    [0.275, 0.345, '1'],
+    [0.470, 0.535, '1'],
+    [0.670, 0.735, '1'],
+    [0.870, 0.985, '13767']
   ];
   const scale = 7;
   const yStart = 62;
@@ -61,13 +62,14 @@ after(async () => {
 });
 
 describe('reward OCR integration', () => {
-  it('reads all four reward values from a Lucy reward-card layout fixture', async () => {
+  it('reads all five reward values from a Lucy reward-card layout fixture', async () => {
     const rewards = await readRewards(makeLucyRewardFixture());
     assert.deepEqual(rewards, {
       weapon_shards: 99,
-      weapon_crate: 4,
-      fabled_lootbox: 6,
-      experience: 10174
+      weapon_crate: 1,
+      boss_crate: 1,
+      fabled_lootbox: 1,
+      experience: 13767
     });
   });
 });

@@ -4,12 +4,14 @@ const { DEFAULT_PREFIX } = require('../utils/storage');
 const ALIASES = Object.freeze({
   ws: 'weapon_shards', weapon_shards: 'weapon_shards',
   wc: 'weapon_crate', weapon_crate: 'weapon_crate',
+  bc: 'boss_crate', boss_crate: 'boss_crate',
   flb: 'fabled_lootbox', flootbox: 'fabled_lootbox', fabled_lootbox: 'fabled_lootbox',
   xp: 'experience', experience: 'experience'
 });
 const LABELS = {
   weapon_shards: 'Weapon Shards',
   weapon_crate: 'Weapon Crate',
+  boss_crate: 'Boss Crate',
   fabled_lootbox: 'Fabled Lootbox',
   experience: 'Experience'
 };
@@ -23,7 +25,7 @@ function parseAmount(token) {
   return { target, operator: match[4] ? '>' : '>=' };
 }
 function parseTargets(tokens) {
-  if (!tokens.length || tokens.length % 2 !== 0) throw new Error('Format: boss notify ws 100 xp 10k++ flb 5');
+  if (!tokens.length || tokens.length % 2 !== 0) throw new Error('Format: boss notify ws 100 bc 3 xp 10k++ flb 5');
   const result = {};
   for (let i = 0; i < tokens.length; i += 2) {
     const category = ALIASES[tokens[i].toLowerCase()];
@@ -54,7 +56,7 @@ async function handlePersonalCommand(message, args, prefix = DEFAULT_PREFIX) {
   }
   if (sub === 'remove') {
     const key = ALIASES[(args[1] || '').toLowerCase()];
-    if (!key) { await message.reply('Kategori tidak valid. Gunakan ws, wc, flb, atau xp.'); return true; }
+    if (!key) { await message.reply('Kategori tidak valid. Gunakan ws, wc, bc, flb, atau xp.'); return true; }
     delete targets[key];
     store.setPersonal(message.guildId, userId, targets);
     await message.reply({ content: '✅ Target ' + LABELS[key] + ' dihapus.', allowedMentions: { parse: [] } });
@@ -66,7 +68,7 @@ async function handlePersonalCommand(message, args, prefix = DEFAULT_PREFIX) {
     store.setPersonal(message.guildId, userId, targets);
     await message.reply({ content: '✅ Target reward personal diperbarui.\n' + display(targets), allowedMentions: { parse: [] } });
   } catch (error) {
-    await message.reply({ content: '❌ ' + error.message + '\nContoh: `' + prefix + ' boss notify ws 100 xp 10,000++ flb 5`', allowedMentions: { parse: [] } });
+    await message.reply({ content: '❌ ' + error.message + '\nContoh: `' + prefix + ' boss notify ws 100 bc 3 xp 10,000++ flb 5`', allowedMentions: { parse: [] } });
   }
   return true;
 }

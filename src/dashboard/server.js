@@ -193,7 +193,7 @@ function startDashboard(client, tracker) {
         if (channelId && !/^\d{17,20}$/.test(channelId)) throw new Error('ID channel reward tidak valid.');
         if (roleId && !/^\d{17,20}$/.test(roleId)) throw new Error('ID role reward tidak valid.');
         const targets = {};
-        for (const key of ['weapon_shards', 'weapon_crate', 'fabled_lootbox', 'experience']) {
+        for (const key of ['weapon_shards', 'weapon_crate', 'boss_crate', 'fabled_lootbox', 'experience']) {
           const raw = value.targets?.[key];
           if (raw === '' || raw === null || raw === undefined) continue;
           const target = Number(raw);

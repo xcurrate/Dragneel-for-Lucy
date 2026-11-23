@@ -3,10 +3,11 @@ const { PNG } = require('pngjs');
 const { createWorker } = require('tesseract.js');
 
 const REGIONS = Object.freeze({
-  weapon_shards: [0.08, 0.245],
-  weapon_crate: [0.32, 0.493],
-  fabled_lootbox: [0.57, 0.738],
-  experience: [0.82, 0.984]
+  weapon_shards: [0.078, 0.165],
+  weapon_crate: [0.275, 0.345],
+  boss_crate: [0.470, 0.535],
+  fabled_lootbox: [0.670, 0.735],
+  experience: [0.870, 0.985]
 });
 
 let workerPromise;
@@ -117,10 +118,13 @@ async function readRewards(input) {
   // atau confidence tertinggi saja tidak cukup.
   const recognizeDigits = async (crop) => {
     const tally = new Map(); // digits -> { count, confidence, psm }
+    let truncatedText = '';
     for (const psm of ['6', '7', '8', '13']) {
-      await worker.setParameters({ tessedit_char_whitelist: '0123456789,', tessedit_pageseg_mode: psm });
+      await worker.setParameters({ tessedit_char_whitelist: '0123456789,.', tessedit_pageseg_mode: psm });
       const { data } = await worker.recognize(crop);
-      const digits = String(data.text || '').replace(/[^\d]/g, '');
+      const raw = String(data.text || '');
+      if (/(?:\.{3,}|…)/.test(raw)) truncatedText = raw;
+      const digits = raw.replace(/[^\d]/g, '');
       if (!digits) continue;
       const confidence = Number(data.confidence || 0);
       const cur = tally.get(digits) || { count: 0, confidence: 0, psm };
@@ -131,7 +135,7 @@ async function readRewards(input) {
       }
       tally.set(digits, cur);
     }
-    if (!tally.size) return { digits: '', confidence: 0, psm: '-' };
+    if (!tally.size) return { digits: '', confidence: 0, psm: '-', truncatedText };
     // Mayoritas menang; seri dipecah dengan confidence tertinggi.
     let best = null;
     for (const [digits, info] of tally) {
@@ -140,15 +144,25 @@ async function readRewards(input) {
         best = { digits, info };
       }
     }
-    return { digits: best.digits, confidence: best.info.confidence, psm: best.info.psm };
+    return { digits: best.digits, confidence: best.info.confidence, psm: best.info.psm, truncatedText };
+  };
+
+  const truncatedLowerBound = (text) => {
+    if (!/,\s*(?:\.{3,}|…)\s*$/.test(text)) return null;
+    const groups = text.replace(/[^\d,]/g, '').replace(/,+$/, '').split(',').filter(Boolean);
+    if (groups.length < 2) return null;
+    const lower = Number(groups.join('')) * 1000;
+    return Number.isSafeInteger(lower) ? lower : null;
   };
 
   for (const [name, [start, end]] of Object.entries(REGIONS)) {
     const crop = cropNumber(image, start, end);
-    const { digits, confidence, psm } = await recognizeDigits(crop);
-    const value = digits ? Number(digits) : null;
+    const { digits, confidence, psm, truncatedText } = await recognizeDigits(crop);
+    const lowerBound = truncatedLowerBound(truncatedText);
+    const value = lowerBound ?? (digits ? Number(digits) : null);
     results[name] = Number.isSafeInteger(value) ? value : null;
-    console.info('[RewardOCR][region] category=' + name + ' cropBytes=' + crop.length + ' digits=' + digits + ' parsed=' + results[name] + ' confidence=' + confidence.toFixed(1) + '% psm=' + psm);
+    console.info('[RewardOCR][region] category=' + name + ' cropBytes=' + crop.length + ' digits=' + digits + ' parsed=' + results[name] + ' confidence=' + confidence.toFixed(1) + '% psm=' + psm
+      + (lowerBound !== null ? ' truncated=true lowerBound=' + lowerBound : ''));
   }
   return results;
 }
