@@ -414,6 +414,7 @@ function makeProgressPublisher(message, sendEmbed, sendPayload, labels, mode) {
 function globalUsage(prefix = 'd') {
   return [
     `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** (kecuali tim yang dipilih)`,
+    `\`${prefix} sim global <blueprint>\` — blueprint melawan seluruh tim tersimpan`,
     '',
     'Hasil berisi: rata-rata streak, rata-rata kalah, dan rekap menang/seri/kalah',
     'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
@@ -502,19 +503,8 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
   const userId = message.author.id;
 
-  const team = store.getActiveTeam(userId);
-  if (!team) {
-    return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
-  }
-  if (!team.slots.length) {
-    return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
-  }
-
   const { flags, rest, unknown } = parseFlags(args);
   if (unknown.length) return send(message, unknownFlagsError(unknown, prefix));
-  if (rest.length) {
-    return send(message, errorEmbed(`Argumen \`${rest.join(' ')}\` tidak dikenal di simulasi global. Lihat \`${prefix} sim global help\`.`));
-  }
 
   const seed = flags['-s'] ?? flags['-seed'];
   if (seed != null && !Number.isFinite(Number(seed))) return send(message, errorEmbed('Seed harus angka.'));
@@ -534,20 +524,44 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     return send(message, errorEmbed(`Format level salah. Contoh: \`${prefix} sim global lvl100\`, \`${prefix} sim global lvl/40\`.`));
   }
 
-  const rawPlayer = resolveTeamSpecs(team);
-  if (rawPlayer.error) return send(message, errorEmbed(`❌ ${rawPlayer.error}`));
-  const player = { specs: withLevel(withQuality(rawPlayer.specs, playerQuality), levels.player) };
+  // Tanpa argumen, tim aktif yang bertarung. Dengan argumen, argumen itu
+  // dibaca sebagai blueprint komposisi inline (hewan/senjata/pasif).
+  const blueprintText = rest.join(' ').trim();
+  let team = null;
+  let rawPlayerSpecs = null;
+  let playerLabel = null;
+  if (blueprintText) {
+    const parsed = simParser.parseInlineSide(rest, {
+      defaultLevel: levels.player ?? data.DEFAULT_LEVEL,
+      prefix,
+    });
+    if (parsed.error) return send(message, errorEmbed(`❌ ${parsed.error}`));
+    rawPlayerSpecs = parsed.specs;
+    playerLabel = parsed.label;
+  } else {
+    team = store.getActiveTeam(userId);
+    if (!team) {
+      return send(message, errorEmbed(`Belum ada tim aktif. Buat dulu: \`${prefix} team new <nama>\` lalu \`${prefix} team add 1 <hewan>\`.`));
+    }
+    if (!team.slots.length) {
+      return send(message, errorEmbed(`Tim **${team.name}** masih kosong. Isi dengan \`${prefix} team add 1 <hewan>\`.`));
+    }
+    const rawPlayer = resolveTeamSpecs(team);
+    if (rawPlayer.error) return send(message, errorEmbed(`❌ ${rawPlayer.error}`));
+    rawPlayerSpecs = rawPlayer.specs;
+    playerLabel = teamLabel(team);
+  }
+  const player = { specs: withLevel(withQuality(rawPlayerSpecs, playerQuality), levels.player) };
 
   const opponents = [];
   // Simulasi global melawan semua tim tersimpan, termasuk tim lain milik user
-  // sendiri. Hanya tim yang sedang dipilih yang dikecualikan, karena tim itu
-  // yang bertarung. Semua yang tidak ikut diadu dicatat supaya angka `dtm`
-  // bisa direkonsiliasi.
+  // sendiri. Hanya tim aktif yang dikecualikan saat memakai tim aktif; saat
+  // memakai blueprint tidak ada tim tersimpan yang perlu dikecualikan.
   const skipped = [];
   let excluded = 0;
   const allTeams = store.listAllTeams();
   for (const other of allTeams) {
-    if (other.id === team.id) { excluded += 1; continue; }
+    if (team && other.id === team.id) { excluded += 1; continue; }
     if (!other.slots.length) {
       skipped.push({ label: teamLabel(other), reason: 'kosong' });
       continue;
@@ -587,7 +601,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + GLOBAL_COOLDOWN_MS);
   }
 
-  const labels = { playerLabel: teamLabel(team) };
+  const labels = { playerLabel };
   const publishProgress = makeProgressPublisher(message, send, sendPayload, labels, 'global');
 
   // Embed progres dikirim sebelum simulasi dimulai supaya user langsung melihat

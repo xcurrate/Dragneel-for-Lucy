@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const parser = require(path.join(ROOT, 'src/utils/simParser'));
+const blueprint = require(path.join(ROOT, 'src/utils/blueprint'));
 const { buildWeapon, averageQuality } = require(path.join(ROOT, 'src/services/battleWeapon'));
 const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
 const { createRng } = require(path.join(ROOT, 'src/services/battleRng'));
@@ -49,6 +50,33 @@ describe('parser komposisi inline', () => {
   it('stat manual tidak dianggap komposisi inline', () => {
     assert.equal(parser.looksInline(['hp=8,att=6,pr=2,wp=3,mag=5,mr=1']), false);
     assert.equal(parser.looksInline(['snail', 'sword', 'crit']), true);
+  });
+
+  it('menerima alias sageguard untuk Safeguard', () => {
+    const result = parser.parseInlineSide(['snail', 'rune', 'sageguard']);
+    assert.ok(!result.error, result.error);
+    assert.deepEqual(result.specs[0].weapon.passives, [{ id: 11 }]);
+  });
+
+  it('memisahkan quality 10,10 dari level unit berikutnya', () => {
+    const result = parser.parseInlineSide('50 snail gsword 100 crit mtap, 50 snail Aegis 100,50 sac 10,10, 10 snail rune sageguard');
+    assert.ok(!result.error, result.error);
+    assert.strictEqual(result.specs.length, 3);
+    assert.deepEqual(result.specs[1].weapon.passives, [{ id: 19, quality: [10, 10] }]);
+    assert.strictEqual(result.specs[2].level, 10);
+    assert.deepEqual(result.specs[2].weapon.passives, [{ id: 11 }]);
+  });
+});
+
+describe('blueprint tim', () => {
+  it('mengubah spec menjadi payload slot dan bisa dibaca balik', () => {
+    const parsed = parser.parseInlineSide(['50', 'snail', 'gsword', '100', 'crit', 'mtap']);
+    assert.ok(!parsed.error, parsed.error);
+    const slots = blueprint.specsToSlots(parsed.specs);
+    assert.equal(slots[0].level, 50);
+    assert.equal(slots[0].weaponId, 1);
+    assert.deepEqual(slots[0].passives, [{ id: 12 }, { id: 9 }]);
+    assert.ok(slots[0].animalKey || slots[0].custom, 'ada sumber stat');
   });
 });
 

@@ -22,6 +22,16 @@ function tokenize(input) {
   const re = /\d+(?:\s*,\s*\d+)+|\d+|[^\s,]+|,/g;
   let match;
   while ((match = re.exec(text))) tokens.push(match[0]);
+
+  // `sac 10,10, 10 snail` ambigu: regex membaca `10,10, 10` sebagai satu
+  // daftar quality. Kalau token berikutnya nama hewan, angka terakhir adalah
+  // level unit baru, bukan quality ketiga.
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const split = /^(\d+(?:\s*,\s*\d+)*),\s*(\d+)$/.exec(tokens[i]);
+    if (!split || !data.findAnimal(tokens[i + 1])) continue;
+    tokens.splice(i, 1, split[1], ',', split[2]);
+    i += 2;
+  }
   return tokens;
 }
 

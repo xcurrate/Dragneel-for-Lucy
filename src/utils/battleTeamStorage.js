@@ -194,6 +194,12 @@ function rowToSlot(row) {
     : null;
   let passives = null;
   if (row.passives) { try { passives = JSON.parse(row.passives); } catch {} }
+  // Quality per-stat (mis. Aegis 100,50) disimpan sebagai JSON di kolom
+  // INTEGER; SQLite menyimpannya sebagai teks, jadi harus di-parse saat dibaca.
+  let weaponQuality = row.weapon_quality;
+  if (typeof weaponQuality === 'string' && weaponQuality.startsWith('[')) {
+    try { weaponQuality = JSON.parse(weaponQuality); } catch {}
+  }
   const finalStats = row.final_hp != null
     ? { hp: row.final_hp, att: row.final_att, pr: row.final_pr, wp: row.final_wp, mag: row.final_mag, mr: row.final_mr }
     : null;
@@ -205,9 +211,13 @@ function rowToSlot(row) {
     custom,
     level: row.level || 1,
     weaponId: row.weapon_id,
-    weaponQuality: row.weapon_quality,
+    weaponQuality,
     passives,
   };
+}
+
+function encodeQuality(value) {
+  return Array.isArray(value) ? JSON.stringify(value) : (value ?? null);
 }
 
 function rowToTeam(row, slots = []) {
@@ -433,7 +443,7 @@ function setSlot(userId, teamName, slot, data) {
     custom ? custom.wp : null, custom ? custom.mag : null, custom ? custom.mr : null,
     data.finalStats?.hp ?? null, data.finalStats?.att ?? null, data.finalStats?.pr ?? null,
     data.finalStats?.wp ?? null, data.finalStats?.mag ?? null, data.finalStats?.mr ?? null,
-    level, data.weaponId ?? null, data.weaponQuality ?? null, passives
+    level, data.weaponId ?? null, encodeQuality(data.weaponQuality), passives
   );
   touch(team.id);
   return { team: getTeamById(team.id) };
@@ -454,7 +464,7 @@ function setWeapon(userId, teamName, slot, { weaponId, weaponQuality = null, pas
   getDb().prepare(
     'UPDATE team_slots SET weapon_id = ?, weapon_quality = ?, passives = ? WHERE team_id = ? AND slot = ?'
   ).run(
-    weaponId ?? null, weaponQuality ?? null,
+    weaponId ?? null, encodeQuality(weaponQuality),
     Array.isArray(passives) ? JSON.stringify(passives) : null,
     team.id, index
   );

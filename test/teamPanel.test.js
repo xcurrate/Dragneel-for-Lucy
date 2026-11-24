@@ -85,28 +85,31 @@ describe('panel tim', () => {
     assert.equal(payload.total, 2);
   });
 
-  it('menyediakan tombol panah, select menu, dan tombol hapus', () => {
+  it('menyediakan tombol panah, select menu, pilih, ekspor, dan hapus', () => {
     store.createTeam('u', 'Alpha');
     store.createTeam('u', 'Beta');
     const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', {});
     const rows = payload.components.map(row => row.toJSON());
     assert.equal(rows.length, 2, 'satu baris select + satu baris tombol');
     assert.equal(rows[0].components[0].type, 3, 'select menu');
-    assert.equal(rows[1].components.length, 4, '◀ label ▶ hapus');
-    assert.deepEqual(rows[1].components.map(b => b.label), ['◀', 'Tim 1/2', '▶', 'Hapus']);
-    assert.equal(rows[1].components[3].style, 4, 'tombol hapus merah');
-    assert.equal(rows[1].components[3].emoji.name, '🗑️');
+    assert.equal(rows[1].components.length, 5, '◀ pilih ▶ ekspor hapus');
+    assert.deepEqual(rows[1].components.map(b => b.label), ['◀', 'Pilih Tim Ini', '▶', 'Ekspor', 'Hapus']);
+    assert.equal(rows[1].components[4].style, 4, 'tombol hapus merah');
+    assert.equal(rows[1].components[4].emoji.name, '🗑️');
+    assert.equal(rows[1].components[3].emoji.name, '📤');
   });
 
   it('tombol hapus tetap ada saat user hanya punya satu tim', () => {
     store.createTeam('u', 'Solo');
     const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', {});
     const nav = payload.components[1].toJSON().components;
-    assert.deepEqual(nav.map(b => b.label), ['◀', 'Tim 1/1', '▶', 'Hapus']);
+    assert.deepEqual(nav.map(b => b.label), ['◀', 'Pilih Tim Ini', '▶', 'Ekspor', 'Hapus']);
     assert.equal(nav[0].disabled, true, 'panah mundur mati');
     assert.equal(nav[2].disabled, true, 'panah maju mati');
-    assert.ok(!nav[3].disabled, 'hapus tetap bisa dipakai');
-    const parsed = teamPanel.parsePanelNav(nav[3].custom_id);
+    assert.ok(!nav[1].disabled, 'pilih tetap bisa dipakai');
+    assert.ok(!nav[3].disabled, 'ekspor tetap bisa dipakai');
+    assert.ok(!nav[4].disabled, 'hapus tetap bisa dipakai');
+    const parsed = teamPanel.parsePanelNav(nav[4].custom_id);
     assert.equal(parsed.kind, 'delete');
     assert.equal(parsed.index, 0);
   });
@@ -116,7 +119,7 @@ describe('panel tim', () => {
     store.createTeam('u', 'Beta');
     store.createTeam('u', 'Gamma');
     const payload = teamPanel.panelPayload(store.listTeams('u'), 2, 'u', {});
-    const hapus = payload.components[1].toJSON().components[3];
+    const hapus = payload.components[1].toJSON().components[4];
     assert.equal(teamPanel.parsePanelNav(hapus.custom_id).index, 2, 'tim ketiga');
   });
 
@@ -140,13 +143,14 @@ describe('panel tim', () => {
     const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', {});
     const prev = payload.components[1].toJSON().components[0];
     const next = payload.components[1].toJSON().components[2];
+    const pick = payload.components[1].toJSON().components[1];
     const parsedPrev = teamPanel.parsePanelNav(prev.custom_id);
     const parsedNext = teamPanel.parsePanelNav(next.custom_id);
     assert.equal(parsedPrev.index, 2, 'dari tim pertama, ◀ membungkus ke terakhir');
     assert.equal(parsedNext.index, 1);
+    assert.equal(teamPanel.parsePanelNav(pick.custom_id).kind, 'pick');
+    assert.equal(teamPanel.parsePanelNav(pick.custom_id).index, 0);
 
-    const pick = teamPanel.parsePanelNav(teamPanel.navId(teamPanel.NAV_PICK, 'u', 0));
-    assert.equal(pick.kind, 'pick');
     // Select menu ada di dalam action row: components[0].components[0].
     const menu = payload.components[0].toJSON().components[0];
     // Select menu menaruh pilihan di `options`, bukan `components`.
@@ -154,9 +158,21 @@ describe('panel tim', () => {
     assert.equal(menu.options[0].default, true, 'opsi aktif ditandai');
   });
 
+  it('mengekspor blueprint tim yang sedang ditampilkan', () => {
+    const team = store.createTeam('u', 'Alpha').team;
+    store.setSlot('u', 'Alpha', 1, { animalKey: 'snail', level: 50, weaponId: 1, weaponQuality: [100], passives: [{ id: 12 }, { id: 9 }] });
+    store.setSlot('u', 'Alpha', 2, { animalKey: 'snail', level: 10, weaponId: 4, passives: [{ id: 11 }] });
+    const fresh = store.getTeamById(team.id);
+    const embed = teamPanel.blueprintEmbed(fresh, { prefix: 'd' }).toJSON();
+    assert.match(embed.title, /Blueprint/);
+    assert.match(embed.description, /50 snail gsword 100 crit mtap/);
+    assert.match(embed.description, /10 snail rune sg/);
+  });
+
   it('menolak customId yang bukan milik panel', () => {
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_prev:u:0'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_del:u:0'), true);
+    assert.equal(teamPanel.isTeamPanelNav('battle_tm_export:u:0'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_del:u:0:yes'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_team_pick:u:0'), false);
     assert.equal(teamPanel.parsePanelNav('battle_tm_prev').ok, false);

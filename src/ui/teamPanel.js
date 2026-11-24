@@ -8,12 +8,14 @@ const {
   StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
 } = require('discord.js');
 const store = require('../utils/battleTeamStorage');
-const { teamEmbed, COLOR } = require('./battlePanel');
+const { teamToBlueprint } = require('../utils/blueprint');
+const { teamEmbed, COLOR, errorEmbed } = require('./battlePanel');
 
 const NAV_PREV = 'battle_tm_prev';
 const NAV_NEXT = 'battle_tm_next';
 const NAV_PICK = 'battle_tm_pick';
 const NAV_DELETE = 'battle_tm_del';
+const NAV_EXPORT = 'battle_tm_export';
 const SEP = ':';
 
 // `dtm:<userId>:<index>` — index adalah posisi di daftar tim terurut ID.
@@ -27,20 +29,25 @@ function isTeamPanelNav(customId) {
       || customId.startsWith(`${NAV_NEXT}${SEP}`)
       || customId === NAV_PICK
       || customId.startsWith(`${NAV_PICK}${SEP}`)
-      || customId.startsWith(`${NAV_DELETE}${SEP}`));
+      || customId.startsWith(`${NAV_DELETE}${SEP}`)
+      || customId.startsWith(`${NAV_EXPORT}${SEP}`));
 }
 
 function parsePanelNav(customId) {
   const parts = String(customId || '').split(SEP);
-  if (parts[0] === NAV_PICK) return { ok: true, kind: 'pick', userId: parts[1] || null, index: null };
+  if (parts[0] === NAV_PICK && parts.length === 2) {
+    return { ok: true, kind: 'pick', userId: parts[1] || null, index: null };
+  }
   // Tombol konfirmasi hapus membawa bagian keempat: 'yes' atau 'no'.
   if (parts.length !== 3 && parts.length !== 4) return { ok: false };
   const index = Number(parts[2]);
   if (!Number.isInteger(index) || index < 0) return { ok: false };
   const kind = parts[0] === NAV_PREV ? 'prev'
     : parts[0] === NAV_NEXT ? 'next'
-      : parts[0] === NAV_DELETE ? 'delete'
-        : null;
+      : parts[0] === NAV_PICK ? 'pick'
+        : parts[0] === NAV_DELETE ? 'delete'
+          : parts[0] === NAV_EXPORT ? 'export'
+            : null;
   if (!kind) return { ok: false };
   const confirm = parts.length === 4 ? parts[3] : null;
   if (confirm != null && !['yes', 'no'].includes(confirm)) return { ok: false };
@@ -84,16 +91,24 @@ function panelComponents(teams, index, userId) {
       .setLabel('◀')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(single),
+    // Tombol ini yang mengaktifkan tim yang sedang ditampilkan. Panah hanya
+    // berpindah tampilan; select menu langsung memilih tim.
     new ButtonBuilder()
       .setCustomId(navId(NAV_PICK, userId, index))
-      .setLabel(`Tim ${index + 1}/${total}`)
+      .setLabel('Pilih Tim Ini')
       .setStyle(ButtonStyle.Primary)
-      .setDisabled(true),
+      .setDisabled(!team),
     new ButtonBuilder()
       .setCustomId(navId(NAV_NEXT, userId, (index + 1) % Math.max(1, total)))
       .setLabel('▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(single),
+    new ButtonBuilder()
+      .setCustomId(navId(NAV_EXPORT, userId, index))
+      .setLabel('Ekspor')
+      .setEmoji('📤')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!team),
     // Hapus tim yang sedang ditampilkan. `index` dibawa agar konfirmasi dan
     // penghapusan menyasar tim yang sama walau daftar berubah di antaranya.
     new ButtonBuilder()
@@ -138,6 +153,18 @@ function panelEmbed(team, { prefix = 'd', index = 0, total = 1, active = false }
   return embed;
 }
 
+// Embed ekspor: blueprint di dalam code block supaya bisa disalin dari Discord.
+function blueprintEmbed(team, { prefix = 'd' } = {}) {
+  const result = teamToBlueprint(team);
+  if (result.error) return errorEmbed(`❌ ${result.error}`);
+  const id = team.slotId != null ? `[${team.slotId}] ` : '';
+  return new EmbedBuilder()
+    .setColor(COLOR.info)
+    .setTitle(`📤 Blueprint — ${id}${team.name}`)
+    .setDescription('```\n' + result.blueprint + '\n```')
+    .setFooter({ text: `Salin teks di atas, lalu: ${prefix} team new <nama> | <blueprint>` });
+}
+
 // Pesan lengkap: embed + komponen. Tanpa tim, kembalikan embed ajakan membuat.
 function panelPayload(teams, index, userId, { prefix = 'd', active = null } = {}) {
   const ordered = orderedTeams(teams);
@@ -171,7 +198,7 @@ function indexOfActive(teams, active) {
 }
 
 module.exports = {
-  NAV_PREV, NAV_NEXT, NAV_PICK, NAV_DELETE, deleteConfirmComponents,
+  NAV_PREV, NAV_NEXT, NAV_PICK, NAV_DELETE, NAV_EXPORT, deleteConfirmComponents,
   navId, isTeamPanelNav, parsePanelNav,
-  orderedTeams, panelComponents, panelEmbed, panelPayload, indexOfActive,
+  orderedTeams, panelComponents, panelEmbed, blueprintEmbed, panelPayload, indexOfActive,
 };

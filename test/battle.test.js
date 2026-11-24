@@ -823,6 +823,34 @@ describe('balasan command memakai embed', () => {
       'tim baru harus aktif supaya `team add` berikutnya tidak menulis ke tim lama');
   });
 
+  it('d team new dengan blueprint mengisi slot dan mengaktifkan tim', async () => {
+    const blueprint = '50 snail gsword 100 crit mtap, 50 snail Aegis 100,50 sac 10,10, 10 snail rune sg';
+    await handleTeamCommand(message('d team new Meta | ' + blueprint), ['new', 'Meta', '|', ...blueprint.split(' ')], 'd', { sendEmbed });
+    const team = store.getActiveTeam('u');
+    assert.strictEqual(team.name, 'Meta');
+    assert.strictEqual(team.slots.length, 3);
+    assert.strictEqual(team.slots[0].weaponId, 1);
+    assert.deepStrictEqual(team.slots[0].passives, [{ id: 12 }, { id: 9 }]);
+    assert.strictEqual(team.slots[1].weaponId, 5);
+    assert.deepStrictEqual(team.slots[1].weaponQuality, [100, 50]);
+    assert.deepStrictEqual(team.slots[1].passives, [{ id: 19, quality: [10, 10] }]);
+    assert.strictEqual(team.slots[2].weaponId, 4);
+    assert.deepStrictEqual(team.slots[2].passives, [{ id: 11 }]);
+  });
+
+  it('d team new tanpa pemisah tetap membaca blueprint setelah nama', async () => {
+    await handleTeamCommand(message('d team new Solo snail'), ['new', 'Solo', 'snail'], 'd', { sendEmbed });
+    const team = store.getActiveTeam('u');
+    assert.strictEqual(team.name, 'Solo');
+    assert.strictEqual(team.slots.length, 1);
+  });
+
+  it('blueprint yang salah tidak membuat tim setengah jadi', async () => {
+    await handleTeamCommand(message('d team new Rusak | snail sword'), ['new', 'Rusak', '|', 'snail', 'sword'], 'd', { sendEmbed });
+    assert.strictEqual(store.findTeam('u', 'Rusak'), null);
+    assert.match(replies[0].description, /pasif/);
+  });
+
   it('d team list mengirim embed beserta tombol', async () => {
     store.createTeam('u', 'Alpha');
     store.createTeam('u', 'Beta');
@@ -3412,6 +3440,29 @@ describe('panel tim: tombol hapus', () => {
     assert.ok(!i.updated, 'panel milik orang lain tidak ditimpa');
     const active = store.getActiveTeam('u');
     assert.strictEqual(active.name, 'Alpha', 'tim aktif pemilik tidak berubah');
+  });
+
+  it('tombol Pilih Tim Ini mengaktifkan tim yang sedang ditampilkan', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_PICK, 'u', 1));
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.getActiveTeam('u').name, 'Beta');
+    assert.ok(i.updated, 'panel diperbarui');
+    assert.ok(i.updated.embeds[0].toJSON().title.includes('Beta'));
+  });
+
+  it('panah hanya berpindah tampilan dan tidak mengubah tim aktif', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_NEXT, 'u', 1));
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.getActiveTeam('u').name, 'Alpha', 'tim aktif tetap');
+    assert.ok(i.updated.embeds[0].toJSON().title.includes('Beta'), 'tampilan pindah ke Beta');
+  });
+
+  it('tombol Ekspor mengirim blueprint tim yang ditampilkan', async () => {
+    store.setSlot('u', 'Alpha', 1, { animalKey: 'snail', level: 50, weaponId: 1, weaponQuality: [100], passives: [{ id: 12 }, { id: 9 }] });
+    const i = interaction(teamPanel.navId(teamPanel.NAV_EXPORT, 'u', 0));
+    await handleTeamPanelNav(i);
+    assert.ok(i.out.embeds[0].toJSON().description.includes('50 snail gsword 100 crit mtap'));
+    assert.equal(store.getActiveTeam('u').name, 'Alpha', 'ekspor tidak mengubah tim aktif');
   });
 
   it('indeks tim yang sudah tidak ada tidak menghapus tim lain', async () => {

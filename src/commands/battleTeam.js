@@ -16,6 +16,8 @@ const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const animalDex = require('../services/animalDex');
 const sim = require('../services/battleSim');
+const simParser = require('../utils/simParser');
+const blueprintUtil = require('../utils/blueprint');
 const data = require('../data/owoBattle');
 const passiveData = require('../data/owoPassives');
 const emoji = require('../services/battleEmoji');
@@ -31,6 +33,8 @@ function usage(prefix = 'd') {
     `\`${prefix} tm\` — panel tim (pindah lewat ◀ ▶ atau menu pilih)`,
     `\`${prefix} team list\` — daftar tim beserta ID`,
     `\`${prefix} team new <nama>\` — buat tim baru (ID otomatis 1-21)`,
+    `\`${prefix} team new <nama> | <blueprint>\` — buat tim langsung dari blueprint`,
+    `\`${prefix} team blueprint <nama> | <blueprint>\` — sama, nama perintah eksplisit`,
     `\`${prefix} team pick <id|nama>\` — jadikan tim aktif`,
     `\`${prefix} team show [id|nama]\` — lihat isi tim`,
     `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
@@ -179,6 +183,49 @@ function animalsOf(team) {
   return (team.slots || []).map(slot => (slot.animalKey ? dexStore.resolveAnimal(slot.animalKey) : null));
 }
 
+// `team new Nama | snail sword crit` atau `team new Nama snail sword crit`.
+// Pemisah `|` dipakai kalau nama tim mengandung spasi; tanpa itu hanya token
+// pertama yang dianggap nama dan sisanya harus terlihat seperti blueprint.
+function splitBlueprintArgs(rest) {
+  const raw = rest.join(' ').trim();
+  const pipe = raw.indexOf('|');
+  if (pipe >= 0) {
+    return { name: raw.slice(0, pipe).trim(), blueprint: raw.slice(pipe + 1).trim() };
+  }
+  if (rest.length > 1) {
+    const after = rest.slice(1);
+    const first = String(after[0] || '');
+    if (simParser.looksInline(after) || data.findAnimal(first) || /^\d+$/.test(first)) {
+      return { name: rest[0], blueprint: after.join(' ').trim() };
+    }
+  }
+  return { name: raw, blueprint: '' };
+}
+
+function createTeamFromBlueprint(message, name, blueprint, prefix, send, userId) {
+  const parsed = simParser.parseInlineSide(blueprint, { defaultLevel: DEFAULT_LEVEL, prefix });
+  if (parsed.error) return say(send, message, `❌ ${parsed.error}`);
+  if (parsed.specs.length > store.MAX_SLOTS) {
+    return say(send, message, `❌ Blueprint berisi ${parsed.specs.length} unit; maksimal ${store.MAX_SLOTS} slot per tim.`);
+  }
+
+  const result = store.createTeam(userId, name, prefix);
+  if (result.error) return say(send, message, `❌ ${result.error}`);
+  store.setActiveTeam(userId, result.team.name);
+
+  const slots = blueprintUtil.specsToSlots(parsed.specs);
+  for (let index = 0; index < slots.length; index++) {
+    const saved = store.setSlot(userId, result.team.name, index + 1, slots[index]);
+    if (saved.error) {
+      store.deleteTeam(userId, result.team.name);
+      return say(send, message, `❌ Gagal mengisi slot ${index + 1}: ${saved.error}`);
+    }
+  }
+  return say(send, message,
+    `✅ Tim **[${result.team.slotId}] ${result.team.name}** dibuat dari blueprint dan diaktifkan.\n` +
+    `\`\`\`\n${blueprint}\n\`\`\``);
+}
+
 async function handleTeamCommand(message, args, prefix, deps = {}) {
   // Semua balasan memakai embed, konsisten dengan panel dan game lain.
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
@@ -210,14 +257,25 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
   }
 
   if (sub === 'new' || sub === 'buat') {
-    const name = rest.join(' ');
-    if (!name) return say(send, message, `Format: \`${prefix} team new <nama>\``);
-    const result = store.createTeam(userId, name, prefix);
-    if (result.error) return say(send, message, `❌ ${result.error}`);
-    // Tim baru langsung aktif: balasan di bawah menyuruh `team add`, dan tanpa
-    // ini perintah itu justru menulis ke tim aktif yang lama.
-    store.setActiveTeam(userId, result.team.name);
-    return say(send, message, `✅ Tim **[${result.team.slotId}] ${result.team.name}** dibuat dan diaktifkan. Isi slot dengan \`${prefix} team add 1 <hewan>\`.`);
+    const { name, blueprint } = splitBlueprintArgs(rest);
+    if (!name) return say(send, message, `Format: \`${prefix} team new <nama>\` atau \`${prefix} team new <nama> | <blueprint>\``);
+    if (!blueprint) {
+      const result = store.createTeam(userId, name, prefix);
+      if (result.error) return say(send, message, `❌ ${result.error}`);
+      // Tim baru langsung aktif: balasan di bawah menyuruh `team add`, dan tanpa
+      // ini perintah itu justru menulis ke tim aktif yang lama.
+      store.setActiveTeam(userId, result.team.name);
+      return say(send, message, `✅ Tim **[${result.team.slotId}] ${result.team.name}** dibuat dan diaktifkan. Isi slot dengan \`${prefix} team add 1 <hewan>\`.`);
+    }
+    return createTeamFromBlueprint(message, name, blueprint, prefix, send, userId);
+  }
+
+  if (sub === 'blueprint' || sub === 'bp') {
+    const { name, blueprint } = splitBlueprintArgs(rest);
+    if (!name || !blueprint) {
+      return say(send, message, `Format: \`${prefix} team blueprint <nama> | <blueprint>\``);
+    }
+    return createTeamFromBlueprint(message, name, blueprint, prefix, send, userId);
   }
 
   if (sub === 'pick' || sub === 'pilih' || sub === 'use') {
@@ -437,11 +495,25 @@ async function handleTeamPanelNav(i, deps = {}) {
   const target = ordered[Math.max(0, Math.min(index, ordered.length - 1))];
   if (!target) return i.reply(expired);
 
-  store.setActiveTeam(i.user.id, String(target.slotId ?? target.name));
+  // Ekspor hanya membaca tim yang sedang ditampilkan; tidak mengubah tim aktif.
+  if (parsed.kind === 'export') {
+    return i.reply({ embeds: [teamPanel.blueprintEmbed(target, { prefix })], flags: MessageFlags.Ephemeral });
+  }
+
+  // Panah hanya berpindah tampilan. Tim diaktifkan lewat tombol "Pilih Tim Ini"
+  // atau select menu.
+  if (parsed.kind === 'pick') {
+    store.setActiveTeam(i.user.id, String(target.slotId ?? target.name));
+  }
   await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
   const fresh = store.listTeams(i.user.id);
   const active = store.getActiveTeam(i.user.id);
-  const payload = teamPanel.panelPayload(fresh, teamPanel.indexOfActive(fresh, active), i.user.id, { prefix, active });
+  // Panah mempertahankan tim yang sedang dilihat; tombol pilih mengikuti tim
+  // aktif yang baru.
+  const panelIndex = parsed.kind === 'pick'
+    ? teamPanel.indexOfActive(fresh, active)
+    : Math.max(0, Math.min(index, fresh.length - 1));
+  const payload = teamPanel.panelPayload(fresh, panelIndex, i.user.id, { prefix, active });
   delete payload.team;
   delete payload.index;
   delete payload.total;

@@ -261,6 +261,22 @@ describe('simulasi global', () => {
     assert.ok(embed.title.includes('Simulasi Global'));
   });
 
+  it('memakai blueprint sebagai tim pemain tanpa perlu tim aktif', async () => {
+    store.createTeam('rival', 'Lemah');
+    store.setSlot('rival', 'Lemah', 1, { custom: COEFFS_WEAK, level: 20 });
+    let payload = null;
+    const blueprint = ['50', 'snail', 'gsword', '100', 'crit', 'mtap'];
+    await handleSimCommand(message('d sim global ' + blueprint.join(' ') + ' -m 1 -s 1'), ['global', ...blueprint, '-m', '1', '-s', '1'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    const embed = payload.embeds[0].toJSON();
+    const body = JSON.stringify(embed);
+    assert.ok(body.includes('**Tim kamu:** snail'), 'label blueprint dipakai');
+    assert.ok(body.includes('1 tim'), 'tim tersimpan tetap jadi lawan');
+  });
+
   it('menolak bila belum ada tim lawan dari user lain', async () => {
     store.createTeam('me', 'Sendiri');
     store.setSlot('me', 'Sendiri', 1, { custom: COEFFS_STRONG, level: 50 });
