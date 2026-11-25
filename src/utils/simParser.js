@@ -9,12 +9,37 @@
 // `sac 10,10` (heal 10, replenish 10).
 const data = require('../data/owoBattle');
 const passiveData = require('../data/owoPassives');
+const dexStore = require('./animalDexStorage');
 
 const NUMBER = /^\d+$/;
 const NUMBER_LIST = /^\d+(?:\s*,\s*\d+)+$/;
 const LEVEL_EQ = /^level=(\d+)$/i;
 const STAT_EQ = /^(hp|att|attack|pr|protection|wp|wisdom|mag|magic|mr)=/i;
 const STAT_KEYS = ['hp', 'att', 'pr', 'wp', 'mag', 'mr'];
+
+function fromDexAnimal(animal) {
+  const stats = animal.stats || {};
+  return {
+    name: animal.name,
+    hp: stats.hp,
+    att: stats.attack,
+    pr: stats.protection,
+    wp: stats.wisdom,
+    mag: stats.magic,
+    mr: stats.mr,
+    dexAnimal: animal,
+  };
+}
+
+// Hewan battle berasal dari data statis OwO, tetapi hewan hasil tangkapan Lucy
+// bisa lebih banyak. Kalau tidak ada di data statis, cari di dex supaya
+// komposisi inline dan ekspor blueprint tetap bekerja.
+function findAnimal(query) {
+  const known = data.findAnimal(query);
+  if (known) return known;
+  const animal = dexStore.resolveAnimal(query) || dexStore.searchAnimals(query)[0];
+  return animal ? fromDexAnimal(animal) : null;
+}
 
 function tokenize(input) {
   const text = Array.isArray(input) ? input.join(' ') : String(input ?? '');
@@ -28,7 +53,7 @@ function tokenize(input) {
   // level unit baru, bukan quality ketiga.
   for (let i = 0; i < tokens.length - 1; i++) {
     const split = /^(\d+(?:\s*,\s*\d+)*),\s*(\d+)$/.exec(tokens[i]);
-    if (!split || !data.findAnimal(tokens[i + 1])) continue;
+    if (!split || !findAnimal(tokens[i + 1])) continue;
     tokens.splice(i, 1, split[1], ',', split[2]);
     i += 2;
   }
@@ -63,7 +88,7 @@ function longestMatch(tokens, index, maxWords, lookup) {
 }
 
 function matchAnimal(tokens, index) {
-  return longestMatch(tokens, index, 3, query => data.findAnimal(query));
+  return longestMatch(tokens, index, 3, query => findAnimal(query));
 }
 
 function matchWeapon(tokens, index) {
@@ -97,7 +122,7 @@ function looksInline(input) {
   if (!tokens.length) return false;
   if (tokens.some(token => STAT_EQ.test(token))) return false;
   if (tokens.length > 1 && (NUMBER.test(tokens[0]) || LEVEL_EQ.test(tokens[0]))) return true;
-  if (tokens.length > 1 && data.findAnimal(tokens[0])) {
+  if (tokens.length > 1 && findAnimal(tokens[0])) {
     const next = tokens[1];
     if (data.findWeapon(next) || data.findPendingWeapon(next)) return true;
     if (passiveData.get(next) || passiveData.findPending(next)) return true;
@@ -289,4 +314,4 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
   return { specs, label: units.map(unit => unit.animal.name).join(' + ') };
 }
 
-module.exports = { tokenize, parseQuality, looksInline, parseInlineSide };
+module.exports = { tokenize, parseQuality, looksInline, parseInlineSide, findAnimal };

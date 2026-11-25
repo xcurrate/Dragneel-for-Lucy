@@ -902,7 +902,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       if (!inline.error) {
         resolvedPlayerSpecs = inline.specs;
         playerLabel = inline.label;
-      } else if (simParser.looksInline(sides.playerTokens) || data.findAnimal(query)) {
+      } else if (simParser.looksInline(sides.playerTokens) || simParser.findAnimal(query)) {
         return send(message, errorEmbed(`❌ ${inline.error}`));
       } else if (store.findForeignTeam(userId, query)) {
         return send(message, errorEmbed('Kamu tidak memiliki tim tersebut.'));

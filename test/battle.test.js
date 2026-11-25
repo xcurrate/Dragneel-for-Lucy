@@ -787,6 +787,8 @@ describe('balasan command memakai embed', () => {
   const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
   const { handleSimCommand } = require(path.join(ROOT, 'src/commands/battleSim'));
   const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+  const dexStore = require(path.join(ROOT, 'src/utils/animalDexStorage'));
+  const blueprintUtil = require(path.join(ROOT, 'src/utils/blueprint'));
 
   let tempDir;
   let replies;
@@ -843,6 +845,43 @@ describe('balasan command memakai embed', () => {
     const team = store.getActiveTeam('u');
     assert.strictEqual(team.name, 'Solo');
     assert.strictEqual(team.slots.length, 1);
+  });
+
+  function seedCifer() {
+    const snail = data.findAnimal('snail');
+    dexStore.upsertAnimal({
+      name: 'cifer', nameKey: 'cifer', alias: null, nickname: null, rank: null, quantity: null,
+      points: null, sell: null, sacrifice: null, role: null, weapons: null, rarity: null,
+      stats: {
+        hp: snail.hp, attack: snail.att, protection: snail.pr,
+        wisdom: snail.wp, magic: snail.mag, mr: snail.mr,
+      },
+    });
+  }
+
+  it('d sim inline memakai hewan dex di luar data statis', async () => {
+    seedCifer();
+    await handleSimCommand(
+      message('d sim cifer aegis hgen fr 10, cifer vs cifer'),
+      ['cifer', 'aegis', 'hgen', 'fr', '10,', 'cifer', 'vs', 'cifer'],
+      'd', { sendEmbed }
+    );
+    assert.ok(replies.length > 0, 'ada balasan');
+    assert.ok(!replies[0].description.includes('tidak dikenal'), replies[0].description);
+  });
+
+  it('ekspor blueprint mendukung hewan dex di luar data statis', async () => {
+    seedCifer();
+    await handleTeamCommand(
+      message('d team new Cifer | cifer aegis hgen fr 10'),
+      ['new', 'Cifer', '|', 'cifer', 'aegis', 'hgen', 'fr', '10'],
+      'd', { sendEmbed }
+    );
+    const team = store.getActiveTeam('u');
+    assert.strictEqual(team.slots[0].animalKey, 'cifer');
+    const exported = blueprintUtil.teamToBlueprint(team);
+    assert.ok(!exported.error, exported.error);
+    assert.match(exported.blueprint, /cifer aegis hgen frarm 10/);
   });
 
   it('blueprint yang salah tidak membuat tim setengah jadi', async () => {

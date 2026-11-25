@@ -21,11 +21,12 @@ function teamToBlueprint(team) {
   for (const slot of slots) {
     const animal = slot.animalKey ? dexStore.resolveAnimal(slot.animalKey) : null;
     const animalName = animal?.name || slot.animalKey || slot.label;
-    if (!animalName || !data.findAnimal(animalName)) {
-      return { error: `Slot ${slot.slot} memakai stat manual/nama hewan yang tidak dikenal; blueprint hanya mendukung hewan dari data battle.` };
+    const known = data.findAnimal(animalName) || animal || dexStore.resolveAnimal(animalName);
+    if (!animalName || !known) {
+      return { error: `Slot ${slot.slot} memakai stat manual/nama hewan yang tidak dikenal; blueprint hanya mendukung hewan dari data battle atau dex.` };
     }
     if (slot.custom) {
-      return { error: `Slot ${slot.slot} memakai stat manual; blueprint hanya mendukung hewan dari data battle.` };
+      return { error: `Slot ${slot.slot} memakai stat manual; blueprint tidak menyimpan stat manual.` };
     }
 
     let text = `${slot.level || data.DEFAULT_LEVEL} ${animalName}`;

@@ -195,7 +195,7 @@ function splitBlueprintArgs(rest) {
   if (rest.length > 1) {
     const after = rest.slice(1);
     const first = String(after[0] || '');
-    if (simParser.looksInline(after) || data.findAnimal(first) || /^\d+$/.test(first)) {
+    if (simParser.looksInline(after) || simParser.findAnimal(first) || /^\d+$/.test(first)) {
       return { name: rest[0], blueprint: after.join(' ').trim() };
     }
   }
