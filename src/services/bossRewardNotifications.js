@@ -172,12 +172,6 @@ async function evaluateServer(guild, rewards) {
     await channel.send({ content, allowedMentions: { parse: [], roles: [role.id] } });
     store.markNotified(guild.id, cooldownKey);
     console.info('[BossRewards][server:sent] guild=' + guild.id + ' channel=' + channel.id + ' role=' + role.id);
-    const next = { ...config.targets };
-    for (const line of matched) {
-      const key = Object.keys(LABELS).find(k => line.startsWith(LABELS[k]));
-      if (key) delete next[key];
-    }
-    store.setServer(guild.id, { ...config, targets: next });
   } catch (error) { console.warn('[BossRewards] Server notification failed:', error.message); }
 }
 
@@ -263,4 +257,4 @@ function enqueue(message) {
   queue.push(message);
   setImmediate(() => drain().catch(error => console.error('[BossRewards] Queue error:', error)));
 }
-module.exports = { enqueue, processMessage, findRewardImage, downloadRewardImage, reached, rewardLines, isRewardSourceChannel, isBossEnded };
+module.exports = { enqueue, processMessage, evaluateServer, findRewardImage, downloadRewardImage, reached, rewardLines, isRewardSourceChannel, isBossEnded };
