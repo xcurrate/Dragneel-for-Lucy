@@ -272,7 +272,7 @@ const PASSIVES = {
     id: 25, name: 'Living Hive', stats,
     postAttack(ctx, unit, target, _total, _type) {
       const { useMana, tagged, withTag, isAlive } = engine();
-      if (tagged(ctx, 'livingHive', unit) || !isAlive(target)) return;
+      if (tagged(ctx, 'livingHive', unit) || tagged(ctx, 'pest', unit) || !isAlive(target)) return;
       if (unit.stats.wp[0] < stats[0]) return;
       withTag(ctx, 'livingHive', unit, () => {
         useMana(unit, stats[0]);

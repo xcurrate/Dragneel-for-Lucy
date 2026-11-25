@@ -314,7 +314,10 @@ const FACTORIES = {
       const idx = unit.buffs.indexOf(this);
       if (idx === -1) return;
       unit.buffs.splice(idx, 1);
-      buffDamage(ctx, from, unit, 'mag', stats[0] / 100, 'm');
+      // Damage Pest tidak boleh memicu Living Hive lagi: tanpa penanda ini
+      // Pest -> Living Hive -> Pest berulang dan meledak eksponensial.
+      const e = engine();
+      e.withTag(ctx, 'pest', from, () => buffDamage(ctx, from, unit, 'mag', stats[0] / 100, 'm'));
     },
   }),
 

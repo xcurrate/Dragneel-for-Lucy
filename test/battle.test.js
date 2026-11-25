@@ -3156,6 +3156,19 @@ describe('update OwO: Wounding Crossbow, Frostbite, Pest, Exposed, Resonance, Li
     assert.strictEqual(me.stats.wp[0], 1, 'WP tidak berubah');
   });
 
+  it('Pest dari Living Hive tidak memicu Living Hive lagi (tidak eksplosif)', () => {
+    const me = fresh('me', { weapon: { id: 4, quality: 100, passives: [25, 20, 20] } });
+    const foe = fresh('foe');
+    link([me], [foe]);
+    me.stats.wp[0] = 1000;
+    foe.stats.hp[0] = 1e9;
+
+    engine.runTurn({ ...ctxOf(), playerFirst: true }, [me], [foe]);
+
+    assert.strictEqual(foe.buffs.filter(b => b.id === 18).length, 0,
+      'Pest yang meledak tidak boleh menempelkan Pest baru lewat Living Hive');
+  });
+
   it('buff dan pasif baru tidak merusak battle penuh', () => {
     const rng = rngModule.createRng(11);
     const player = [fresh('p1', { weapon: { id: 129, quality: 100, passives: [28, 25] } })];
