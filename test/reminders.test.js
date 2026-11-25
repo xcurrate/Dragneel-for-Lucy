@@ -1242,25 +1242,47 @@ describe('custom reminder — revisi: counter off, discohook, panel, create ring
       };
     };
 
-    const help = makeInteraction('rempanel:help');
+    const help = makeInteraction(`rempanel:help:${owner}`);
     assert.equal(await svcMod.handleComponent(help), true);
     const helpText = help.updates[0].embeds[0].data.description;
     for (const cmd of ['redeem', 'view', 'send', 'update', 'embed', 'media', 'enable', 'disable']) {
       assert.match(helpText, new RegExp(cmd), 'bantuan memuat ' + cmd);
     }
-    assert.ok(help.updates[0].components[0].components[0].data.custom_id.endsWith(':back'), 'ada tombol kembali');
+    assert.ok(help.updates[0].components[0].components[0].data.custom_id.includes(':back:'), 'ada tombol kembali');
 
-    const vars = makeInteraction('rempanel:vars');
+    const vars = makeInteraction(`rempanel:vars:${owner}`);
     assert.equal(await svcMod.handleComponent(vars), true);
     assert.match(vars.updates[0].embeds[0].data.description, /\{USER\}/);
     assert.match(vars.updates[0].embeds[0].data.description, /\{DAILY_TOMORROW\}/);
 
-    const back = makeInteraction('rempanel:back');
+    const back = makeInteraction(`rempanel:back:${owner}`);
     assert.equal(await svcMod.handleComponent(back), true);
     assert.match(back.updates[0].embeds[0].data.title, /Custom Reminders/);
-    assert.ok(back.updates[0].components[0].components[0].data.custom_id.endsWith(':help'), 'tombol panel kembali');
+    assert.ok(back.updates[0].components[0].components[0].data.custom_id.includes(':help:'), 'tombol panel kembali');
 
     assert.equal(await svcMod.handleComponent({ customId: 'lain:1' }), false, 'abaikan tombol asing');
+  });
+
+  it('menolak tombol panel milik user lain', async () => {
+    const owner = '111222333444555666';
+    const other = '999888777666555444';
+    const message = makeMessage('d r', { userId: owner });
+    await svc().handleMessage(message);
+    const helpId = message.sent.at(-1).components[0].components[0].data.custom_id;
+
+    const replies = [];
+    const updates = [];
+    const interaction = {
+      customId: helpId,
+      user: { id: other, username: 'other' },
+      member: { displayName: 'Other' },
+      updates,
+      update: async payload => { updates.push(payload); },
+      reply: async payload => { replies.push(payload); },
+    };
+    assert.equal(await svc().handleComponent(interaction), true);
+    assert.equal(updates.length, 0, 'panel owner lain tidak boleh berubah');
+    assert.match(replies[0].content, /bukan milikmu/);
   });
 
   it('membuat template tanpa nama/isi: `r create battle embed`', async () => {

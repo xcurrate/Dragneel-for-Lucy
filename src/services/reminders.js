@@ -20,7 +20,7 @@ const variables = require('../utils/reminderVariables');
 const cats = require('../utils/reminderCategories');
 const resolver = require('../utils/reminderResolve');
 const { isDeveloper } = require('../commands/prefix');
-const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 
 // Konfirmasi tindakan destruktif/transfer. Disimpan di memori karena hanya
 // berlaku singkat; yang penting (kepemilikan) tetap di SQLite.
@@ -31,9 +31,6 @@ const pendingConfirms = new Map();
 
 // Panel interaktif `d r`: tombol untuk bantuan dan daftar variabel.
 const PANEL_PREFIX = 'rempanel';
-const PANEL_HELP = PANEL_PREFIX + ':help';
-const PANEL_VARS = PANEL_PREFIX + ':vars';
-const PANEL_BACK = PANEL_PREFIX + ':back';
 
 // Palet warna dan ikon agar semua balasan seragam dan mudah dipindai.
 const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E };
@@ -179,17 +176,26 @@ function inventoryEmbed(message, user, list) {
   return embed;
 }
 
+// Tombol panel menyertakan pemiliknya. Tanpa ini user lain bisa menekan
+// tombol pada panel orang lain dan melihat inventory miliknya sendiri.
+function panelId(action, ownerId) {
+  return PANEL_PREFIX + ':' + action + ':' + ownerId;
+}
+function parsePanelId(customId) {
+  const match = String(customId || '').match(/^rempanel:(help|vars|back):(\d{17,20})$/);
+  return match ? { action: match[1], ownerId: match[2] } : null;
+}
 // Baris tombol panel: "Cara menggunakan" dan "Variabel".
-function panelRow() {
+function panelRow(ownerId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(PANEL_HELP).setLabel('Cara menggunakan').setEmoji(ICON.help).setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(PANEL_VARS).setLabel('Variabel').setEmoji(ICON.variable).setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(panelId('help', ownerId)).setLabel('Cara menggunakan').setEmoji(ICON.help).setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(panelId('vars', ownerId)).setLabel('Variabel').setEmoji(ICON.variable).setStyle(ButtonStyle.Secondary)
   );
 }
 // Baris tombol kembali dari halaman bantuan/variabel.
-function panelBackRow() {
+function panelBackRow(ownerId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(PANEL_BACK).setLabel('Kembali').setEmoji('↩️').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(panelId('back', ownerId)).setLabel('Kembali').setEmoji('↩️').setStyle(ButtonStyle.Secondary)
   );
 }
 
@@ -346,7 +352,7 @@ async function handleMessage(message, deps = {}) {
     const user = await panelUser(message);
     const activeOnly = sub === 'active' || sub === 'aktif';
     const list = store.listRemindersByOwner(message.author.id, activeOnly ? { activeOnly: true } : undefined);
-    await send(message, { embeds: [inventoryEmbed(message, user, list)], components: [panelRow()] });
+    await send(message, { embeds: [inventoryEmbed(message, user, list)], components: [panelRow(message.author.id)] });
     return true;
   }
 
@@ -722,22 +728,36 @@ function isPanelNav(customId) {
 
 async function handleComponent(i) {
   if (!isPanelNav(i.customId)) return false;
-  const id = i.customId;
+  const nav = parsePanelId(i.customId);
+  if (!nav) {
+    await denyPanel(i, 'Panel ini sudah kedaluwarsa. Buka `' + prefixOf(i) + ' r` lagi.');
+    return true;
+  }
+  if (String(i.user?.id) !== nav.ownerId) {
+    await denyPanel(i, 'Panel ini bukan milikmu.');
+    return true;
+  }
   const user = await panelUser(i);
-  if (id === PANEL_HELP) {
-    await i.update({ embeds: [usageEmbed(prefixOf(i))], components: [panelBackRow()] });
+  if (nav.action === 'help') {
+    await i.update({ embeds: [usageEmbed(prefixOf(i))], components: [panelBackRow(nav.ownerId)] });
     return true;
   }
-  if (id === PANEL_VARS) {
-    await i.update({ embeds: [variablesEmbed()], components: [panelBackRow()] });
+  if (nav.action === 'vars') {
+    await i.update({ embeds: [variablesEmbed()], components: [panelBackRow(nav.ownerId)] });
     return true;
   }
-  if (id === PANEL_BACK) {
-    const list = store.listRemindersByOwner(i.user.id);
-    await i.update({ embeds: [inventoryEmbed(i, user, list)], components: [panelRow()] });
+  if (nav.action === 'back') {
+    const list = store.listRemindersByOwner(nav.ownerId);
+    await i.update({ embeds: [inventoryEmbed(i, user, list)], components: [panelRow(nav.ownerId)] });
     return true;
   }
   return false;
+}
+
+async function denyPanel(i, content) {
+  const payload = { content, flags: MessageFlags.Ephemeral };
+  if (i.replied || i.deferred) await i.followUp?.(payload).catch(() => {});
+  else await i.reply?.(payload).catch(() => {});
 }
 
 // Data pengguna untuk judul + avatar inventory (pesan maupun interaksi).
