@@ -19,7 +19,7 @@ const data = require('../data/owoBattle');
 const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
-  globalSimEmbed, globalLossesEmbeds, globalLossButton, parseGlobalLossButton,
+  globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
   globalWeaponsButton, parseGlobalWeaponsButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
@@ -194,9 +194,9 @@ function unknownFlagsError(unknown, prefix) {
 const GLOBAL_COOLDOWN_MS = 10000;
 const GLOBAL_COOLDOWN_ACTION = 'sim-global';
 
-// Default per tim, sama dengan batas bawaan developer. Angka ini bisa diubah
-// lewat `d sim global limit`, jadi yang dipakai selalu nilai tersimpan.
-const DEFAULT_GLOBAL_RUNS = store.DEFAULT_MAX_GLOBAL_RUNS;
+// Default `sim global` per tim. Batas maksimum per tim tetap terpisah di
+// `store.DEFAULT_MAX_GLOBAL_RUNS` supaya `-m` masih bisa dipakai lebih besar.
+const DEFAULT_GLOBAL_RUNS = 50;
 
 // Batas per perintah. Diukur ~240 ribu pertarungan/detik dengan 4 worker, jadi
 // 10 juta kira-kira 40 detik: masih di bawah batas waktu interaksi Discord dan
@@ -420,11 +420,11 @@ function globalUsage(prefix = 'd') {
     'Hasil berisi: rata-rata streak, streak terpanjang, Max Streak, rata-rata kalah,',
     'dan rekap menang/seri/kalah',
     'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
-    'Tombol **Lihat kekalahan** menampilkan maksimal 50 tim yang mengalahkan kamu',
-    '(dikirim dua halaman, hanya terlihat olehmu, senjata lawan disembunyikan).',
+    'Tombol **Lihat kekalahan** menampilkan tim mana saja yang mengalahkan kamu',
+    '(hanya terlihat olehmu, senjata lawan disembunyikan).',
     '',
     `Opsi:`,
-    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
+    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${DEFAULT_GLOBAL_RUNS.toLocaleString('id-ID')})`,
     `\`-total <jumlah>\` total pertarungan, dibagi rata ke semua tim lawan`,
     `\`-qp <0-100>\` kualitas senjata tim kamu (menimpa kualitas slot)`,
     `\`-qe <0-100>\` kualitas senjata semua tim lawan`,
@@ -474,7 +474,7 @@ function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = fals
     return { value: perTeamValue, total: value };
   }
 
-  const runs = perTeam ?? maxPerTeam ?? DEFAULT_GLOBAL_RUNS;
+  const runs = perTeam ?? DEFAULT_GLOBAL_RUNS;
   const value = Number(runs);
   if (!Number.isSafeInteger(value) || value < 1) {
     return { error: `Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim global -m 5000\`.` };
@@ -707,13 +707,10 @@ async function handleGlobalLossButton(i, deps = {}) {
   // Hanya pemilik hasil yang boleh melihat senjata lawan, dan hanya jika
   // toggle developer untuk user itu aktif.
   const showWeapons = isDev && i.user.id === parsed.userId && store.getGlobalWeapons(parsed.userId);
-  const embeds = globalLossesEmbeds(entry.result, { playerLabel: entry.playerLabel, showWeapons });
-  await i.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
-  for (const embed of embeds.slice(1)) {
-    if (typeof i.followUp === 'function') {
-      await i.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral });
-    }
-  }
+  return i.reply({
+    embeds: [globalLossesEmbed(entry.result, { playerLabel: entry.playerLabel, showWeapons })],
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 // Toggle senjata pada hasil simulasi global. Hanya developer yang boleh

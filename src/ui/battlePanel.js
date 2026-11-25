@@ -620,68 +620,41 @@ function hiddenSpecLine(spec, index, { showWeapons = false } = {}) {
 }
 
 // Daftar tim yang mengalahkan pemain, dipakai sebagai balasan ephemeral.
-// Discord hanya mengizinkan 25 field per embed dan 6.000 karakter per pesan,
-// jadi 50 hasil dikirim sebagai dua embed (25 tim per embed).
-const GLOBAL_LOSS_LIMIT = 50;
-const GLOBAL_LOSSES_PER_EMBED = 25;
+function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = false } = {}) {
+  const embed = new EmbedBuilder()
+    .setColor(COLOR.error)
+    .setTitle('🔍 Tim yang mengalahkan kamu');
 
-function globalLossesEmbeds(result, { playerLabel = 'Tim kamu', showWeapons = false } = {}) {
-  const total = result.losses.length;
-  if (!total) {
-    return [new EmbedBuilder()
-      .setColor(COLOR.error)
-      .setTitle('🔍 Tim yang mengalahkan kamu')
-      .setDescription(`**${playerLabel}** tidak kalah dari satu tim pun dalam simulasi ini. 🏆`)];
+  if (!result.losses.length) {
+    return embed.setDescription(
+      `**${playerLabel}** tidak kalah dari satu tim pun dalam simulasi ini. 🏆`
+    );
   }
 
-  const shown = result.losses.slice(0, GLOBAL_LOSS_LIMIT);
-  const pageCount = Math.ceil(shown.length / GLOBAL_LOSSES_PER_EMBED);
-  const embeds = [];
-  for (let page = 0; page < pageCount; page++) {
-    const start = page * GLOBAL_LOSSES_PER_EMBED;
-    const chunk = shown.slice(start, start + GLOBAL_LOSSES_PER_EMBED);
-    const embed = new EmbedBuilder().setColor(COLOR.error);
-    if (page === 0) {
-      embed
-        .setTitle('🔍 Tim yang mengalahkan kamu')
-        .setDescription(
-          `**${playerLabel}** kalah dari **${total}** tim`
-          + ` (total ${result.tally.enemy.toLocaleString('id-ID')} kekalahan).\n`
-          + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.')
-        );
-    } else {
-      embed
-        .setTitle('🔍 Tim yang mengalahkan kamu (lanjutan)')
-        .setDescription(`**${playerLabel}** — halaman ${page + 1}/${pageCount}.`);
-    }
+  embed.setDescription(
+    `**${playerLabel}** kalah dari **${result.losses.length}** tim`
+    + ` (total ${result.tally.enemy.toLocaleString('id-ID')} kekalahan).\n`
+    + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.')
+  );
 
-    for (const loss of chunk) {
-      const { tally } = loss;
-      const detail = [
-        `Kalah **${tally.enemy.toLocaleString('id-ID')}**× · seri ${tally.tie.toLocaleString('id-ID')}× · menang ${tally.player.toLocaleString('id-ID')}×`,
-        ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i, { showWeapons })),
-      ].join('\n');
-      embed.addFields({
-        name: `${loss.label} · L.${loss.level}`.slice(0, 256),
-        value: detail.slice(0, 1024),
-        inline: false,
-      });
-    }
-
-    const footer = [];
-    if (pageCount > 1) footer.push(`Halaman ${page + 1}/${pageCount}`);
-    if (page === pageCount - 1 && total > shown.length) {
-      footer.push(`…dan ${total - shown.length} tim lain tidak ditampilkan.`);
-    }
-    if (footer.length) embed.setFooter({ text: footer.join(' · ') });
-    embeds.push(embed);
+  // Discord membatasi jumlah field; sisanya diringkas dalam satu baris.
+  const shown = result.losses.slice(0, 20);
+  for (const loss of shown) {
+    const { tally } = loss;
+    const detail = [
+      `Kalah **${tally.enemy.toLocaleString('id-ID')}**× · seri ${tally.tie.toLocaleString('id-ID')}× · menang ${tally.player.toLocaleString('id-ID')}×`,
+      ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i, { showWeapons })),
+    ].join('\n');
+    embed.addFields({
+      name: `${loss.label} · L.${loss.level}`.slice(0, 256),
+      value: detail.slice(0, 1024),
+      inline: false,
+    });
   }
-  return embeds;
-}
-
-// Kompatibilitas pemanggil lama: hanya halaman pertama.
-function globalLossesEmbed(result, options) {
-  return globalLossesEmbeds(result, options)[0];
+  if (result.losses.length > shown.length) {
+    embed.setFooter({ text: `…dan ${result.losses.length - shown.length} tim lain tidak ditampilkan.` });
+  }
+  return embed;
 }
 
 function parseTeamButton(customId) {
@@ -698,7 +671,7 @@ module.exports = {
   teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, teamCompLines, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
   turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
   teamButtons, isTeamButton, parseTeamButton,
-  GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbeds, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
+  GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
   globalWeaponsButton, isGlobalWeaponsButton, parseGlobalWeaponsButton,
   REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,
 };

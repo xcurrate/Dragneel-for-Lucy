@@ -11,7 +11,7 @@ const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
 const battleEmoji = require(path.join(ROOT, 'src/services/battleEmoji'));
 const {
   handleSimCommand, handleGlobalLossButton, handleGlobalWeaponsButton, resolveRunCount,
-  GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
+  GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES,
 } = require(path.join(ROOT, 'src/commands/battleSim'));
 const engine = require(path.join(ROOT, 'src/services/battleEngine'));
 const core = require(path.join(ROOT, 'src/services/globalSimCore'));
@@ -236,36 +236,6 @@ describe('simulasi global', () => {
     assert.ok(reply.embeds[0].toJSON().title.includes('mengalahkan'));
   });
 
-  it('menampilkan maksimal 50 tim kekalahan dalam dua halaman', async () => {
-    const losses = Array.from({ length: 60 }, (_, i) => ({
-      label: 'Tim ' + (i + 1),
-      level: 80,
-      specs: [],
-      tally: { enemy: 1, tie: 0, player: 0 },
-    }));
-    globalResults.set('metok', {
-      at: Date.now(),
-      result: { losses, tally: { enemy: 60, tie: 0, player: 0 } },
-      playerLabel: 'Aku',
-    });
-
-    const replies = [];
-    const followUps = [];
-    await handleGlobalLossButton({
-      customId: 'battle_global_losses:me:tok',
-      user: { id: 'me' },
-      reply: async p => { replies.push(p); },
-      followUp: async p => { followUps.push(p); },
-    });
-
-    assert.strictEqual(replies.length, 1, 'halaman pertama lewat reply');
-    assert.strictEqual(followUps.length, 1, 'halaman kedua lewat followUp');
-    assert.strictEqual(replies[0].embeds[0].toJSON().fields.length, 25);
-    assert.strictEqual(followUps[0].embeds[0].toJSON().fields.length, 25);
-    assert.match(JSON.stringify(followUps[0].embeds[0].toJSON()), /10 tim lain tidak ditampilkan/);
-    globalResults.delete('metok');
-  });
-
   it('membuka tombol milik user lain (satu-satunya pengecualian)', async () => {
     seedWorld();
     let payload = null;
@@ -468,11 +438,15 @@ describe('simulasi global', () => {
 });
 
 describe('jumlah pertarungan simulasi global', () => {
-  it('memakai default 100 pertarungan per tim', () => {
-    assert.strictEqual(DEFAULT_GLOBAL_RUNS, 100);
+  it('memakai default 50 pertarungan per tim', () => {
+    assert.strictEqual(DEFAULT_GLOBAL_RUNS, 50);
     const out = resolveRunCount({}, 5);
     assert.strictEqual(out.value, DEFAULT_GLOBAL_RUNS);
     assert.strictEqual(out.total, DEFAULT_GLOBAL_RUNS * 5);
+    // Batas maksimum per tim tidak boleh mengubah default.
+    const limited = resolveRunCount({}, 5, { maxPerTeam: 100 });
+    assert.strictEqual(limited.value, 50);
+    assert.strictEqual(limited.total, 250);
   });
 
   it('menolak jumlah di atas batas per tim', () => {
