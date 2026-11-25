@@ -19,7 +19,7 @@ const data = require('../data/owoBattle');
 const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
-  globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
+  globalSimEmbed, globalLossesEmbeds, globalLossButton, parseGlobalLossButton,
   globalWeaponsButton, parseGlobalWeaponsButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
@@ -420,8 +420,8 @@ function globalUsage(prefix = 'd') {
     'Hasil berisi: rata-rata streak, streak terpanjang, Max Streak, rata-rata kalah,',
     'dan rekap menang/seri/kalah',
     'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
-    'Tombol **Lihat kekalahan** menampilkan tim mana saja yang mengalahkan kamu',
-    '(hanya terlihat olehmu, senjata lawan disembunyikan).',
+    'Tombol **Lihat kekalahan** menampilkan maksimal 50 tim yang mengalahkan kamu',
+    '(dikirim dua halaman, hanya terlihat olehmu, senjata lawan disembunyikan).',
     '',
     `Opsi:`,
     `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
@@ -707,10 +707,13 @@ async function handleGlobalLossButton(i, deps = {}) {
   // Hanya pemilik hasil yang boleh melihat senjata lawan, dan hanya jika
   // toggle developer untuk user itu aktif.
   const showWeapons = isDev && i.user.id === parsed.userId && store.getGlobalWeapons(parsed.userId);
-  return i.reply({
-    embeds: [globalLossesEmbed(entry.result, { playerLabel: entry.playerLabel, showWeapons })],
-    flags: MessageFlags.Ephemeral,
-  });
+  const embeds = globalLossesEmbeds(entry.result, { playerLabel: entry.playerLabel, showWeapons });
+  await i.reply({ embeds: [embeds[0]], flags: MessageFlags.Ephemeral });
+  for (const embed of embeds.slice(1)) {
+    if (typeof i.followUp === 'function') {
+      await i.followUp({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    }
+  }
 }
 
 // Toggle senjata pada hasil simulasi global. Hanya developer yang boleh
