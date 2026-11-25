@@ -55,10 +55,7 @@ function slotIcon(entry) {
     parts.push(emoji.rankEmoji(entry.weaponQuality ?? data.DEFAULT_QUALITY));
     parts.push(emoji.weaponEmoji(entry.weaponId, entry.weaponQuality));
   }
-  for (const passive of entry.passives || []) {
-    const id = passive && typeof passive === 'object' ? passive.id : passive;
-    parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
-  }
+  for (const id of entry.passives || []) parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
   return parts.join('');
 }
 
@@ -98,25 +95,16 @@ function slotStats(entry) {
 }
 
 // Emoji senjata + pasif beserta quality, mis. `<fabled><frstaff><fhgen> 100%`.
-// Saat `detailed` aktif, nama senjata dan pasif ikut ditulis supaya seluruh
-// perlengkapan tim bisa dibaca tanpa membuka tiap slot.
-function weaponLine(entry, { detailed = false } = {}) {
+function weaponLine(entry) {
   if (!entry.weaponId) return '*tanpa senjata*';
   const quality = entry.weaponQuality ?? data.DEFAULT_QUALITY;
   const rank = qualityRank(quality);
-  const passiveIds = (entry.passives || [])
-    .map(passive => (passive && typeof passive === 'object' ? passive.id : passive));
   const icons = [
     emoji.rankEmoji(rank),
     emoji.weaponEmoji(entry.weaponId, rank),
-    ...passiveIds.map(id => emoji.passiveEmoji(id, rank)),
+    ...(entry.passives || []).map(id => emoji.passiveEmoji(id, rank)),
   ].join('');
-  if (!detailed) return `${icons} ${qualityText(quality)}`;
-  const passives = passiveIds
-    .map(id => passiveData.get(id)?.name)
-    .filter(Boolean);
-  return `${icons} ${qualityText(quality)} · **${weaponName(entry.weaponId)}**`
-    + (passives.length ? ` · ${passives.join(', ')}` : '');
+  return `${icons} ${qualityText(quality)}`;
 }
 
 // Nama field kosong: Discord menolak nama kosong, jadi pakai karakter tak
@@ -128,7 +116,7 @@ function addHint(prefix, slot) {
 }
 
 // Satu slot jadi satu field: judul `[1] L.100 <emoji> nama`, isi stat 4 baris.
-function slotField(entry, slot, prefix, { showWeapons = false } = {}) {
+function slotField(entry, slot, prefix) {
   if (!entry) return { name: BLANK, value: addHint(prefix, slot), inline: false };
 
   const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
@@ -143,7 +131,7 @@ function slotField(entry, slot, prefix, { showWeapons = false } = {}) {
       `${emoji.statIcon('hp')} \`${stats.hp}\` ${emoji.statIcon('wp')} \`${stats.wp}\``,
       `${emoji.statIcon('att')} \`${stats.att}\` ${emoji.statIcon('mag')} \`${stats.mag}\``,
       `${emoji.statIcon('pr')} \`${stats.pr}%\` ${emoji.statIcon('mr')} \`${stats.mr}%\``,
-      weaponLine(entry, { detailed: showWeapons }),
+      weaponLine(entry),
     ].join('\n')
     : '*stat tidak terbaca*';
 
@@ -154,7 +142,7 @@ function slotField(entry, slot, prefix, { showWeapons = false } = {}) {
   };
 }
 
-function teamEmbed(team, { prefix = 'd', active = false, slotId = null, showWeapons = false } = {}) {
+function teamEmbed(team, { prefix = 'd', active = false, slotId = null } = {}) {
   const id = slotId ?? team.slotId;
   const embed = new EmbedBuilder()
     .setColor(active ? COLOR.ok : COLOR.info)
@@ -165,7 +153,7 @@ function teamEmbed(team, { prefix = 'd', active = false, slotId = null, showWeap
     });
 
   for (let slot = 1; slot <= MAX_SLOTS; slot++) {
-    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot, prefix, { showWeapons }));
+    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot, prefix));
   }
   return embed;
 }
@@ -450,6 +438,7 @@ function isTeamButton(customId) {
 // supaya hasil milik orang lain tidak bisa dibuka, dan `token` supaya tombol
 // lama tidak menampilkan data dari simulasi yang sudah digantikan.
 const GLOBAL_BUTTON = 'battle_global_losses';
+const GLOBAL_WEAPONS_BUTTON = 'battle_global_weapons';
 // Tombol 🔁 pada hasil satu pertarungan: ulangi sebagai `-m <runs>`.
 const REPEAT_BUTTON = 'battle_sim_repeat';
 
@@ -470,6 +459,26 @@ function isGlobalLossButton(customId) {
 function parseGlobalLossButton(customId) {
   const parts = String(customId || '').split(ID_SEP);
   if (parts.length !== 3 || parts[0] !== GLOBAL_BUTTON) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2] };
+}
+
+function globalWeaponsButton(userId, token, enabled) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_WEAPONS_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}`)
+      .setLabel(enabled ? 'Senjata: ON' : 'Senjata: OFF')
+      .setEmoji('🗡️')
+      .setStyle(enabled ? ButtonStyle.Success : ButtonStyle.Secondary)
+  );
+}
+
+function isGlobalWeaponsButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${GLOBAL_WEAPONS_BUTTON}${ID_SEP}`);
+}
+
+function parseGlobalWeaponsButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 3 || parts[0] !== GLOBAL_WEAPONS_BUTTON) return { ok: false };
   return { ok: true, userId: parts[1], token: parts[2] };
 }
 
@@ -498,14 +507,26 @@ function percent(value) {
   return `${Number(value || 0).toLocaleString('id-ID')}%`;
 }
 
-// Komposisi tim pemain pada simulasi global. Senjata dan pasif sengaja tidak
-// ditampilkan: yang dibutuhkan di sini hanya gambaran pet dan levelnya.
-function teamCompLines(specs) {
+// Komposisi tim pemain pada simulasi global. Senjata dan pasif hanya ikut
+// ditampilkan saat toggle developer aktif.
+function teamCompLines(specs, { showWeapons = false } = {}) {
   if (!specs || !specs.length) return '*Tim kosong.*';
   return specs.map((spec, index) => {
     const slot = spec.slot || index + 1;
     const label = spec.label || `slot${slot}`;
-    return `\`${slot}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}`;
+    let line = `\`${slot}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}`;
+    if (showWeapons && spec.weapon) {
+      const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
+      const rank = qualityRank(quality);
+      const def = data.weapons().find(w => w.id === spec.weapon.id);
+      const passives = (spec.weapon.passives || [])
+        .map(passive => passiveData.get(passive && typeof passive === 'object' ? passive.id : passive)?.name)
+        .filter(Boolean);
+      line += ` · ${emoji.rankEmoji(rank)}${emoji.weaponEmoji(spec.weapon.id, rank)}`
+        + ` **${def?.name || `#${spec.weapon.id}`}** ${qualityText(quality)}`
+        + (passives.length ? ` · ${passives.join(', ')}` : '');
+    }
+    return line;
   }).join('\n');
 }
 
@@ -523,7 +544,7 @@ function bucketLines(bucket) {
 
 // Hasil simulasi global. Angka utama ditaruh di description mengikuti gaya
 // laporan yang sudah dipakai bot lain, lalu rincian per kelompok level.
-function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, totals = null } = {}) {
+function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, totals = null, showWeapons = false } = {}) {
   const seconds = (result.durationMs / 1000).toFixed(2);
   const low = result.buckets.low;
   const high = result.buckets.high;
@@ -544,7 +565,7 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
     .addFields(
       {
         name: '🪖 Komposisi tim kamu',
-        value: teamCompLines(playerSpecs),
+        value: teamCompLines(playerSpecs, { showWeapons }),
         inline: false,
       },
       {
@@ -648,5 +669,6 @@ module.exports = {
   turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
   teamButtons, isTeamButton, parseTeamButton,
   GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
+  globalWeaponsButton, isGlobalWeaponsButton, parseGlobalWeaponsButton,
   REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,
 };

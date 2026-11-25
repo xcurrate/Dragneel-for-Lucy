@@ -100,35 +100,6 @@ describe('panel tim', () => {
     assert.equal(rows[1].components[1].style, 1, 'tombol pilih biru saat tim belum aktif');
   });
 
-  it('user biasa tidak mendapat tombol toggle senjata', () => {
-    store.createTeam('u', 'Alpha');
-    const payload = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', { showWeapons: true });
-    assert.equal(payload.components.length, 2);
-    assert.ok(!payload.components.some(row => row.toJSON().components.some(c => c.custom_id?.startsWith('battle_tm_weapons'))));
-  });
-
-  it('toggle senjata menampilkan nama senjata dan pasif seluruh slot', () => {
-    store.createTeam('u', 'Alpha');
-    const stats = { hp: 8, att: 6, pr: 2, wp: 3, mag: 5, mr: 1 };
-    store.setSlot('u', 'Alpha', 1, { custom: stats, level: 50, weaponId: 1, passives: [{ id: 12 }] });
-    store.setSlot('u', 'Alpha', 2, { custom: stats, level: 50, weaponId: 4, passives: [{ id: 11 }] });
-    const teams = store.listTeams('u');
-    const payload = teamPanel.panelPayload(teams, 0, 'u', { showWeapons: true, isDeveloper: true });
-    const toggle = payload.components[2].toJSON().components[0];
-    const body = JSON.stringify(payload.embeds[0].toJSON());
-    assert.equal(toggle.label, 'Senjata: ON');
-    assert.equal(toggle.style, 3, 'toggle hijau saat hidup');
-    assert.ok(body.includes('Great Sword'), 'nama senjata slot 1');
-    assert.ok(body.includes('Rune of the Forgotten'), 'nama senjata slot 2');
-    assert.ok(body.includes('Critical'), 'nama pasif ikut tampil');
-
-    store.setTeamWeapons('dev', true);
-    const other = teamPanel.panelPayload(store.listTeams('u'), 0, 'u', { isDeveloper: true });
-    assert.equal(other.components[2].toJSON().components[0].label, 'Senjata: OFF',
-      'preferensi developer tidak menular ke user lain');
-    assert.ok(!JSON.stringify(other.embeds[0].toJSON()).includes('Great Sword'));
-  });
-
   it('menandai tim aktif dengan tombol hijau dan bintang di dropdown', () => {
     store.createTeam('u', 'Alpha');
     store.createTeam('u', 'Beta');
@@ -217,11 +188,9 @@ describe('panel tim', () => {
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_prev:u:0'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_del:u:0'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_export:u:0'), true);
-    assert.equal(teamPanel.isTeamPanelNav('battle_tm_weapons:u:0'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_tm_del:u:0:yes'), true);
     assert.equal(teamPanel.isTeamPanelNav('battle_team_pick:u:0'), false);
     assert.equal(teamPanel.parsePanelNav('battle_tm_prev').ok, false);
     assert.equal(teamPanel.parsePanelNav('battle_tm_next:u:abc').ok, false);
-    assert.equal(teamPanel.parsePanelNav('battle_tm_weapons:u:0').kind, 'weapons');
   });
 });

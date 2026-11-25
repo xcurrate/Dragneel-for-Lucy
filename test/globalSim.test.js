@@ -9,7 +9,7 @@ const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
 const globalSim = require(path.join(ROOT, 'src/services/globalSim'));
 const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
 const {
-  handleSimCommand, handleGlobalLossButton, resolveRunCount,
+  handleSimCommand, handleGlobalLossButton, handleGlobalWeaponsButton, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES,
 } = require(path.join(ROOT, 'src/commands/battleSim'));
 const engine = require(path.join(ROOT, 'src/services/battleEngine'));
@@ -275,6 +275,68 @@ describe('simulasi global', () => {
     const body = JSON.stringify(embed);
     assert.ok(body.includes('**Tim kamu:** snail'), 'label blueprint dipakai');
     assert.ok(body.includes('1 tim'), 'tim tersimpan tetap jadi lawan');
+  });
+
+  it('developer bisa toggle nama senjata di hasil simulasi global', async () => {
+    store.createTeam('me', 'Milikku');
+    store.setSlot('me', 'Milikku', 1, {
+      custom: COEFFS_STRONG, level: 80, weaponId: 1, passives: [{ id: 12 }],
+    });
+    store.setActiveTeam('me', 'Milikku');
+    store.createTeam('rival', 'Lemah');
+    store.setSlot('rival', 'Lemah', 1, { custom: COEFFS_WEAK, level: 20 });
+
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 1 -s 3'), ['global', '-m', '1', '-s', '3'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    assert.strictEqual(payload.components.length, 2, 'tombol kekalahan + toggle senjata');
+    assert.ok(!JSON.stringify(payload.embeds[0].toJSON()).includes('Great Sword'), 'default OFF');
+
+    const button = payload.components[1].toJSON().components[0];
+    assert.strictEqual(button.label, 'Senjata: OFF');
+    const i = {
+      customId: button.custom_id,
+      user: { id: 'me' },
+      client: {},
+      guild: {},
+      reply: data => { i.out = data; },
+      update: data => { i.updated = data; },
+    };
+    await handleGlobalWeaponsButton(i, { prefix: 'd', isDeveloper: () => true });
+    const body = JSON.stringify(i.updated.embeds[0].toJSON());
+    assert.ok(body.includes('Great Sword'), 'ON menampilkan senjata');
+    assert.ok(body.includes('Critical'), 'ON menampilkan pasif');
+    assert.strictEqual(i.updated.components[1].toJSON().components[0].label, 'Senjata: ON');
+    assert.strictEqual(store.getGlobalWeapons('me'), true);
+  });
+
+  it('user biasa tidak mendapat tombol senjata di hasil global', async () => {
+    seedWorld();
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 1 -s 4'), ['global', '-m', '1', '-s', '4'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => false,
+    });
+    assert.strictEqual(payload.components.length, 1, 'hanya tombol kekalahan');
+    assert.ok(!JSON.stringify(payload).includes('Senjata:'));
+  });
+
+  it('preferensi senjata developer tidak menular ke user lain', async () => {
+    store.setGlobalWeapons('dev', true);
+    seedWorld();
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 1 -s 5'), ['global', '-m', '1', '-s', '5'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    assert.strictEqual(store.getGlobalWeapons('dev'), true);
+    assert.strictEqual(store.getGlobalWeapons('me'), false);
+    assert.ok(!JSON.stringify(payload.embeds[0].toJSON()).includes('Great Sword'));
   });
 
   it('menolak bila belum ada tim lawan dari user lain', async () => {

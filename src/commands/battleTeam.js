@@ -28,7 +28,7 @@ const {
 } = require('../ui/battlePanel');
 const teamPanel = require('../ui/teamPanel');
 
-function usage(prefix = 'd', { isDeveloper = false } = {}) {
+function usage(prefix = 'd') {
   return [
     `\`${prefix} tm\` — panel tim (pindah lewat ◀ ▶ atau menu pilih)`,
     `\`${prefix} team list\` — daftar tim beserta ID`,
@@ -37,7 +37,6 @@ function usage(prefix = 'd', { isDeveloper = false } = {}) {
     `\`${prefix} team blueprint <nama> | <blueprint>\` — sama, nama perintah eksplisit`,
     `\`${prefix} team pick <id|nama>\` — jadikan tim aktif`,
     `\`${prefix} team show [id|nama]\` — lihat isi tim`,
-    ...(isDeveloper ? [`\`${prefix} team weapons on|off\` — tampilkan nama senjata seluruh slot`] : []),
     `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
     `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
     `\`${prefix} team clear <slot>\` — kosongkan slot`,
@@ -232,12 +231,11 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
 
   const userId = message.author.id;
-  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
   const sub = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
 
   if (sub === 'help' || sub === 'bantuan') {
-    return send(message, usageEmbed('🐾 Tim Kustom', usage(prefix, { isDeveloper: isDev })));
+    return send(message, usageEmbed('🐾 Tim Kustom', usage(prefix)));
   }
 
   // Tanpa argumen `dtm` langsung menampilkan panel komposisi tim, bukan daftar
@@ -294,12 +292,7 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     if (team) await animalDex.ensureAnimalEmojis(animalsOf(team));
     if (!team) return say(send, message, name ? `❌ Tim **${name}** tidak ditemukan.` : `Belum ada tim aktif. Buat dengan \`${prefix} team new <nama>\`.`);
     const active = store.getActiveTeam(userId);
-    return send(message, teamEmbed(team, {
-      prefix,
-      active: !!active && active.id === team.id,
-      slotId: team.slotId,
-      showWeapons: isDev && store.getTeamWeapons(userId),
-    }));
+    return send(message, teamEmbed(team, { prefix, active: !!active && active.id === team.id, slotId: team.slotId }));
   }
 
   if (sub === 'del' || sub === 'hapus' || sub === 'delete') {
@@ -327,29 +320,6 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     return say(send, message, `✅ Slot ${rest[0]} dikosongkan dari tim **${teamName.name}**.`);
   }
 
-  if (sub === 'weapons' || sub === 'tampil-senjata' || sub === 'senjata-tampil') {
-    if (!isDev) return say(send, message, '❌ Toggle senjata hanya untuk developer.');
-    const arg = String(rest[0] || '').toLowerCase();
-    const on = ['on', 'aktif', '1', 'true'].includes(arg);
-    const off = ['off', 'nonaktif', '0', 'false'].includes(arg);
-    if (!on && !off) {
-      const current = store.getTeamWeapons(userId) ? 'ON' : 'OFF';
-      return say(send, message,
-        `Tampilan senjata saat ini: **${current}**.\n`
-        + `Ubah dengan \`${prefix} team weapons on\` atau \`${prefix} team weapons off\`.`);
-    }
-    store.setTeamWeapons(userId, on);
-    const team = store.getActiveTeam(userId);
-    if (!team) return say(send, message, `Tampilan senjata: **${on ? 'ON' : 'OFF'}**. Belum ada tim aktif.`);
-    await animalDex.ensureAnimalEmojis(animalsOf(team));
-    return send(message, teamEmbed(team, {
-      prefix,
-      active: true,
-      slotId: team.slotId,
-      showWeapons: on,
-    }));
-  }
-
   if (sub === 's' || sub === 'senjata' || sub === 'weapon') {
     return handleWeaponCommand(message, rest, prefix, send, userId);
   }
@@ -358,7 +328,7 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     return handleAdd(message, rest, prefix, send, userId);
   }
 
-  return send(message, usageEmbed('🐾 Tim Kustom', ['Perintah tidak dikenal.', '', usage(prefix, { isDeveloper: isDev })]));
+  return send(message, usageEmbed('🐾 Tim Kustom', ['Perintah tidak dikenal.', '', usage(prefix)]));
 }
 
 function handleAdd(message, rest, prefix, send, userId) {
@@ -481,11 +451,8 @@ function handleWeaponCommand(message, rest, prefix, send, userId) {
 async function sendTeamPanel(message, prefix, userId, deps = {}) {
   const teams = store.listTeams(userId);
   const active = store.getActiveTeam(userId);
-  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
   await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
-  const payload = teamPanel.panelPayload(teams, teamPanel.indexOfActive(teams, active), userId, {
-    prefix, active, isDeveloper: isDev,
-  });
+  const payload = teamPanel.panelPayload(teams, teamPanel.indexOfActive(teams, active), userId, { prefix, active });
   delete payload.team;
   delete payload.index;
   delete payload.total;
@@ -498,9 +465,6 @@ async function sendTeamPanel(message, prefix, userId, deps = {}) {
 // lalu tim itu dijadikan aktif dan panel digambar ulang di tempat.
 async function handleTeamPanelNav(i, deps = {}) {
   const prefix = deps.prefix || 'd';
-  const isDev = deps.isDeveloper
-    ? deps.isDeveloper({ author: i.user, client: i.client, guild: i.guild })
-    : false;
   const parsed = teamPanel.parsePanelNav(i.customId);
   const expired = { embeds: [errorEmbed(`Panel kedaluwarsa. Jalankan \`${prefix} tm\` lagi.`)], flags: MessageFlags.Ephemeral };
   if (!parsed.ok) return i.reply(expired);
@@ -538,14 +502,6 @@ async function handleTeamPanelNav(i, deps = {}) {
     return i.reply({ embeds: [teamPanel.blueprintEmbed(target, { prefix })], flags: MessageFlags.Ephemeral });
   }
 
-  // Toggle tampilan senjata hanya mengubah preferensi user, bukan tim aktif.
-  if (parsed.kind === 'weapons') {
-    if (!isDev) {
-      return i.reply({ embeds: [errorEmbed('❌ Toggle senjata hanya untuk developer.')], flags: MessageFlags.Ephemeral });
-    }
-    store.setTeamWeapons(i.user.id, !store.getTeamWeapons(i.user.id));
-  }
-
   // Panah dan select menu hanya berpindah tampilan. Tim diaktifkan lewat
   // tombol "Pilih Tim Ini".
   if (parsed.kind === 'pick' && !isSelect) {
@@ -559,7 +515,7 @@ async function handleTeamPanelNav(i, deps = {}) {
   const panelIndex = parsed.kind === 'pick' && !isSelect
     ? teamPanel.indexOfActive(fresh, active)
     : Math.max(0, Math.min(index, fresh.length - 1));
-  const payload = teamPanel.panelPayload(fresh, panelIndex, i.user.id, { prefix, active, isDeveloper: isDev });
+  const payload = teamPanel.panelPayload(fresh, panelIndex, i.user.id, { prefix, active });
   delete payload.team;
   delete payload.index;
   delete payload.total;

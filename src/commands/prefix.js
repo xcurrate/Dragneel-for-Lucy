@@ -177,11 +177,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   }
 
   if (sub === 'team') {
-    return handleTeamCommand(message, args, prefix, {
-      sendEmbed: _sendEmbed,
-      sendPayload: _send,
-      isDeveloper: _isDeveloper,
-    });
+    return handleTeamCommand(message, args, prefix, { sendEmbed: _sendEmbed, sendPayload: _send });
   }
 
   if (sub === 'sim') {

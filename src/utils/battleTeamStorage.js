@@ -569,17 +569,17 @@ function setMaxGlobalUser(value) {
   return n;
 }
 
-// Preferensi tampilan panel: tampilkan nama senjata dan pasif untuk seluruh
-// slot, bukan hanya ikon. Disimpan per user supaya pilihan bertahan saat
-// panel dibuka lagi.
-const TEAM_WEAPONS_KEY = 'team_weapons';
+// Preferensi tampilan hasil simulasi global: tampilkan nama senjata dan pasif
+// tim pemain. Disimpan per user supaya toggle developer tidak menular ke user
+// lain dan bertahan saat hasil dibuka lagi.
+const GLOBAL_WEAPONS_KEY = 'global_sim_weapons';
 
-function getTeamWeapons(userId) {
-  return getSetting(`${TEAM_WEAPONS_KEY}:${userId}`) === '1';
+function getGlobalWeapons(userId) {
+  return getSetting(`${GLOBAL_WEAPONS_KEY}:${userId}`) === '1';
 }
 
-function setTeamWeapons(userId, enabled) {
-  setSetting(`${TEAM_WEAPONS_KEY}:${userId}`, enabled ? '1' : '0');
+function setGlobalWeapons(userId, enabled) {
+  setSetting(`${GLOBAL_WEAPONS_KEY}:${userId}`, enabled ? '1' : '0');
   return Boolean(enabled);
 }
 
@@ -647,8 +647,8 @@ module.exports = {
   setMaxGlobalRuns,
   getMaxGlobalUser,
   setMaxGlobalUser,
-  getTeamWeapons,
-  setTeamWeapons,
+  getGlobalWeapons,
+  setGlobalWeapons,
   globalRunLimitFor,
   setCooldown,
   clearCooldown,
