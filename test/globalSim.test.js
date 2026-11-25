@@ -159,6 +159,30 @@ describe('simulasi global', () => {
     assert.ok(body.includes('50 pertarungan pertama per tim'), body);
   });
 
+  it('daftar kekalahan tidak melewati batas 6000 karakter Discord', () => {
+    const losses = Array.from({ length: 20 }, (_, i) => ({
+      label: 'Tim Lawan Dengan Nama Panjang ' + (i + 1),
+      level: 100,
+      tally: { enemy: 50, tie: 0, player: 0 },
+      specs: [1, 2, 3].map(slot => ({
+        slot, level: 100, animal: 'snail', label: 'Pet Dengan Nama Cukup Panjang ' + slot,
+        weapon: { id: 1, quality: 100, passives: [{ id: 12, quality: 100 }] },
+      })),
+    }));
+    const json = panel.globalLossesEmbed({
+      losses,
+      tally: { enemy: 1000, tie: 0, player: 0 },
+      runs: 100,
+      lossPanelRuns: 50,
+    }, { playerLabel: 'Aku', showWeapons: true }).toJSON();
+
+    let length = (json.title || '').length + (json.description || '').length;
+    for (const field of json.fields || []) length += field.name.length + field.value.length;
+    if (json.footer) length += json.footer.text.length;
+    assert.ok(length <= 6000, `panjang embed ${length}`);
+    assert.ok((json.fields || []).length <= 20);
+  });
+
   it('menyembunyikan ikon senjata pada daftar kekalahan', async () => {
     store.createTeam('me', 'Lemah');
     store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 5 });

@@ -612,29 +612,34 @@ function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = fal
 
   const panelLosses = result.losses.reduce((sum, loss) => sum + loss.tally.enemy, 0);
   const sampled = result.lossPanelRuns && result.runs > result.lossPanelRuns;
-  embed.setDescription(
-    `**${playerLabel}** kalah dari **${result.losses.length}** tim`
+  const description = `**${playerLabel}** kalah dari **${result.losses.length}** tim`
     + ` (total ${panelLosses.toLocaleString('id-ID')} kekalahan).\n`
     + (sampled ? `-# Menampilkan ${result.lossPanelRuns} pertarungan pertama per tim.\n` : '')
-    + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.')
-  );
+    + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.');
+  embed.setDescription(description);
 
-  // Discord membatasi jumlah field; sisanya diringkas dalam satu baris.
-  const shown = result.losses.slice(0, 20);
-  for (const loss of shown) {
-    const { tally } = loss;
+  // Discord membatasi 20 field DAN total 6.000 karakter per embed. Tanpa
+  // anggaran karakter, 20 tim dengan tiga pet bisa melewati batas itu.
+  const MAX_EMBED_CHARS = 5900;
+  let used = embed.data.title.length + description.length;
+  const shown = [];
+  for (const loss of result.losses) {
+    if (shown.length >= 20) break;
+    const name = `${loss.label} · L.${loss.level}`.slice(0, 256);
     const detail = [
-      `Kalah **${tally.enemy.toLocaleString('id-ID')}**× · seri ${tally.tie.toLocaleString('id-ID')}× · menang ${tally.player.toLocaleString('id-ID')}×`,
+      `Kalah **${loss.tally.enemy.toLocaleString('id-ID')}**× · seri ${loss.tally.tie.toLocaleString('id-ID')}× · menang ${loss.tally.player.toLocaleString('id-ID')}×`,
       ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i, { showWeapons })),
     ].join('\n');
-    embed.addFields({
-      name: `${loss.label} · L.${loss.level}`.slice(0, 256),
-      value: detail.slice(0, 1024),
-      inline: false,
-    });
+    const available = MAX_EMBED_CHARS - used - name.length;
+    if (available < 80) break;
+    const value = detail.slice(0, Math.min(1024, available));
+    embed.addFields({ name, value, inline: false });
+    used += name.length + value.length;
+    shown.push(loss);
   }
   if (result.losses.length > shown.length) {
-    embed.setFooter({ text: `…dan ${result.losses.length - shown.length} tim lain tidak ditampilkan.` });
+    const footer = `…dan ${result.losses.length - shown.length} tim lain tidak ditampilkan.`;
+    if (used + footer.length <= 6000) embed.setFooter({ text: footer });
   }
   return embed;
 }
