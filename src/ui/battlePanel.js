@@ -4,6 +4,7 @@
 // supaya tampilan battle konsisten dengan panel dan game lain.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const data = require('../data/owoBattle');
+const passiveData = require('../data/owoPassives');
 const sim = require('../services/battleSim');
 const engine = require('../services/battleEngine');
 const { createRng } = require('../services/battleRng');
@@ -54,7 +55,10 @@ function slotIcon(entry) {
     parts.push(emoji.rankEmoji(entry.weaponQuality ?? data.DEFAULT_QUALITY));
     parts.push(emoji.weaponEmoji(entry.weaponId, entry.weaponQuality));
   }
-  for (const id of entry.passives || []) parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
+  for (const passive of entry.passives || []) {
+    const id = passive && typeof passive === 'object' ? passive.id : passive;
+    parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
+  }
   return parts.join('');
 }
 
@@ -94,16 +98,25 @@ function slotStats(entry) {
 }
 
 // Emoji senjata + pasif beserta quality, mis. `<fabled><frstaff><fhgen> 100%`.
-function weaponLine(entry) {
+// Saat `detailed` aktif, nama senjata dan pasif ikut ditulis supaya seluruh
+// perlengkapan tim bisa dibaca tanpa membuka tiap slot.
+function weaponLine(entry, { detailed = false } = {}) {
   if (!entry.weaponId) return '*tanpa senjata*';
   const quality = entry.weaponQuality ?? data.DEFAULT_QUALITY;
   const rank = qualityRank(quality);
+  const passiveIds = (entry.passives || [])
+    .map(passive => (passive && typeof passive === 'object' ? passive.id : passive));
   const icons = [
     emoji.rankEmoji(rank),
     emoji.weaponEmoji(entry.weaponId, rank),
-    ...(entry.passives || []).map(id => emoji.passiveEmoji(id, rank)),
+    ...passiveIds.map(id => emoji.passiveEmoji(id, rank)),
   ].join('');
-  return `${icons} ${qualityText(quality)}`;
+  if (!detailed) return `${icons} ${qualityText(quality)}`;
+  const passives = passiveIds
+    .map(id => passiveData.get(id)?.name)
+    .filter(Boolean);
+  return `${icons} ${qualityText(quality)} · **${weaponName(entry.weaponId)}**`
+    + (passives.length ? ` · ${passives.join(', ')}` : '');
 }
 
 // Nama field kosong: Discord menolak nama kosong, jadi pakai karakter tak
@@ -115,7 +128,7 @@ function addHint(prefix, slot) {
 }
 
 // Satu slot jadi satu field: judul `[1] L.100 <emoji> nama`, isi stat 4 baris.
-function slotField(entry, slot, prefix) {
+function slotField(entry, slot, prefix, { showWeapons = false } = {}) {
   if (!entry) return { name: BLANK, value: addHint(prefix, slot), inline: false };
 
   const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
@@ -130,7 +143,7 @@ function slotField(entry, slot, prefix) {
       `${emoji.statIcon('hp')} \`${stats.hp}\` ${emoji.statIcon('wp')} \`${stats.wp}\``,
       `${emoji.statIcon('att')} \`${stats.att}\` ${emoji.statIcon('mag')} \`${stats.mag}\``,
       `${emoji.statIcon('pr')} \`${stats.pr}%\` ${emoji.statIcon('mr')} \`${stats.mr}%\``,
-      weaponLine(entry),
+      weaponLine(entry, { detailed: showWeapons }),
     ].join('\n')
     : '*stat tidak terbaca*';
 
@@ -141,7 +154,7 @@ function slotField(entry, slot, prefix) {
   };
 }
 
-function teamEmbed(team, { prefix = 'd', active = false, slotId = null } = {}) {
+function teamEmbed(team, { prefix = 'd', active = false, slotId = null, showWeapons = false } = {}) {
   const id = slotId ?? team.slotId;
   const embed = new EmbedBuilder()
     .setColor(active ? COLOR.ok : COLOR.info)
@@ -152,7 +165,7 @@ function teamEmbed(team, { prefix = 'd', active = false, slotId = null } = {}) {
     });
 
   for (let slot = 1; slot <= MAX_SLOTS; slot++) {
-    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot, prefix));
+    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot, prefix, { showWeapons }));
   }
   return embed;
 }

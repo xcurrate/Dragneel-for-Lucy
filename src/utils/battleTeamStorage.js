@@ -569,6 +569,20 @@ function setMaxGlobalUser(value) {
   return n;
 }
 
+// Preferensi tampilan panel: tampilkan nama senjata dan pasif untuk seluruh
+// slot, bukan hanya ikon. Disimpan per user supaya pilihan bertahan saat
+// panel dibuka lagi.
+const TEAM_WEAPONS_KEY = 'team_weapons';
+
+function getTeamWeapons(userId) {
+  return getSetting(`${TEAM_WEAPONS_KEY}:${userId}`) === '1';
+}
+
+function setTeamWeapons(userId, enabled) {
+  setSetting(`${TEAM_WEAPONS_KEY}:${userId}`, enabled ? '1' : '0');
+  return Boolean(enabled);
+}
+
 // Batas yang berlaku untuk satu user: batas khusus user bila ada, kalau tidak
 // batas umum.
 function globalRunLimitFor() {
@@ -633,6 +647,8 @@ module.exports = {
   setMaxGlobalRuns,
   getMaxGlobalUser,
   setMaxGlobalUser,
+  getTeamWeapons,
+  setTeamWeapons,
   globalRunLimitFor,
   setCooldown,
   clearCooldown,

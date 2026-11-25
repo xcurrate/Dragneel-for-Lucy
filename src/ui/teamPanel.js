@@ -16,6 +16,7 @@ const NAV_NEXT = 'battle_tm_next';
 const NAV_PICK = 'battle_tm_pick';
 const NAV_DELETE = 'battle_tm_del';
 const NAV_EXPORT = 'battle_tm_export';
+const NAV_WEAPONS = 'battle_tm_weapons';
 const SEP = ':';
 
 // `dtm:<userId>:<index>` — index adalah posisi di daftar tim terurut ID.
@@ -30,7 +31,8 @@ function isTeamPanelNav(customId) {
       || customId === NAV_PICK
       || customId.startsWith(`${NAV_PICK}${SEP}`)
       || customId.startsWith(`${NAV_DELETE}${SEP}`)
-      || customId.startsWith(`${NAV_EXPORT}${SEP}`));
+      || customId.startsWith(`${NAV_EXPORT}${SEP}`)
+      || customId.startsWith(`${NAV_WEAPONS}${SEP}`));
 }
 
 function parsePanelNav(customId) {
@@ -47,7 +49,8 @@ function parsePanelNav(customId) {
       : parts[0] === NAV_PICK ? 'pick'
         : parts[0] === NAV_DELETE ? 'delete'
           : parts[0] === NAV_EXPORT ? 'export'
-            : null;
+            : parts[0] === NAV_WEAPONS ? 'weapons'
+              : null;
   if (!kind) return { ok: false };
   const confirm = parts.length === 4 ? parts[3] : null;
   if (confirm != null && !['yes', 'no'].includes(confirm)) return { ok: false };
@@ -63,7 +66,7 @@ function labelOf(team) {
   return team.slotId != null ? `[${team.slotId}] ${team.name}` : team.name;
 }
 
-function panelComponents(teams, index, userId, { active = null } = {}) {
+function panelComponents(teams, index, userId, { active = null, showWeapons = false } = {}) {
   const team = teams[index];
   const total = teams.length;
   const isActive = Boolean(active && team && active.id === team.id);
@@ -119,6 +122,15 @@ function panelComponents(teams, index, userId, { active = null } = {}) {
       .setEmoji('🗑️')
       .setStyle(ButtonStyle.Danger),
   ));
+  // Baris terpisah karena baris navigasi sudah memakai lima tombol.
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(navId(NAV_WEAPONS, userId, index))
+      .setLabel(showWeapons ? 'Senjata: ON' : 'Senjata: OFF')
+      .setEmoji('🗡️')
+      .setStyle(showWeapons ? ButtonStyle.Success : ButtonStyle.Secondary)
+      .setDisabled(!team),
+  ));
 
   return { rows, team };
 }
@@ -141,8 +153,8 @@ function deleteConfirmComponents(userId, index, name) {
   )];
 }
 
-function panelEmbed(team, { prefix = 'd', index = 0, total = 1, active = false } = {}) {
-  const embed = teamEmbed(team, { prefix, active });
+function panelEmbed(team, { prefix = 'd', index = 0, total = 1, active = false, showWeapons = false } = {}) {
+  const embed = teamEmbed(team, { prefix, active, showWeapons });
   const id = team.slotId != null ? `[${team.slotId}]` : '[?]';
   embed.setTitle(`🐾 ${id} ${team.name}`);
   embed.setColor(active ? COLOR.ok : COLOR.info);
@@ -168,7 +180,7 @@ function blueprintEmbed(team, { prefix = 'd' } = {}) {
 }
 
 // Pesan lengkap: embed + komponen. Tanpa tim, kembalikan embed ajakan membuat.
-function panelPayload(teams, index, userId, { prefix = 'd', active = null } = {}) {
+function panelPayload(teams, index, userId, { prefix = 'd', active = null, showWeapons = null } = {}) {
   const ordered = orderedTeams(teams);
   if (!ordered.length) {
     return {
@@ -181,10 +193,11 @@ function panelPayload(teams, index, userId, { prefix = 'd', active = null } = {}
     };
   }
   const safeIndex = Math.max(0, Math.min(index, ordered.length - 1));
-  const { rows, team } = panelComponents(ordered, safeIndex, userId, { active });
+  const detailed = showWeapons == null ? store.getTeamWeapons(userId) : showWeapons;
+  const { rows, team } = panelComponents(ordered, safeIndex, userId, { active, showWeapons: detailed });
   const isActive = active ? active.id === team.id : false;
   return {
-    embeds: [panelEmbed(team, { prefix, index: safeIndex, total: ordered.length, active: isActive })],
+    embeds: [panelEmbed(team, { prefix, index: safeIndex, total: ordered.length, active: isActive, showWeapons: detailed })],
     components: rows,
     team,
     index: safeIndex,
@@ -200,7 +213,7 @@ function indexOfActive(teams, active) {
 }
 
 module.exports = {
-  NAV_PREV, NAV_NEXT, NAV_PICK, NAV_DELETE, NAV_EXPORT, deleteConfirmComponents,
+  NAV_PREV, NAV_NEXT, NAV_PICK, NAV_DELETE, NAV_EXPORT, NAV_WEAPONS, deleteConfirmComponents,
   navId, isTeamPanelNav, parsePanelNav,
   orderedTeams, panelComponents, panelEmbed, blueprintEmbed, panelPayload, indexOfActive,
 };

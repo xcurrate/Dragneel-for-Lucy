@@ -37,6 +37,7 @@ function usage(prefix = 'd') {
     `\`${prefix} team blueprint <nama> | <blueprint>\` — sama, nama perintah eksplisit`,
     `\`${prefix} team pick <id|nama>\` — jadikan tim aktif`,
     `\`${prefix} team show [id|nama]\` — lihat isi tim`,
+    `\`${prefix} team weapons on|off\` — tampilkan nama senjata seluruh slot`,
     `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
     `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
     `\`${prefix} team clear <slot>\` — kosongkan slot`,
@@ -292,7 +293,12 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     if (team) await animalDex.ensureAnimalEmojis(animalsOf(team));
     if (!team) return say(send, message, name ? `❌ Tim **${name}** tidak ditemukan.` : `Belum ada tim aktif. Buat dengan \`${prefix} team new <nama>\`.`);
     const active = store.getActiveTeam(userId);
-    return send(message, teamEmbed(team, { prefix, active: !!active && active.id === team.id, slotId: team.slotId }));
+    return send(message, teamEmbed(team, {
+      prefix,
+      active: !!active && active.id === team.id,
+      slotId: team.slotId,
+      showWeapons: store.getTeamWeapons(userId),
+    }));
   }
 
   if (sub === 'del' || sub === 'hapus' || sub === 'delete') {
@@ -318,6 +324,28 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     const result = store.clearSlot(userId, teamName.name, rest[0]);
     if (result.error) return say(send, message, `❌ ${result.error}`);
     return say(send, message, `✅ Slot ${rest[0]} dikosongkan dari tim **${teamName.name}**.`);
+  }
+
+  if (sub === 'weapons' || sub === 'tampil-senjata' || sub === 'senjata-tampil') {
+    const arg = String(rest[0] || '').toLowerCase();
+    const on = ['on', 'aktif', '1', 'true'].includes(arg);
+    const off = ['off', 'nonaktif', '0', 'false'].includes(arg);
+    if (!on && !off) {
+      const current = store.getTeamWeapons(userId) ? 'ON' : 'OFF';
+      return say(send, message,
+        `Tampilan senjata saat ini: **${current}**.\n`
+        + `Ubah dengan \`${prefix} team weapons on\` atau \`${prefix} team weapons off\`.`);
+    }
+    store.setTeamWeapons(userId, on);
+    const team = store.getActiveTeam(userId);
+    if (!team) return say(send, message, `Tampilan senjata: **${on ? 'ON' : 'OFF'}**. Belum ada tim aktif.`);
+    await animalDex.ensureAnimalEmojis(animalsOf(team));
+    return send(message, teamEmbed(team, {
+      prefix,
+      active: true,
+      slotId: team.slotId,
+      showWeapons: on,
+    }));
   }
 
   if (sub === 's' || sub === 'senjata' || sub === 'weapon') {
@@ -500,6 +528,11 @@ async function handleTeamPanelNav(i, deps = {}) {
   // Ekspor hanya membaca tim yang sedang ditampilkan; tidak mengubah tim aktif.
   if (parsed.kind === 'export') {
     return i.reply({ embeds: [teamPanel.blueprintEmbed(target, { prefix })], flags: MessageFlags.Ephemeral });
+  }
+
+  // Toggle tampilan senjata hanya mengubah preferensi user, bukan tim aktif.
+  if (parsed.kind === 'weapons') {
+    store.setTeamWeapons(i.user.id, !store.getTeamWeapons(i.user.id));
   }
 
   // Panah dan select menu hanya berpindah tampilan. Tim diaktifkan lewat
