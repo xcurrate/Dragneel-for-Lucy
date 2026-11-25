@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags, Partials } = require('discord.js');
 const command = require('./commands/boss');
-const { handlePrefixCommand } = require('./commands/prefix');
+const { handlePrefixCommand, isDeveloper } = require('./commands/prefix');
 const battleTeam = require('./commands/battleTeam');
 const battleSim = require('./commands/battleSim');
 const teamPanel = require('./ui/teamPanel');
@@ -154,7 +154,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && battlePanel.isGlobalLossButton(i.customId)) { await battleSim.handleGlobalLossButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
     if (i.isButton() && battlePanel.isRepeatButton(i.customId)) { await battleSim.handleRepeatButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
     if ((i.isButton() || i.isStringSelectMenu()) && teamPanel.isTeamPanelNav(i.customId)) {
-      await battleTeam.handleTeamPanelNav(i, { prefix: prefixForGuild(i.guildId) });
+      await battleTeam.handleTeamPanelNav(i, { prefix: prefixForGuild(i.guildId), isDeveloper });
       return;
     }
     if (i.isButton() || i.isStringSelectMenu()) { await command.handleComponent(i, tracker); return; }

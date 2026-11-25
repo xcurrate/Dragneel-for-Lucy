@@ -66,7 +66,7 @@ function labelOf(team) {
   return team.slotId != null ? `[${team.slotId}] ${team.name}` : team.name;
 }
 
-function panelComponents(teams, index, userId, { active = null, showWeapons = false } = {}) {
+function panelComponents(teams, index, userId, { active = null, showWeapons = false, isDeveloper = false } = {}) {
   const team = teams[index];
   const total = teams.length;
   const isActive = Boolean(active && team && active.id === team.id);
@@ -122,15 +122,18 @@ function panelComponents(teams, index, userId, { active = null, showWeapons = fa
       .setEmoji('🗑️')
       .setStyle(ButtonStyle.Danger),
   ));
-  // Baris terpisah karena baris navigasi sudah memakai lima tombol.
-  rows.push(new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(navId(NAV_WEAPONS, userId, index))
-      .setLabel(showWeapons ? 'Senjata: ON' : 'Senjata: OFF')
-      .setEmoji('🗡️')
-      .setStyle(showWeapons ? ButtonStyle.Success : ButtonStyle.Secondary)
-      .setDisabled(!team),
-  ));
+  // Toggle senjata hanya untuk developer. Baris terpisah karena baris
+  // navigasi sudah memakai lima tombol.
+  if (isDeveloper) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(navId(NAV_WEAPONS, userId, index))
+        .setLabel(showWeapons ? 'Senjata: ON' : 'Senjata: OFF')
+        .setEmoji('🗡️')
+        .setStyle(showWeapons ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setDisabled(!team),
+    ));
+  }
 
   return { rows, team };
 }
@@ -180,7 +183,7 @@ function blueprintEmbed(team, { prefix = 'd' } = {}) {
 }
 
 // Pesan lengkap: embed + komponen. Tanpa tim, kembalikan embed ajakan membuat.
-function panelPayload(teams, index, userId, { prefix = 'd', active = null, showWeapons = null } = {}) {
+function panelPayload(teams, index, userId, { prefix = 'd', active = null, showWeapons = null, isDeveloper = false } = {}) {
   const ordered = orderedTeams(teams);
   if (!ordered.length) {
     return {
@@ -193,8 +196,8 @@ function panelPayload(teams, index, userId, { prefix = 'd', active = null, showW
     };
   }
   const safeIndex = Math.max(0, Math.min(index, ordered.length - 1));
-  const detailed = showWeapons == null ? store.getTeamWeapons(userId) : showWeapons;
-  const { rows, team } = panelComponents(ordered, safeIndex, userId, { active, showWeapons: detailed });
+  const detailed = isDeveloper && (showWeapons == null ? store.getTeamWeapons(userId) : showWeapons);
+  const { rows, team } = panelComponents(ordered, safeIndex, userId, { active, showWeapons: detailed, isDeveloper });
   const isActive = active ? active.id === team.id : false;
   return {
     embeds: [panelEmbed(team, { prefix, index: safeIndex, total: ordered.length, active: isActive, showWeapons: detailed })],

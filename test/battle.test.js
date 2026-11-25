@@ -891,16 +891,33 @@ describe('balasan command memakai embed', () => {
     });
     store.setActiveTeam('u', 'Senjata');
 
-    await handleTeamCommand(message('d team weapons on'), ['weapons', 'on'], 'd', { sendEmbed });
+    await handleTeamCommand(message('d team weapons on'), ['weapons', 'on'], 'd', {
+      sendEmbed, isDeveloper: () => true,
+    });
     assert.ok(JSON.stringify(replies[0]).includes('Great Sword'), 'ON menampilkan nama senjata');
 
     replies = [];
-    await handleTeamCommand(message('d team show'), ['show'], 'd', { sendEmbed });
+    await handleTeamCommand(message('d team show'), ['show'], 'd', {
+      sendEmbed, isDeveloper: () => true,
+    });
     assert.ok(JSON.stringify(replies[0]).includes('Great Sword'), 'team show mengikuti preferensi ON');
 
     replies = [];
-    await handleTeamCommand(message('d team weapons off'), ['weapons', 'off'], 'd', { sendEmbed });
+    await handleTeamCommand(message('d team weapons off'), ['weapons', 'off'], 'd', {
+      sendEmbed, isDeveloper: () => true,
+    });
     assert.ok(!JSON.stringify(replies[0]).includes('Great Sword'), 'OFF menyembunyikan nama senjata');
+  });
+
+  it('toggle senjata ditolak untuk user biasa', async () => {
+    store.createTeam('u', 'Senjata');
+    store.setSlot('u', 'Senjata', 1, {
+      custom: COEFFS_STRONG, level: 60, weaponId: 1, passives: [{ id: 12 }],
+    });
+    store.setActiveTeam('u', 'Senjata');
+    await handleTeamCommand(message('d team weapons on'), ['weapons', 'on'], 'd', { sendEmbed });
+    assert.match(replies[0].description, /hanya untuk developer/);
+    assert.strictEqual(store.getTeamWeapons('u'), false, 'preferensi tidak berubah');
   });
 
   it('blueprint yang salah tidak membuat tim setengah jadi', async () => {
@@ -3525,16 +3542,23 @@ describe('panel tim: tombol hapus', () => {
       custom: COEFFS_STRONG, level: 60, weaponId: 1, passives: [{ id: 12 }],
     });
     const on = interaction(teamPanel.navId(teamPanel.NAV_WEAPONS, 'u', 0));
-    await handleTeamPanelNav(on);
+    await handleTeamPanelNav(on, { isDeveloper: () => true });
     assert.strictEqual(store.getTeamWeapons('u'), true);
     assert.ok(JSON.stringify(on.updated.embeds[0].toJSON()).includes('Great Sword'));
     assert.strictEqual(on.updated.components[2].toJSON().components[0].label, 'Senjata: ON');
 
     const off = interaction(teamPanel.navId(teamPanel.NAV_WEAPONS, 'u', 0));
-    await handleTeamPanelNav(off);
+    await handleTeamPanelNav(off, { isDeveloper: () => true });
     assert.strictEqual(store.getTeamWeapons('u'), false);
     assert.ok(!JSON.stringify(off.updated.embeds[0].toJSON()).includes('Great Sword'));
     assert.strictEqual(off.updated.components[2].toJSON().components[0].label, 'Senjata: OFF');
+  });
+
+  it('tombol Senjata ditolak untuk user biasa', async () => {
+    const i = interaction(teamPanel.navId(teamPanel.NAV_WEAPONS, 'u', 0));
+    await handleTeamPanelNav(i);
+    assert.match(i.out.embeds[0].toJSON().description, /hanya untuk developer/);
+    assert.strictEqual(store.getTeamWeapons('u'), false, 'preferensi tidak berubah');
   });
 
   it('panah hanya berpindah tampilan dan tidak mengubah tim aktif', async () => {
