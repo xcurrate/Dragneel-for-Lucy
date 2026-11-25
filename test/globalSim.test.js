@@ -112,28 +112,6 @@ describe('simulasi global', () => {
     assert.strictEqual(result.streak.avg, 10);
   });
 
-  it('menghitung Max Streak dari rata-rata streak terpanjang tiap ronde', async () => {
-    store.createTeam('me', 'Dewa');
-    store.setSlot('me', 'Dewa', 1, { custom: { hp: 40, att: 40, pr: 10, wp: 10, mag: 40, mr: 10 }, level: 500 });
-    for (const name of ['Cupu1', 'Cupu2', 'Cupu3']) {
-      store.createTeam('rival', name);
-      store.setSlot('rival', name, 1, { custom: COEFFS_WEAK, level: 1 });
-    }
-
-    const cmd = require(path.join(ROOT, 'src/commands/battleSim'));
-    const player = cmd.resolveTeamSpecs(store.getTeam('me', 'Dewa'));
-    const opponents = ['Cupu1', 'Cupu2', 'Cupu3'].map(name => ({
-      label: name,
-      specs: cmd.resolveTeamSpecs(store.getTeam('rival', name)).specs,
-    }));
-    const result = await globalSim.runGlobalSimRounds(player.specs, opponents, { rounds: 2, seed: 21 });
-
-    assert.strictEqual(result.battles, 6);
-    assert.strictEqual(result.streak.max, 3, 'tiap ronde menang 3 kali');
-    assert.strictEqual(result.streak.maxAvg, 3, 'rata-rata max tiap ronde');
-    assert.strictEqual(result.streak.avg, 3);
-  });
-
   it('mencatat tim yang mengalahkan pemain beserta jumlah kekalahannya', async () => {
     store.createTeam('me', 'Lemah');
     store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 5 });
@@ -410,6 +388,32 @@ describe('simulasi global', () => {
 
     await handleSimCommand(message('d sim global -m 1'), ['global', '-m', '1'], 'd', { sendEmbed, isDeveloper: () => true });
     assert.ok(replies[0].description.includes('Belum ada tim lawan'));
+  });
+
+  it('Max Streak memakai rata-rata Terpanjang dari 5 simulasi penuh', async () => {
+    seedWorld();
+    const cmd = require(path.join(ROOT, 'src/commands/battleSim'));
+    const active = store.getActiveTeam('me');
+    const player = cmd.resolveTeamSpecs(active);
+    const opponents = store.listAllTeams()
+      .filter(team => team.id !== active.id)
+      .map(team => ({ label: team.name, specs: cmd.resolveTeamSpecs(team).specs }));
+
+    let sum = 0;
+    for (let i = 0; i < 5; i++) {
+      const run = await globalSim.runGlobalSim(player.specs, opponents, { runs: 5, seed: 9 + i });
+      sum += run.streak.max;
+    }
+    const expected = Math.round(sum / 5);
+
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 5 -s 9'), ['global', '-m', '5', '-s', '9'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    const body = JSON.stringify(payload.embeds[0].toJSON());
+    assert.ok(body.includes(`Max Streak **${expected}**`), `Max Streak ${expected}`);
   });
 
   it('embed hasil memuat semua angka yang diminta', async () => {

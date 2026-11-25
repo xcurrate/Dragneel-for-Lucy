@@ -424,7 +424,7 @@ function globalUsage(prefix = 'd') {
     '(hanya terlihat olehmu, senjata lawan disembunyikan).',
     '',
     `Opsi:`,
-    `\`-m <jumlah>\` jumlah ronde; tiap ronde satu pertarungan melawan semua tim lawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
+    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
     `\`-total <jumlah>\` total pertarungan, dibagi rata ke semua tim lawan`,
     `\`-qp <0-100>\` kualitas senjata tim kamu (menimpa kualitas slot)`,
     `\`-qe <0-100>\` kualitas senjata semua tim lawan`,
@@ -616,13 +616,27 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
 
   let result;
   try {
-    result = await globalSim.runGlobalSimRounds(player.specs, opponents, {
-      rounds: runCount.value,
-      seed: seed != null ? Number(seed) : undefined,
+    const baseSeed = seed != null ? Number(seed) : undefined;
+    result = await globalSim.runGlobalSim(player.specs, opponents, {
+      runs: runCount.value,
+      seed: baseSeed,
       playerQuality,
       enemyQuality,
       onProgress: publishProgress,
     });
+
+    // Max Streak = rata-rata streak terpanjang dari 5 simulasi penuh.
+    let maxSum = result.streak.max;
+    for (let i = 1; i < 5; i++) {
+      const extra = await globalSim.runGlobalSim(player.specs, opponents, {
+        runs: runCount.value,
+        seed: baseSeed == null ? undefined : baseSeed + i,
+        playerQuality,
+        enemyQuality,
+      });
+      maxSum += extra.streak.max;
+    }
+    result.streak.maxAvg = Math.round(maxSum / 5);
   } catch (error) {
     // Antrean penuh bukan kesalahan user: beri tahu dan lepas cooldown supaya
     // bisa langsung mencoba lagi.

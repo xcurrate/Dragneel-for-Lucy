@@ -8,7 +8,7 @@ const path = require('node:path');
 const { Worker } = require('node:worker_threads');
 const { randomSeed } = require('./battleRng');
 const {
-  LEVEL_THRESHOLD, emptyTally, emptyBucket, rate, aggregateChunk, runSeed,
+  LEVEL_THRESHOLD, emptyTally, emptyBucket, rate, aggregateChunk,
 } = require('./globalSimCore');
 
 const WORKER_FILE = path.join(__dirname, 'globalSimWorker.js');
@@ -197,7 +197,7 @@ function mergeChunks(chunks) {
     winRate: rate(tally.player, battles),
     lossRate: rate(tally.enemy, battles),
     tieRate: rate(tally.tie, battles),
-    streak: { avg: count ? Math.round((sum / count) * 10) / 10 : 0, max: maxStreak, count, sum },
+    streak: { avg: count ? Math.round((sum / count) * 10) / 10 : 0, max: maxStreak, count },
     avgLosses: opponentCount ? Math.round((tally.enemy / opponentCount) * 10) / 10 : 0,
     buckets: { low: summarize(buckets.low), high: summarize(buckets.high) },
     losses,
@@ -327,95 +327,7 @@ async function runSimulation(playerSpecs, opponents, {
   };
 }
 
-// Jalankan `rounds` simulasi global, masing-masing satu pertarungan per lawan.
-// Streak terpanjang tiap ronde dirata-ratakan untuk metrik Max Streak.
-function roundsToChunks(results) {
-  return results.map((result, index) => ({
-    battles: result.battles,
-    tally: result.tally,
-    buckets: {
-      low: {
-        ...result.buckets.low,
-        teams: index === 0 ? result.buckets.low.teams : 0,
-        levelSum: index === 0 ? result.buckets.low.levelSum : 0,
-      },
-      high: {
-        ...result.buckets.high,
-        teams: index === 0 ? result.buckets.high.teams : 0,
-        levelSum: index === 0 ? result.buckets.high.levelSum : 0,
-      },
-    },
-    losses: result.losses,
-    streak: {
-      head: 0,
-      tail: 0,
-      sum: result.streak.sum,
-      count: result.streak.count,
-      maxInternal: result.streak.max,
-    },
-  }));
-}
-
-async function runGlobalSimRounds(playerSpecs, opponents, {
-  rounds = 100, seed = randomSeed(), onProgress, playerQuality, enemyQuality,
-} = {}) {
-  await acquireSlot();
-  try {
-    const roundCount = Math.max(1, Math.floor(Number(rounds) || 1));
-    const startedAt = Date.now();
-    const total = roundCount * opponents.length;
-    const results = [];
-    const tally = emptyTally();
-    let done = 0;
-
-    for (let round = 0; round < roundCount; round++) {
-      const result = await runSimulation(playerSpecs, opponents, {
-        runs: 1,
-        seed: runSeed(seed, round, 0),
-        playerQuality,
-        enemyQuality,
-      });
-      results.push(result);
-      done += result.battles;
-      for (const key of ['player', 'enemy', 'tie']) tally[key] += result.tally[key];
-      if (onProgress) {
-        const elapsed = Date.now() - startedAt;
-        onProgress({
-          done,
-          total,
-          etaMs: done > 0 ? Math.round((elapsed / done) * (total - done)) : null,
-          tally: { ...tally },
-          winRate: rate(tally.player, done),
-          lossRate: rate(tally.enemy, done),
-          tieRate: rate(tally.tie, done),
-          avgTurns: 0,
-        });
-      }
-    }
-
-    const merged = mergeChunks(roundsToChunks(results));
-    merged.losses.sort((a, b) => b.tally.enemy - a.tally.enemy || a.label.localeCompare(b.label));
-    const maxSum = results.reduce((sum, result) => sum + result.streak.max, 0);
-
-    return {
-      seed,
-      runs: roundCount,
-      opponents: opponents.length,
-      workers: planWorkers(opponents.length, 1),
-      battles: merged.battles,
-      durationMs: Date.now() - startedAt,
-      ...merged,
-      streak: {
-        ...merged.streak,
-        maxAvg: Math.round(maxSum / roundCount),
-      },
-    };
-  } finally {
-    releaseSlot();
-  }
-}
-
 module.exports = {
-  LEVEL_THRESHOLD, runGlobalSim, runGlobalSimRounds, rate, mergeChunks, planWorkers, splitWork,
+  LEVEL_THRESHOLD, runGlobalSim, rate, mergeChunks, planWorkers, splitWork,
   MAX_WORKERS, queueInfo, MAX_QUEUE, MIN_BATTLES_FOR_WORKERS,
 };
