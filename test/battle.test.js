@@ -3399,13 +3399,14 @@ describe('panel tim: tombol hapus', () => {
 
   // Interaction tiruan: `reply` untuk konfirmasi ephemeral, `update` untuk
   // menimpa panel, dan `followUp` untuk pesan tambahan.
-  function interaction(customId, userId = 'u') {
+  function interaction(customId, userId = 'u', values = null) {
     const i = {
       customId,
       user: { id: userId },
+      values,
       out: null,
       updated: null,
-      isStringSelectMenu: () => false,
+      isStringSelectMenu: () => values != null,
     };
     i.reply = async payload => { i.out = payload; };
     i.update = async payload => { i.updated = payload; };
@@ -3479,6 +3480,15 @@ describe('panel tim: tombol hapus', () => {
     assert.ok(!i.updated, 'panel milik orang lain tidak ditimpa');
     const active = store.getActiveTeam('u');
     assert.strictEqual(active.name, 'Alpha', 'tim aktif pemilik tidak berubah');
+  });
+
+  it('dropdown hanya berpindah tampilan tanpa mengaktifkan tim', async () => {
+    const i = interaction(`${teamPanel.NAV_PICK}:u`, 'u', ['1']);
+    await handleTeamPanelNav(i);
+    assert.strictEqual(store.getActiveTeam('u').name, 'Alpha', 'tim aktif tidak berubah');
+    assert.ok(i.updated.embeds[0].toJSON().title.includes('Beta'), 'tampilan pindah ke Beta');
+    assert.strictEqual(i.updated.components[1].toJSON().components[1].style, 1, 'tombol pilih masih biru');
+    assert.ok(!i.updated.components[0].toJSON().components[0].options[1].label.startsWith('⭐ '), 'belum ada bintang');
   });
 
   it('tombol Pilih Tim Ini mengaktifkan tim yang sedang ditampilkan', async () => {

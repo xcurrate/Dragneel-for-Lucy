@@ -484,10 +484,12 @@ async function handleTeamPanelNav(i, deps = {}) {
     return handleDeleteNav(i, parsed, prefix);
   }
 
+  // Select menu hanya berpindah tampilan, sama seperti panah. Tim baru
+  // diaktifkan oleh tombol "Pilih Tim Ini".
+  const isSelect = Boolean(i.isStringSelectMenu?.());
   let index = parsed.index;
   if (parsed.kind === 'pick') {
-    // Select menu mengirim nilai berupa indeks, bukan nama tim.
-    const value = i.isStringSelectMenu?.() ? Number(i.values?.[0]) : index;
+    const value = isSelect ? Number(i.values?.[0]) : index;
     index = Number.isInteger(value) && value >= 0 ? value : teamPanel.indexOfActive(teams, store.getActiveTeam(i.user.id));
   }
 
@@ -500,17 +502,17 @@ async function handleTeamPanelNav(i, deps = {}) {
     return i.reply({ embeds: [teamPanel.blueprintEmbed(target, { prefix })], flags: MessageFlags.Ephemeral });
   }
 
-  // Panah hanya berpindah tampilan. Tim diaktifkan lewat tombol "Pilih Tim Ini"
-  // atau select menu.
-  if (parsed.kind === 'pick') {
+  // Panah dan select menu hanya berpindah tampilan. Tim diaktifkan lewat
+  // tombol "Pilih Tim Ini".
+  if (parsed.kind === 'pick' && !isSelect) {
     store.setActiveTeam(i.user.id, String(target.slotId ?? target.name));
   }
   await animalDex.ensureAnimalEmojis(teams.flatMap(animalsOf));
   const fresh = store.listTeams(i.user.id);
   const active = store.getActiveTeam(i.user.id);
-  // Panah mempertahankan tim yang sedang dilihat; tombol pilih mengikuti tim
-  // aktif yang baru.
-  const panelIndex = parsed.kind === 'pick'
+  // Panah dan select menu mempertahankan tim yang sedang dilihat; tombol
+  // pilih mengikuti tim aktif yang baru.
+  const panelIndex = parsed.kind === 'pick' && !isSelect
     ? teamPanel.indexOfActive(fresh, active)
     : Math.max(0, Math.min(index, fresh.length - 1));
   const payload = teamPanel.panelPayload(fresh, panelIndex, i.user.id, { prefix, active });
