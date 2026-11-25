@@ -69,6 +69,23 @@ describe('parser komposisi inline', () => {
 });
 
 describe('blueprint tim', () => {
+  it('tidak menulis quality default 100 saat ekspor', () => {
+    const result = blueprint.teamToBlueprint({
+      slots: [
+        {
+          slot: 1, animalKey: 'snail', level: 50, weaponId: 1,
+          weaponQuality: 100, passives: [{ id: 12 }, { id: 9 }],
+        },
+        {
+          slot: 2, animalKey: 'snail', level: 50, weaponId: 5,
+          weaponQuality: [100, 50], passives: [{ id: 19, quality: [100, 100] }],
+        },
+      ],
+    });
+    assert.ok(!result.error, result.error);
+    assert.equal(result.blueprint, '50 snail gsword crit mtap, 50 snail aegis 100,50 sac');
+  });
+
   it('mengubah spec menjadi payload slot dan bisa dibaca balik', () => {
     const parsed = parser.parseInlineSide(['50', 'snail', 'gsword', '100', 'crit', 'mtap']);
     assert.ok(!parsed.error, parsed.error);

@@ -209,7 +209,7 @@ describe('panel tim', () => {
     const fresh = store.getTeamById(team.id);
     const embed = teamPanel.blueprintEmbed(fresh, { prefix: 'd' }).toJSON();
     assert.match(embed.title, /Blueprint/);
-    assert.match(embed.description, /50 snail gsword 100 crit mtap/);
+    assert.match(embed.description, /50 snail gsword crit mtap/);
     assert.match(embed.description, /10 snail rune sg/);
   });
 

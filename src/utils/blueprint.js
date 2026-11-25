@@ -13,6 +13,13 @@ function qualityText(quality) {
   return Array.isArray(quality) ? quality.join(',') : String(quality);
 }
 
+// Quality 100 (Fabled) adalah default parser. Menuliskannya hanya membuat
+// blueprint lebih panjang tanpa mengubah hasil.
+function isDefaultQuality(quality) {
+  const values = Array.isArray(quality) ? quality : [quality];
+  return values.length > 0 && values.every(value => Number(value) === data.DEFAULT_QUALITY);
+}
+
 function teamToBlueprint(team) {
   const slots = [...(team?.slots || [])].sort((a, b) => a.slot - b.slot);
   if (!slots.length) return { error: 'Tim ini belum punya slot untuk diekspor.' };
@@ -34,14 +41,18 @@ function teamToBlueprint(team) {
       const weapon = data.weapons().find(w => w.id === slot.weaponId);
       if (!weapon) return { error: `Slot ${slot.slot}: senjata #${slot.weaponId} tidak dikenal.` };
       text += ` ${aliasOf(weapon)}`;
-      if (slot.weaponQuality != null) text += ` ${qualityText(slot.weaponQuality)}`;
+      if (slot.weaponQuality != null && !isDefaultQuality(slot.weaponQuality)) {
+        text += ` ${qualityText(slot.weaponQuality)}`;
+      }
 
       for (const raw of slot.passives || []) {
         const passive = typeof raw === 'object' ? raw : { id: raw };
         const def = passiveData.get(passive.id);
         if (!def) return { error: `Slot ${slot.slot}: pasif #${passive.id} tidak dikenal.` };
         text += ` ${aliasOf(def)}`;
-        if (passive.quality != null) text += ` ${qualityText(passive.quality)}`;
+        if (passive.quality != null && !isDefaultQuality(passive.quality)) {
+          text += ` ${qualityText(passive.quality)}`;
+        }
       }
     } else if (slot.passives?.length) {
       return { error: `Slot ${slot.slot} punya pasif tanpa senjata.` };
@@ -70,4 +81,4 @@ function specsToSlots(specs) {
   });
 }
 
-module.exports = { teamToBlueprint, specsToSlots, qualityText, aliasOf };
+module.exports = { teamToBlueprint, specsToSlots, qualityText, aliasOf, isDefaultQuality };

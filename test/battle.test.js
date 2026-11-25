@@ -3572,7 +3572,7 @@ describe('panel tim: tombol hapus', () => {
     store.setSlot('u', 'Alpha', 1, { animalKey: 'snail', level: 50, weaponId: 1, weaponQuality: [100], passives: [{ id: 12 }, { id: 9 }] });
     const i = interaction(teamPanel.navId(teamPanel.NAV_EXPORT, 'u', 0));
     await handleTeamPanelNav(i);
-    assert.ok(i.out.embeds[0].toJSON().description.includes('50 snail gsword 100 crit mtap'));
+    assert.ok(i.out.embeds[0].toJSON().description.includes('50 snail gsword crit mtap'));
     assert.equal(store.getActiveTeam('u').name, 'Alpha', 'ekspor tidak mengubah tim aktif');
   });
 
