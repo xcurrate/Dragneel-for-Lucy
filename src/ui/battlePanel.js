@@ -580,6 +580,7 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
         value: [
           `Rata-rata **${result.streak.avg.toLocaleString('id-ID')}**`,
           `Terpanjang **${result.streak.max.toLocaleString('id-ID')}**`,
+          `Max Streak **${(result.streak.maxAvg ?? 0).toLocaleString('id-ID')}**`,
         ].join('\n'),
         inline: true,
       },

@@ -417,13 +417,14 @@ function globalUsage(prefix = 'd') {
     `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** (kecuali tim yang dipilih)`,
     `\`${prefix} sim global <blueprint>\` — blueprint melawan seluruh tim tersimpan`,
     '',
-    'Hasil berisi: rata-rata streak, rata-rata kalah, dan rekap menang/seri/kalah',
+    'Hasil berisi: rata-rata streak, streak terpanjang, Max Streak, rata-rata kalah,',
+    'dan rekap menang/seri/kalah',
     'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
     'Tombol **Lihat kekalahan** menampilkan tim mana saja yang mengalahkan kamu',
     '(hanya terlihat olehmu, senjata lawan disembunyikan).',
     '',
     `Opsi:`,
-    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
+    `\`-m <jumlah>\` jumlah ronde; tiap ronde satu pertarungan melawan semua tim lawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
     `\`-total <jumlah>\` total pertarungan, dibagi rata ke semua tim lawan`,
     `\`-qp <0-100>\` kualitas senjata tim kamu (menimpa kualitas slot)`,
     `\`-qe <0-100>\` kualitas senjata semua tim lawan`,
@@ -615,8 +616,8 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
 
   let result;
   try {
-    result = await globalSim.runGlobalSim(player.specs, opponents, {
-      runs: runCount.value,
+    result = await globalSim.runGlobalSimRounds(player.specs, opponents, {
+      rounds: runCount.value,
       seed: seed != null ? Number(seed) : undefined,
       playerQuality,
       enemyQuality,

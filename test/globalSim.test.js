@@ -112,6 +112,28 @@ describe('simulasi global', () => {
     assert.strictEqual(result.streak.avg, 10);
   });
 
+  it('menghitung Max Streak dari rata-rata streak terpanjang tiap ronde', async () => {
+    store.createTeam('me', 'Dewa');
+    store.setSlot('me', 'Dewa', 1, { custom: { hp: 40, att: 40, pr: 10, wp: 10, mag: 40, mr: 10 }, level: 500 });
+    for (const name of ['Cupu1', 'Cupu2', 'Cupu3']) {
+      store.createTeam('rival', name);
+      store.setSlot('rival', name, 1, { custom: COEFFS_WEAK, level: 1 });
+    }
+
+    const cmd = require(path.join(ROOT, 'src/commands/battleSim'));
+    const player = cmd.resolveTeamSpecs(store.getTeam('me', 'Dewa'));
+    const opponents = ['Cupu1', 'Cupu2', 'Cupu3'].map(name => ({
+      label: name,
+      specs: cmd.resolveTeamSpecs(store.getTeam('rival', name)).specs,
+    }));
+    const result = await globalSim.runGlobalSimRounds(player.specs, opponents, { rounds: 2, seed: 21 });
+
+    assert.strictEqual(result.battles, 6);
+    assert.strictEqual(result.streak.max, 3, 'tiap ronde menang 3 kali');
+    assert.strictEqual(result.streak.maxAvg, 3, 'rata-rata max tiap ronde');
+    assert.strictEqual(result.streak.avg, 3);
+  });
+
   it('mencatat tim yang mengalahkan pemain beserta jumlah kekalahannya', async () => {
     store.createTeam('me', 'Lemah');
     store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 5 });
@@ -405,6 +427,7 @@ describe('simulasi global', () => {
     assert.ok(names.includes('Max level < 35'));
     assert.ok(names.includes('Max level ≥ 35'));
     assert.ok(body.includes('Streak'), 'ada rata-rata streak');
+    assert.ok(body.includes('Max Streak'), 'ada Max Streak');
     assert.ok(!body.includes('Kalah per tim'), 'field kalah per tim sudah dihapus');
     assert.ok(body.includes('menang') && body.includes('seri') && body.includes('kalah'));
   });
