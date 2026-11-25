@@ -8,6 +8,9 @@ const { runBattle } = require('./battleEngine');
 const { createRng } = require('./battleRng');
 
 const LEVEL_THRESHOLD = 35;
+// Panel "Lihat kekalahan" memakai 50 pertarungan pertama per tim, bukan
+// seluruh run, supaya isinya tetap 50 meskipun simulasi global memakai 100.
+const LOSS_PANEL_RUNS = 50;
 
 function maxLevelOf(specs) {
   return specs.reduce((max, spec) => Math.max(max, Number(spec.level) || 0), 0);
@@ -97,7 +100,10 @@ function aggregateChunk(playerSpecs, opponents, {
     const key = opponent.teamId != null ? `t${opponent.teamId}` : `n${opponent.label}`;
     let entry = perOpponent.get(key);
     if (!entry) {
-      entry = { ...opponent, level, battles: 0, tally: emptyTally() };
+      entry = {
+        ...opponent, level, battles: 0, tally: emptyTally(),
+        panelBattles: 0, panelTally: emptyTally(),
+      };
       perOpponent.set(key, entry);
     }
 
@@ -108,6 +114,10 @@ function aggregateChunk(playerSpecs, opponents, {
       bucket.tally[result.winner] += 1;
       entry.tally[result.winner] += 1;
       entry.battles += 1;
+      if (i < LOSS_PANEL_RUNS) {
+        entry.panelTally[result.winner] += 1;
+        entry.panelBattles += 1;
+      }
       bucket.battles += 1;
       battles += 1;
 
@@ -150,6 +160,6 @@ function aggregateChunk(playerSpecs, opponents, {
 }
 
 module.exports = {
-  LEVEL_THRESHOLD, PROGRESS_STEP, maxLevelOf, emptyTally, emptyBucket, rate,
+  LEVEL_THRESHOLD, LOSS_PANEL_RUNS, PROGRESS_STEP, maxLevelOf, emptyTally, emptyBucket, rate,
   mixSeed, runSeed, aggregateChunk,
 };

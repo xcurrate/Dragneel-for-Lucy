@@ -631,9 +631,12 @@ function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = fal
     );
   }
 
+  const panelLosses = result.losses.reduce((sum, loss) => sum + loss.tally.enemy, 0);
+  const sampled = result.lossPanelRuns && result.runs > result.lossPanelRuns;
   embed.setDescription(
     `**${playerLabel}** kalah dari **${result.losses.length}** tim`
-    + ` (total ${result.tally.enemy.toLocaleString('id-ID')} kekalahan).\n`
+    + ` (total ${panelLosses.toLocaleString('id-ID')} kekalahan).\n`
+    + (sampled ? `-# Menampilkan ${result.lossPanelRuns} pertarungan pertama per tim.\n` : '')
     + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.')
   );
 

@@ -8,7 +8,7 @@ const path = require('node:path');
 const { Worker } = require('node:worker_threads');
 const { randomSeed } = require('./battleRng');
 const {
-  LEVEL_THRESHOLD, emptyTally, emptyBucket, rate, aggregateChunk,
+  LEVEL_THRESHOLD, LOSS_PANEL_RUNS, emptyTally, emptyBucket, rate, aggregateChunk,
 } = require('./globalSimCore');
 
 const WORKER_FILE = path.join(__dirname, 'globalSimWorker.js');
@@ -153,10 +153,18 @@ function mergeChunks(chunks) {
       const key = loss.teamId != null ? `t${loss.teamId}` : `n${loss.label}`;
       const entry = perOpponent.get(key);
       if (!entry) {
-        perOpponent.set(key, { ...loss, tally: { ...loss.tally } });
+        perOpponent.set(key, {
+          ...loss,
+          tally: { ...loss.tally },
+          panelTally: { ...loss.panelTally },
+        });
       } else {
-        for (const k of ['player', 'enemy', 'tie']) entry.tally[k] += loss.tally[k];
+        for (const k of ['player', 'enemy', 'tie']) {
+          entry.tally[k] += loss.tally[k];
+          entry.panelTally[k] += loss.panelTally[k];
+        }
         entry.battles += loss.battles;
+        entry.panelBattles += loss.panelBattles;
       }
     }
 
@@ -190,7 +198,17 @@ function mergeChunks(chunks) {
   });
 
   const opponentCount = buckets.low.teams + buckets.high.teams;
-  const losses = [...perOpponent.values()];
+  // Panel hanya memuat tim yang mengalahkan pemain pada 50 pertarungan
+  // pertama, supaya angka di panel konsisten dengan sampelnya.
+  const losses = [...perOpponent.values()]
+    .filter(entry => entry.panelTally.enemy > 0)
+    .map(entry => ({
+      ...entry,
+      fullTally: entry.tally,
+      fullBattles: entry.battles,
+      tally: entry.panelTally,
+      battles: entry.panelBattles,
+    }));
   return {
     battles,
     tally,
@@ -319,6 +337,7 @@ async function runSimulation(playerSpecs, opponents, {
   return {
     seed,
     runs: runCount,
+    lossPanelRuns: Math.min(runCount, LOSS_PANEL_RUNS),
     opponents: opponents.length,
     workers: parts,
     battles: merged.battles,

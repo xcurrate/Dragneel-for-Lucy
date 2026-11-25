@@ -132,6 +132,33 @@ describe('simulasi global', () => {
     assert.strictEqual(result.avgLosses, 5);
   });
 
+  it('Lihat Kekalahan memakai 50 pertarungan pertama walau simulasi 100', async () => {
+    store.createTeam('me', 'Lemah');
+    store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 1 });
+    store.createTeam('rival', 'Dewa');
+    store.setSlot('rival', 'Dewa', 1, {
+      custom: { hp: 40, att: 40, pr: 10, wp: 10, mag: 40, mr: 10 }, level: 500,
+    });
+
+    const cmd = require(path.join(ROOT, 'src/commands/battleSim'));
+    const player = cmd.resolveTeamSpecs(store.getTeam('me', 'Lemah'));
+    const opponent = cmd.resolveTeamSpecs(store.getTeam('rival', 'Dewa'));
+    const result = await globalSim.runGlobalSim(player.specs, [{ label: 'Dewa', specs: opponent.specs }], {
+      runs: 100, seed: 5, workers: 1,
+    });
+
+    assert.strictEqual(result.battles, 100);
+    assert.strictEqual(result.tally.enemy, 100, 'rekap global tetap 100');
+    assert.strictEqual(result.losses[0].fullTally.enemy, 100);
+    assert.strictEqual(result.losses[0].tally.enemy, 50, 'panel hanya 50');
+    const panelTotal = result.losses[0].tally.player + result.losses[0].tally.enemy + result.losses[0].tally.tie;
+    assert.strictEqual(panelTotal, 50);
+    assert.strictEqual(result.lossPanelRuns, 50);
+    const body = JSON.stringify(panel.globalLossesEmbed(result, { playerLabel: 'Lemah' }).toJSON());
+    assert.ok(body.includes('total 50 kekalahan'), body);
+    assert.ok(body.includes('50 pertarungan pertama per tim'), body);
+  });
+
   it('menyembunyikan ikon senjata pada daftar kekalahan', async () => {
     store.createTeam('me', 'Lemah');
     store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 5 });
@@ -438,15 +465,11 @@ describe('simulasi global', () => {
 });
 
 describe('jumlah pertarungan simulasi global', () => {
-  it('memakai default 50 pertarungan per tim', () => {
-    assert.strictEqual(DEFAULT_GLOBAL_RUNS, 50);
+  it('memakai default 100 pertarungan per tim', () => {
+    assert.strictEqual(DEFAULT_GLOBAL_RUNS, 100);
     const out = resolveRunCount({}, 5);
     assert.strictEqual(out.value, DEFAULT_GLOBAL_RUNS);
     assert.strictEqual(out.total, DEFAULT_GLOBAL_RUNS * 5);
-    // Batas maksimum per tim tidak boleh mengubah default.
-    const limited = resolveRunCount({}, 5, { maxPerTeam: 100 });
-    assert.strictEqual(limited.value, 50);
-    assert.strictEqual(limited.total, 250);
   });
 
   it('menolak jumlah di atas batas per tim', () => {
