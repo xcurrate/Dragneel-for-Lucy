@@ -66,7 +66,9 @@ function parseSlot(text) {
   if (Object.values(displayedStats).some(value => value == null) || !levelMatch) return null;
   const names = emojiNames(text);
   const weapon = names.map(name => weaponByEmoji.get(name)).find(Boolean) || null;
-  const passives = [...new Set(names.map(name => passiveByEmoji.get(name)?.id).filter(id => id != null))];
+  // Jangan dedupe: Lucy bisa menampilkan dua pasif dengan jenis yang sama,
+  // dan keduanya harus tetap tersimpan sebagai dua entri.
+  const passives = names.map(name => passiveByEmoji.get(name)?.id).filter(id => id != null);
   return {
     slot,
     label,

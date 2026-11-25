@@ -63,6 +63,25 @@ describe('Lucy team import', () => {
     });
   });
 
+  it('mempertahankan dua pasif dengan jenis yang sama', () => {
+    const message = cardMessage({
+      components: [{ type: 17, components: [
+        { type: 10, content: '## ⭐ **dua pasif**' },
+        { type: 10, content: `**[2] <:animal:1> **for** **
+Lvl 83 \`[6,602,130/47,459,321]\`
+<:hp:1> \`2990\` <:wp:2> \`0666\`
+<:att:3> \`0100\` <:mg:4> \`0100\`
+<:pr:5> \`67%\` <:mr:6> \`67%\`
+🔒 \`2PI\` <a:fabled:7> <:fshield:8> <:fthorns:9> <:fthorns:9> 100%` },
+      ] }],
+    });
+    const parsed = importer.parseLucyTeamMessage(message);
+    assert.deepEqual(parsed.slots[0].passives, [8, 8]);
+
+    const result = importer.importLucyTeam('user-1', parsed);
+    assert.deepEqual(result.team.slots[0].passives, [8, 8], 'dua pasif tersimpan');
+  });
+
   it('mengabaikan pesan non-Lucy dan metadata 2PI/1F1C', () => {
     assert.equal(importer.parseLucyTeamMessage(cardMessage({ author: { id: 'other-bot' } })), null);
     const parsed = importer.parseLucyTeamMessage(cardMessage());
