@@ -52,6 +52,22 @@ describe('parser komposisi inline', () => {
     assert.equal(parser.looksInline(['snail', 'sword', 'crit']), true);
   });
 
+  it('menerima unit stat manual enam angka dengan senjata dan pasif', () => {
+    const input = '19,0,1,1,0,1 aegis fr fr, 2,0,2,2,14,2 fstaff magic mtap, 5,0,10,1,0,6 crune pr wgen';
+    assert.strictEqual(parser.looksInline(input), true);
+    const result = parser.parseInlineSide(input);
+    assert.ok(!result.error, result.error);
+    assert.strictEqual(result.specs.length, 3);
+    assert.strictEqual(result.specs[0].customStats, true);
+    assert.strictEqual(result.specs[0].animal, null);
+    assert.strictEqual(result.specs[0].label, '19.0.1.1.0.1');
+    assert.deepEqual(result.specs[0].coeffs, { hp: 19, att: 0, pr: 1, wp: 1, mag: 0, mr: 1 });
+    assert.strictEqual(result.specs[0].weapon.id, 5);
+    assert.strictEqual(result.specs[0].weapon.passives.length, 2);
+    assert.strictEqual(result.specs[1].weapon.id, 10);
+    assert.strictEqual(result.specs[2].weapon.id, 18);
+  });
+
   it('menerima alias sageguard untuk Safeguard', () => {
     const result = parser.parseInlineSide(['snail', 'rune', 'sageguard']);
     assert.ok(!result.error, result.error);

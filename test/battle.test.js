@@ -3604,6 +3604,18 @@ describe('d sim A vs B', () => {
     assert.ok(embed.description.includes('42.5%'), 'rata-rata quality Aegis + Sacrifice');
   });
 
+  it('menerima unit stat manual inline dengan senjata dan pasif', async () => {
+    const embed = await run([
+      '19,0,1,1,0,1', 'aegis', 'fr', 'fr,',
+      '2,0,2,2,14,2', 'fstaff', 'magic', 'mtap,',
+      '5,0,10,1,0,6', 'crune', 'pr', 'wgen',
+      'vs', 'snail', 'sword', 'crit', 'mtap',
+      '-m', '1',
+    ]);
+    assert.ok(embed.title.includes('19.0.1.1.0.1'), embed.title);
+    assert.ok(!JSON.stringify(embed).includes('tidak dikenal'), JSON.stringify(embed));
+  });
+
   it('menolak `-log` untuk non-developer', async () => {
     const embed = await run(['1', 'vs', '3', '-log'], { isDeveloper: () => false });
     assert.ok(embed.description.includes('khusus developer'), embed.description);

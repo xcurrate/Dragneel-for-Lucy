@@ -13,9 +13,9 @@ const dexStore = require('./animalDexStorage');
 
 const NUMBER = /^\d+$/;
 const NUMBER_LIST = /^\d+(?:\s*,\s*\d+)+$/;
+const STAT_KEYS = ['hp', 'att', 'pr', 'wp', 'mag', 'mr'];
 const LEVEL_EQ = /^level=(\d+)$/i;
 const STAT_EQ = /^(hp|att|attack|pr|protection|wp|wisdom|mag|magic|mr)=/i;
-const STAT_KEYS = ['hp', 'att', 'pr', 'wp', 'mag', 'mr'];
 
 function fromDexAnimal(animal) {
   const stats = animal.stats || {};
@@ -74,6 +74,17 @@ function parseLevel(token) {
   return value;
 }
 
+// Unit tanpa hewan: enam koefisien `hp,att,pr,wp,mag,mr`, mis.
+// `19,0,1,1,0,1 aegis fr fr`.
+function parseCustomCoeffs(token) {
+  if (!NUMBER_LIST.test(token)) return null;
+  const values = String(token).split(',').map(Number);
+  if (values.length !== STAT_KEYS.length || values.some(value => !Number.isFinite(value))) return null;
+  const custom = {};
+  STAT_KEYS.forEach((key, i) => { custom[key] = values[i]; });
+  return custom;
+}
+
 // Cocokkan nama terpanjang dulu supaya alias multi-kata seperti
 // "defender's aegis" atau "mana tap" tidak terpotong jadi satu kata.
 function longestMatch(tokens, index, maxWords, lookup) {
@@ -121,6 +132,7 @@ function looksInline(input) {
   const tokens = tokenize(input);
   if (!tokens.length) return false;
   if (tokens.some(token => STAT_EQ.test(token))) return false;
+  if (tokens.some(token => parseCustomCoeffs(token))) return true;
   if (tokens.length > 1 && (NUMBER.test(tokens[0]) || LEVEL_EQ.test(tokens[0]))) return true;
   if (tokens.length > 1 && findAnimal(tokens[0])) {
     const next = tokens[1];
@@ -176,6 +188,14 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
           level = parsed;
           i++;
         }
+      }
+
+      const custom = parseCustomCoeffs(tokens[i]);
+      if (custom) {
+        current = { level, animal: null, custom, weapon: null, passives: [] };
+        i++;
+        pending = null;
+        continue;
       }
 
       const animalMatch = matchAnimal(tokens, i);
@@ -273,8 +293,8 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
   const specs = [];
   for (let index = 0; index < units.length; index++) {
     const unit = units[index];
-    const coeffs = coeffsOf(unit.animal);
-    if (!coeffs) return { error: `Stat \`${unit.animal.name}\` tidak lengkap.` };
+    const coeffs = unit.custom || coeffsOf(unit.animal);
+    if (!coeffs) return { error: `Stat \`${unit.animal ? unit.animal.name : 'custom'}\` tidak lengkap.` };
 
     if (unit.passives.length && !unit.weapon) {
       return { error: `Unit ${index + 1}: pasif butuh senjata.` };
@@ -292,11 +312,11 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
 
     specs.push({
       slot: index + 1,
-      label: unit.animal.name,
+      label: unit.custom ? STAT_KEYS.map(key => unit.custom[key]).join('.') : unit.animal.name,
       level: unit.level,
       coeffs,
-      customStats: false,
-      animal: unit.animal,
+      customStats: Boolean(unit.custom),
+      animal: unit.animal || null,
       weapon: unit.weapon
         ? {
           id: unit.weapon.id,
@@ -311,7 +331,12 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
     });
   }
 
-  return { specs, label: units.map(unit => unit.animal.name).join(' + ') };
+  return {
+    specs,
+    label: units.map(unit => (
+      unit.custom ? STAT_KEYS.map(key => unit.custom[key]).join('.') : unit.animal.name
+    )).join(' + '),
+  };
 }
 
 module.exports = { tokenize, parseQuality, looksInline, parseInlineSide, findAnimal };
