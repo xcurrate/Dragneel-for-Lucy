@@ -8,6 +8,7 @@ const ROOT = path.join(__dirname, '..');
 const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
 const globalSim = require(path.join(ROOT, 'src/services/globalSim'));
 const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
+const battleEmoji = require(path.join(ROOT, 'src/services/battleEmoji'));
 const {
   handleSimCommand, handleGlobalLossButton, handleGlobalWeaponsButton, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES,
@@ -187,8 +188,10 @@ describe('simulasi global', () => {
     }, { isDeveloper: () => true });
 
     const body = JSON.stringify(reply.embeds[0].toJSON());
-    assert.ok(body.includes('Great Sword'), 'nama senjata tampil');
-    assert.ok(body.includes('Critical'), 'nama pasif tampil');
+    assert.ok(body.includes(battleEmoji.weaponEmoji(1, 90)), 'ikon senjata tampil');
+    assert.ok(body.includes(battleEmoji.passiveEmoji(12, 90)), 'ikon pasif tampil');
+    assert.ok(!body.includes('Great Sword'), 'nama senjata tidak ditulis');
+    assert.ok(!body.includes('Critical'), 'nama pasif tidak ditulis');
     assert.ok(body.includes('Senjata lawan ditampilkan'));
     assert.ok(!body.includes('❓'), 'tanda tanya hilang saat toggle aktif');
   });
@@ -344,8 +347,10 @@ describe('simulasi global', () => {
     };
     await handleGlobalWeaponsButton(i, { prefix: 'd', isDeveloper: () => true });
     const body = JSON.stringify(i.updated.embeds[0].toJSON());
-    assert.ok(body.includes('Great Sword'), 'ON menampilkan senjata');
-    assert.ok(body.includes('Critical'), 'ON menampilkan pasif');
+    assert.ok(body.includes(battleEmoji.weaponEmoji(1, 100)), 'ON menampilkan ikon senjata');
+    assert.ok(body.includes(battleEmoji.passiveEmoji(12, 100)), 'ON menampilkan ikon pasif');
+    assert.ok(!body.includes('Great Sword'), 'nama senjata tidak ditulis');
+    assert.ok(!body.includes('Critical'), 'nama pasif tidak ditulis');
     assert.strictEqual(i.updated.components[1].toJSON().components[0].label, 'Senjata: ON');
     assert.strictEqual(store.getGlobalWeapons('me'), true);
   });

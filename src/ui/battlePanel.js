@@ -4,7 +4,6 @@
 // supaya tampilan battle konsisten dengan panel dan game lain.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const data = require('../data/owoBattle');
-const passiveData = require('../data/owoPassives');
 const sim = require('../services/battleSim');
 const engine = require('../services/battleEngine');
 const { createRng } = require('../services/battleRng');
@@ -597,18 +596,18 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
 // tahu senjata apa yang dipakai tim yang mengalahkan kamu.
 const HIDDEN_WEAPON = '❓';
 
-// Rincian senjata satu spec: ikon, nama, quality, lalu nama pasif.
+// Rincian senjata satu spec: hanya ikon rank, senjata, dan pasif.
 function weaponSpecSuffix(spec) {
   if (!spec.weapon) return '';
   const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
-  const rank = qualityRank(quality);
-  const def = data.weapons().find(w => w.id === spec.weapon.id);
-  const passives = (spec.weapon.passives || [])
-    .map(passive => passiveData.get(passive && typeof passive === 'object' ? passive.id : passive)?.name)
-    .filter(Boolean);
-  return ` · ${emoji.rankEmoji(rank)}${emoji.weaponEmoji(spec.weapon.id, rank)}`
-    + ` **${def?.name || `#${spec.weapon.id}`}** ${qualityText(quality)}`
-    + (passives.length ? ` · ${passives.join(', ')}` : '');
+  const passiveIcons = (spec.weapon.passives || []).map(passive => {
+    const id = passive && typeof passive === 'object' ? passive.id : passive;
+    const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
+      ? passive.quality
+      : quality;
+    return emoji.passiveEmoji(id, passiveQuality);
+  }).join('');
+  return ` · ${emoji.rankEmoji(quality)}${emoji.weaponEmoji(spec.weapon.id, quality)}${passiveIcons}`;
 }
 
 // Slot tanpa senjata tidak diberi tanda tanya: itu akan menyiratkan ada senjata
