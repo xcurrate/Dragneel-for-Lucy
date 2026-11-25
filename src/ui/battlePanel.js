@@ -510,7 +510,7 @@ function bucketLines(bucket) {
 
 // Hasil simulasi global. Angka utama ditaruh di description mengikuti gaya
 // laporan yang sudah dipakai bot lain, lalu rincian per kelompok level.
-function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, skipped = [], totals = null } = {}) {
+function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, totals = null } = {}) {
   const seconds = (result.durationMs / 1000).toFixed(2);
   const low = result.buckets.low;
   const high = result.buckets.high;
@@ -524,8 +524,7 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
       `**Lawan:** ${result.opponents.toLocaleString('id-ID')} tim · ${result.battles.toLocaleString('id-ID')} pertarungan (${result.runs.toLocaleString('id-ID')}× per tim)`,
       ...(totals
         ? [`-# ${totals.all.toLocaleString('id-ID')} tim di \`${prefix}tm\` · `
-          + `1 sedang dipilih (tidak diadu) · `
-          + `${(skipped.length).toLocaleString('id-ID')} dilewati`]
+          + `1 sedang dipilih (tidak diadu)`]
         : []),
       `-# ${result.workers || 1} worker · ${Math.round(result.battles / Math.max(1, result.durationMs / 1000)).toLocaleString('id-ID')} pertarungan/detik`,
     ].join('\n'))
@@ -562,28 +561,11 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
         ].join('\n'),
         inline: true,
       },
-      {
-        name: '📉 Kalah per tim',
-        value: `Rata-rata **${result.avgLosses.toLocaleString('id-ID')}**`,
-        inline: true,
-      },
     )
     .setFooter({ text: `Seed ${result.seed} · hasil bisa berbeda karena RNG · cooldown ${prefix} sim global 10 detik` });
 
   if (!result.tally.enemy) {
     embed.addFields({ name: '🏆 Tanpa kekalahan', value: 'Tidak ada tim lawan yang berhasil mengalahkan tim kamu.' });
-  }
-  // Tim yang tidak bisa diadu tetap disebutkan supaya selisih jumlah dengan
-  // `dtm` bisa dijelaskan, bukan terlihat seperti bug.
-  if (skipped.length) {
-    const describe = item => (typeof item === 'string' ? item : `${item.label} (${item.reason})`);
-    const names = skipped.slice(0, 5).map(describe).join(', ');
-    const more = skipped.length > 5 ? `, +${skipped.length - 5} lain` : '';
-    embed.addFields({
-      name: '⚠️ Tim dilewati',
-      value: `${skipped.length} tim tidak diadu: ${names}${more}.\n`
-        + '-# Isi slot kosong dan lengkapi stat agar tim ikut simulasi.',
-    });
   }
   return embed;
 }

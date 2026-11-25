@@ -557,20 +557,13 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   // Simulasi global melawan semua tim tersimpan, termasuk tim lain milik user
   // sendiri. Hanya tim aktif yang dikecualikan saat memakai tim aktif; saat
   // memakai blueprint tidak ada tim tersimpan yang perlu dikecualikan.
-  const skipped = [];
   let excluded = 0;
   const allTeams = store.listAllTeams();
   for (const other of allTeams) {
     if (team && other.id === team.id) { excluded += 1; continue; }
-    if (!other.slots.length) {
-      skipped.push({ label: teamLabel(other), reason: 'kosong' });
-      continue;
-    }
+    if (!other.slots.length) continue;
     const specs = resolveTeamSpecs(other);
-    if (specs.error) {
-      skipped.push({ label: teamLabel(other), reason: 'stat belum lengkap' });
-      continue;
-    }
+    if (specs.error) continue;
     opponents.push({
       teamId: other.id,
       slotId: other.slotId,
@@ -648,7 +641,6 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     playerLabel: labels.playerLabel,
     prefix,
     playerSpecs: player.specs,
-    skipped,
     totals: { all: allTeams.length, excluded },
   });
   const payload = {

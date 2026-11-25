@@ -63,9 +63,10 @@ function labelOf(team) {
   return team.slotId != null ? `[${team.slotId}] ${team.name}` : team.name;
 }
 
-function panelComponents(teams, index, userId) {
+function panelComponents(teams, index, userId, { active = null } = {}) {
   const team = teams[index];
   const total = teams.length;
+  const isActive = Boolean(active && team && active.id === team.id);
   const rows = [];
 
   // Select menu hanya bisa memuat 25 opsi dan teks label 100 karakter.
@@ -74,8 +75,9 @@ function panelComponents(teams, index, userId) {
     .setPlaceholder(total ? `Pilih tim (${total}/${store.MAX_TEAM_ID})` : 'Belum ada tim')
     .setDisabled(!total);
   for (const [i, entry] of teams.slice(0, 25).entries()) {
+    const star = active && entry.id === active.id ? '⭐ ' : '';
     menu.addOptions(new StringSelectMenuOptionBuilder()
-      .setLabel(labelOf(entry).slice(0, 100))
+      .setLabel(`${star}${labelOf(entry)}`.slice(0, 100))
       .setValue(String(i))
       .setDescription(entry.slots.length ? `${entry.slots.length}/3 slot` : 'masih kosong')
       .setDefault(i === index));
@@ -96,7 +98,7 @@ function panelComponents(teams, index, userId) {
     new ButtonBuilder()
       .setCustomId(navId(NAV_PICK, userId, index))
       .setLabel('Pilih Tim Ini')
-      .setStyle(ButtonStyle.Primary)
+      .setStyle(isActive ? ButtonStyle.Success : ButtonStyle.Primary)
       .setDisabled(!team),
     new ButtonBuilder()
       .setCustomId(navId(NAV_NEXT, userId, (index + 1) % Math.max(1, total)))
@@ -179,7 +181,7 @@ function panelPayload(teams, index, userId, { prefix = 'd', active = null } = {}
     };
   }
   const safeIndex = Math.max(0, Math.min(index, ordered.length - 1));
-  const { rows, team } = panelComponents(ordered, safeIndex, userId);
+  const { rows, team } = panelComponents(ordered, safeIndex, userId, { active });
   const isActive = active ? active.id === team.id : false;
   return {
     embeds: [panelEmbed(team, { prefix, index: safeIndex, total: ordered.length, active: isActive })],

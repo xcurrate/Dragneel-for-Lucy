@@ -301,7 +301,7 @@ describe('simulasi global', () => {
     assert.ok(names.includes('Max level < 35'));
     assert.ok(names.includes('Max level ≥ 35'));
     assert.ok(body.includes('Streak'), 'ada rata-rata streak');
-    assert.ok(body.includes('Kalah per tim'), 'ada rata-rata kalah');
+    assert.ok(!body.includes('Kalah per tim'), 'field kalah per tim sudah dihapus');
     assert.ok(body.includes('menang') && body.includes('seri') && body.includes('kalah'));
   });
 });
@@ -553,7 +553,7 @@ describe('tampilan hasil simulasi global', () => {
     assert.ok(!/pasif|passive/i.test(field.value));
   });
 
-  it('menyebut tim kosong dan tim berstat belum lengkap yang tidak diadu', async () => {
+  it('tidak menampilkan tim kosong atau tim berstat belum lengkap', async () => {
     store.createTeam('me', 'Milikku');
     store.setSlot('me', 'Milikku', 1, { custom: COEFFS_STRONG, level: 80 });
     store.setActiveTeam('me', 'Milikku');
@@ -565,10 +565,8 @@ describe('tampilan hasil simulasi global', () => {
 
     const embed = await runGlobal();
     assert.match(embed.description, /1 tim/, 'hanya tim sah yang diadu');
-    const field = embed.fields.find(f => f.name.includes('dilewati'));
-    assert.ok(field, 'field tim dilewati harus ada');
-    assert.match(field.value, /TimKosong \(kosong\)/);
-    assert.match(field.value, /StatKurang \(stat belum lengkap\)/);
+    assert.ok(!embed.fields.some(f => f.name.includes('dilewati')), 'tidak ada field tim dilewati');
+    assert.ok(!JSON.stringify(embed).includes('dilewati'), 'tidak ada teks dilewati');
   });
 
   it('mengadu tim lain milik sendiri, hanya tim terpilih yang dikecualikan', async () => {
@@ -584,7 +582,7 @@ describe('tampilan hasil simulasi global', () => {
     assert.match(embed.description, /2 tim/, 'tim lain milik sendiri ikut diadu');
     assert.match(embed.description, /3 tim di `dtm`/);
     assert.match(embed.description, /1 sedang dipilih \(tidak diadu\)/);
-    assert.match(embed.description, /0 dilewati/);
+    assert.ok(!embed.description.includes('dilewati'), 'tidak ada hitungan dilewati');
   });
 
   it('tidak menampilkan field tim dilewati kalau semua tim bisa diadu', async () => {

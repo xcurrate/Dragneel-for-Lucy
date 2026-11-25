@@ -3487,6 +3487,8 @@ describe('panel tim: tombol hapus', () => {
     assert.strictEqual(store.getActiveTeam('u').name, 'Beta');
     assert.ok(i.updated, 'panel diperbarui');
     assert.ok(i.updated.embeds[0].toJSON().title.includes('Beta'));
+    assert.strictEqual(i.updated.components[1].toJSON().components[1].style, 3, 'tombol pilih jadi hijau');
+    assert.ok(i.updated.components[0].toJSON().components[0].options[1].label.startsWith('⭐ '), 'dropdown menandai tim aktif');
   });
 
   it('panah hanya berpindah tampilan dan tidak mengubah tim aktif', async () => {

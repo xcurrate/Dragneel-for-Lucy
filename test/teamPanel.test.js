@@ -97,6 +97,21 @@ describe('panel tim', () => {
     assert.equal(rows[1].components[4].style, 4, 'tombol hapus merah');
     assert.equal(rows[1].components[4].emoji.name, '🗑️');
     assert.equal(rows[1].components[3].emoji.name, '📤');
+    assert.equal(rows[1].components[1].style, 1, 'tombol pilih biru saat tim belum aktif');
+  });
+
+  it('menandai tim aktif dengan tombol hijau dan bintang di dropdown', () => {
+    store.createTeam('u', 'Alpha');
+    store.createTeam('u', 'Beta');
+    store.setActiveTeam('u', 'Beta');
+    const teams = store.listTeams('u');
+    const active = store.getActiveTeam('u');
+    const payload = teamPanel.panelPayload(teams, teamPanel.indexOfActive(teams, active), 'u', { active });
+    const nav = payload.components[1].toJSON().components;
+    const menu = payload.components[0].toJSON().components[0];
+    assert.equal(nav[1].style, 3, 'tombol pilih hijau untuk tim aktif');
+    assert.ok(menu.options[1].label.startsWith('⭐ '), 'opsi tim aktif memakai bintang');
+    assert.ok(!menu.options[0].label.startsWith('⭐ '), 'tim lain tanpa bintang');
   });
 
   it('tombol hapus tetap ada saat user hanya punya satu tim', () => {
