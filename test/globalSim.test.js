@@ -10,7 +10,7 @@ const globalSim = require(path.join(ROOT, 'src/services/globalSim'));
 const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
 const battleEmoji = require(path.join(ROOT, 'src/services/battleEmoji'));
 const {
-  handleSimCommand, handleGlobalLossButton, handleGlobalWeaponsButton, resolveRunCount,
+  handleSimCommand, handleGlobalLossButton, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES,
 } = require(path.join(ROOT, 'src/commands/battleSim'));
 const engine = require(path.join(ROOT, 'src/services/battleEngine'));
@@ -344,7 +344,7 @@ describe('simulasi global', () => {
     assert.ok(body.includes('1 tim'), 'tim tersimpan tetap jadi lawan');
   });
 
-  it('developer bisa toggle nama senjata di hasil simulasi global', async () => {
+  it('developer bisa toggle senjata lewat command, bukan tombol', async () => {
     store.createTeam('me', 'Milikku');
     store.setSlot('me', 'Milikku', 1, {
       custom: COEFFS_STRONG, level: 80, weaponId: 1, passives: [{ id: 12 }],
@@ -359,30 +359,45 @@ describe('simulasi global', () => {
       sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
       isDeveloper: () => true,
     });
-    assert.strictEqual(payload.components.length, 2, 'tombol kekalahan + toggle senjata');
+    assert.strictEqual(payload.components.length, 1, 'hanya tombol kekalahan');
+    assert.ok(!JSON.stringify(payload).includes('Senjata:'), 'tombol senjata sudah dihapus');
     assert.ok(!JSON.stringify(payload.embeds[0].toJSON()).includes('Great Sword'), 'default OFF');
 
-    const button = payload.components[1].toJSON().components[0];
-    assert.strictEqual(button.label, 'Senjata: OFF');
-    const i = {
-      customId: button.custom_id,
-      user: { id: 'me' },
-      client: {},
-      guild: {},
-      reply: data => { i.out = data; },
-      update: data => { i.updated = data; },
-    };
-    await handleGlobalWeaponsButton(i, { prefix: 'd', isDeveloper: () => true });
-    const body = JSON.stringify(i.updated.embeds[0].toJSON());
+    replies = [];
+    await handleSimCommand(message('d sim global weapon'), ['global', 'weapon'], 'd', {
+      sendEmbed, isDeveloper: () => true,
+    });
+    assert.ok(replies[0].description.includes('OFF'), replies[0].description);
+
+    replies = [];
+    await handleSimCommand(message('d sim global weapon on'), ['global', 'weapon', 'on'], 'd', {
+      sendEmbed, isDeveloper: () => true,
+    });
+    assert.ok(replies[0].description.includes('ON'), replies[0].description);
+    assert.strictEqual(store.getGlobalWeapons('me'), true);
+
+    payload = null;
+    await handleSimCommand(message('d sim global -m 1 -s 3'), ['global', '-m', '1', '-s', '3'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    assert.strictEqual(payload.components.length, 1);
+    const body = JSON.stringify(payload.embeds[0].toJSON());
     assert.ok(body.includes(battleEmoji.weaponEmoji(1, 100)), 'ON menampilkan ikon senjata');
     assert.ok(body.includes(battleEmoji.passiveEmoji(12, 100)), 'ON menampilkan ikon pasif');
     assert.ok(!body.includes('Great Sword'), 'nama senjata tidak ditulis');
     assert.ok(!body.includes('Critical'), 'nama pasif tidak ditulis');
-    assert.strictEqual(i.updated.components[1].toJSON().components[0].label, 'Senjata: ON');
-    assert.strictEqual(store.getGlobalWeapons('me'), true);
+
+    replies = [];
+    await handleSimCommand(message('d sim global weapon off'), ['global', 'weapon', 'off'], 'd', {
+      sendEmbed, isDeveloper: () => true,
+    });
+    assert.ok(replies[0].description.includes('OFF'), replies[0].description);
+    assert.strictEqual(store.getGlobalWeapons('me'), false);
   });
 
-  it('user biasa tidak mendapat tombol senjata di hasil global', async () => {
+  it('user biasa tidak mendapat tombol atau command senjata', async () => {
     seedWorld();
     let payload = null;
     await handleSimCommand(message('d sim global -m 1 -s 4'), ['global', '-m', '1', '-s', '4'], 'd', {
@@ -392,6 +407,13 @@ describe('simulasi global', () => {
     });
     assert.strictEqual(payload.components.length, 1, 'hanya tombol kekalahan');
     assert.ok(!JSON.stringify(payload).includes('Senjata:'));
+
+    replies = [];
+    await handleSimCommand(message('d sim global weapon on'), ['global', 'weapon', 'on'], 'd', {
+      sendEmbed, isDeveloper: () => false,
+    });
+    assert.ok(replies[0].description.includes('hanya untuk developer'), replies[0].description);
+    assert.strictEqual(store.getGlobalWeapons('me'), false);
   });
 
   it('preferensi senjata developer tidak menular ke user lain', async () => {

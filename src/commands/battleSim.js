@@ -20,7 +20,6 @@ const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
-  globalWeaponsButton, parseGlobalWeaponsButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
@@ -430,6 +429,7 @@ function globalUsage(prefix = 'd') {
     `\`-qe <0-100>\` kualitas senjata semua tim lawan`,
     `\`lvl100\` / \`lvl100/60\` / \`lvl/40\` samakan level, seperti \`${prefix} sim\``,
     `\`-s <seed>\` ulangi hasil yang sama`,
+    `\`${prefix} sim global weapon [on|off]\` tampilkan ikon senjata lawan (developer)`,
     '',
     `Batas per tim: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}** pertarungan `
       + `(diatur developer lewat \`${prefix} sim global limit\`).`,
@@ -668,10 +668,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     embeds: [finalEmbed],
     // Tombol tetap ditampilkan walau belum ada kekalahan; saat dibuka akan
     // menjawab bahwa tidak ada tim yang menang.
-    components: [
-      globalLossButton(userId, token),
-      ...(isDev ? [globalWeaponsButton(userId, token, showWeapons)] : []),
-    ],
+    components: [globalLossButton(userId, token)],
   };
 
   return publishProgress.finish(payload);
@@ -713,47 +710,41 @@ async function handleGlobalLossButton(i, deps = {}) {
   });
 }
 
-// Toggle senjata pada hasil simulasi global. Hanya developer yang boleh
-// memakainya, dan hanya pemilik hasil yang bisa mengubah tampilan pesan itu.
-async function handleGlobalWeaponsButton(i, deps = {}) {
-  const prefix = deps.prefix || 'd';
-  const parsed = parseGlobalWeaponsButton(i.customId);
-  if (!parsed.ok) {
-    return i.reply({ content: `Tombol kedaluwarsa. Jalankan \`${prefix} sim global\` lagi.`, flags: MessageFlags.Ephemeral });
-  }
-  const isDev = deps.isDeveloper
-    ? deps.isDeveloper({ author: i.user, client: i.client, guild: i.guild })
-    : false;
-  if (!isDev) {
-    return i.reply({ content: '❌ Toggle senjata hanya untuk developer.', flags: MessageFlags.Ephemeral });
-  }
-  if (i.user.id !== parsed.userId) {
-    return i.reply({ content: '❌ Hanya pemilik hasil simulasi yang bisa mengubah tampilan ini.', flags: MessageFlags.Ephemeral });
-  }
-  const entry = getGlobalResult(parsed.userId, parsed.token);
-  if (!entry || !entry.playerSpecs) {
-    return i.reply({
-      content: `Hasil simulasi ini sudah kedaluwarsa. Jalankan \`${prefix} sim global\` lagi.`,
-      flags: MessageFlags.Ephemeral,
-    });
+// `d sim global weapon [on|off]` — pengganti tombol toggle senjata.
+// Hanya developer yang boleh memakainya karena menampilkan senjata lawan.
+function handleGlobalWeaponCommand(message, args, prefix, deps = {}) {
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  const dev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  if (!dev) {
+    return send(message, errorEmbed('Tampilan senjata hanya untuk developer.'));
   }
 
-  const showWeapons = !store.getGlobalWeapons(parsed.userId);
-  store.setGlobalWeapons(parsed.userId, showWeapons);
-  const embed = globalSimEmbed(entry.result, {
-    playerLabel: entry.playerLabel,
-    prefix,
-    playerSpecs: entry.playerSpecs,
-    totals: entry.totals,
-    showWeapons,
-  });
-  return i.update({
-    embeds: [embed],
-    components: [
-      globalLossButton(parsed.userId, parsed.token),
-      globalWeaponsButton(parsed.userId, parsed.token, showWeapons),
-    ],
-  });
+  const current = store.getGlobalWeapons(message.author.id);
+  const action = (args[0] || '').toLowerCase();
+  if (!action) {
+    return send(message, usageEmbed(
+      '🗡️ Senjata Simulasi Global',
+      [
+        `Status kamu: **${current ? 'ON' : 'OFF'}**.`,
+        '',
+        `Ubah dengan \`${prefix} sim global weapon on\` atau \`${prefix} sim global weapon off\`.`,
+        'Saat ON, hasil `sim global` dan "Lihat kekalahan" menampilkan ikon senjata dan pasif.',
+      ].join('\n')
+    ));
+  }
+  if (!['on', 'off', 'true', 'false', '1', '0'].includes(action)) {
+    return send(message, errorEmbed(
+      `Format: \`${prefix} sim global weapon on\` atau \`${prefix} sim global weapon off\`.`
+    ));
+  }
+
+  const enabled = ['on', 'true', '1'].includes(action);
+  store.setGlobalWeapons(message.author.id, enabled);
+  return send(message, usageEmbed(
+    '🗡️ Senjata Simulasi Global',
+    `Tampilan senjata sekarang **${enabled ? 'ON' : 'OFF'}**.\n`
+    + `Jalankan \`${prefix} sim global\` lagi untuk melihat hasilnya.`
+  ));
 }
 
 // Tombol 🔁: jalankan ulang matchup yang sama sebagai `-m <DEFAULT_RUNS>`.
@@ -926,6 +917,9 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     }
     if ((rest[0] || '').toLowerCase() === 'limit') {
       return handleGlobalLimitCommand(message, rest.slice(1), prefix, deps);
+    }
+    if (['weapon', 'weapons', 'senjata', 'w'].includes((rest[0] || '').toLowerCase())) {
+      return handleGlobalWeaponCommand(message, rest.slice(1), prefix, deps);
     }
     return handleGlobalSim(message, rest, prefix, deps);
   }
@@ -1264,7 +1258,7 @@ function resolveEnemy(userId, args, overrideLevel, prefix = 'd') {
 }
 
 module.exports = {
-  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalWeaponsButton, handleRepeatButton, handleLimitCommand,
+  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
   handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
   parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,

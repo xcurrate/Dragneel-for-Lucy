@@ -437,7 +437,6 @@ function isTeamButton(customId) {
 // supaya hasil milik orang lain tidak bisa dibuka, dan `token` supaya tombol
 // lama tidak menampilkan data dari simulasi yang sudah digantikan.
 const GLOBAL_BUTTON = 'battle_global_losses';
-const GLOBAL_WEAPONS_BUTTON = 'battle_global_weapons';
 // Tombol 🔁 pada hasil satu pertarungan: ulangi sebagai `-m <runs>`.
 const REPEAT_BUTTON = 'battle_sim_repeat';
 
@@ -458,26 +457,6 @@ function isGlobalLossButton(customId) {
 function parseGlobalLossButton(customId) {
   const parts = String(customId || '').split(ID_SEP);
   if (parts.length !== 3 || parts[0] !== GLOBAL_BUTTON) return { ok: false };
-  return { ok: true, userId: parts[1], token: parts[2] };
-}
-
-function globalWeaponsButton(userId, token, enabled) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`${GLOBAL_WEAPONS_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}`)
-      .setLabel(enabled ? 'Senjata: ON' : 'Senjata: OFF')
-      .setEmoji('🗡️')
-      .setStyle(enabled ? ButtonStyle.Success : ButtonStyle.Secondary)
-  );
-}
-
-function isGlobalWeaponsButton(customId) {
-  return typeof customId === 'string' && customId.startsWith(`${GLOBAL_WEAPONS_BUTTON}${ID_SEP}`);
-}
-
-function parseGlobalWeaponsButton(customId) {
-  const parts = String(customId || '').split(ID_SEP);
-  if (parts.length !== 3 || parts[0] !== GLOBAL_WEAPONS_BUTTON) return { ok: false };
   return { ok: true, userId: parts[1], token: parts[2] };
 }
 
@@ -675,6 +654,5 @@ module.exports = {
   turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
   teamButtons, isTeamButton, parseTeamButton,
   GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
-  globalWeaponsButton, isGlobalWeaponsButton, parseGlobalWeaponsButton,
   REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,
 };
