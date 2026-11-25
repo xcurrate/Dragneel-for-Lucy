@@ -686,8 +686,14 @@ async function handleGlobalLossButton(i, deps = {}) {
   await animalDex.ensureAnimalEmojis(
     entry.result.losses.flatMap(loss => loss.specs.map(spec => spec.animal))
   );
+  const isDev = deps.isDeveloper
+    ? deps.isDeveloper({ author: i.user, client: i.client, guild: i.guild })
+    : false;
+  // Hanya pemilik hasil yang boleh melihat senjata lawan, dan hanya jika
+  // toggle developer untuk user itu aktif.
+  const showWeapons = isDev && i.user.id === parsed.userId && store.getGlobalWeapons(parsed.userId);
   return i.reply({
-    embeds: [globalLossesEmbed(entry.result, { playerLabel: entry.playerLabel })],
+    embeds: [globalLossesEmbed(entry.result, { playerLabel: entry.playerLabel, showWeapons })],
     flags: MessageFlags.Ephemeral,
   });
 }

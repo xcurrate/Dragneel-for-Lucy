@@ -514,19 +514,8 @@ function teamCompLines(specs, { showWeapons = false } = {}) {
   return specs.map((spec, index) => {
     const slot = spec.slot || index + 1;
     const label = spec.label || `slot${slot}`;
-    let line = `\`${slot}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}`;
-    if (showWeapons && spec.weapon) {
-      const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
-      const rank = qualityRank(quality);
-      const def = data.weapons().find(w => w.id === spec.weapon.id);
-      const passives = (spec.weapon.passives || [])
-        .map(passive => passiveData.get(passive && typeof passive === 'object' ? passive.id : passive)?.name)
-        .filter(Boolean);
-      line += ` · ${emoji.rankEmoji(rank)}${emoji.weaponEmoji(spec.weapon.id, rank)}`
-        + ` **${def?.name || `#${spec.weapon.id}`}** ${qualityText(quality)}`
-        + (passives.length ? ` · ${passives.join(', ')}` : '');
-    }
-    return line;
+    const line = `\`${slot}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}`;
+    return line + (showWeapons ? weaponSpecSuffix(spec) : '');
   }).join('\n');
 }
 
@@ -608,16 +597,30 @@ function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', player
 // tahu senjata apa yang dipakai tim yang mengalahkan kamu.
 const HIDDEN_WEAPON = '❓';
 
+// Rincian senjata satu spec: ikon, nama, quality, lalu nama pasif.
+function weaponSpecSuffix(spec) {
+  if (!spec.weapon) return '';
+  const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
+  const rank = qualityRank(quality);
+  const def = data.weapons().find(w => w.id === spec.weapon.id);
+  const passives = (spec.weapon.passives || [])
+    .map(passive => passiveData.get(passive && typeof passive === 'object' ? passive.id : passive)?.name)
+    .filter(Boolean);
+  return ` · ${emoji.rankEmoji(rank)}${emoji.weaponEmoji(spec.weapon.id, rank)}`
+    + ` **${def?.name || `#${spec.weapon.id}`}** ${qualityText(quality)}`
+    + (passives.length ? ` · ${passives.join(', ')}` : '');
+}
+
 // Slot tanpa senjata tidak diberi tanda tanya: itu akan menyiratkan ada senjata
 // yang disembunyikan padahal memang kosong.
-function hiddenSpecLine(spec, index) {
+function hiddenSpecLine(spec, index, { showWeapons = false } = {}) {
   const label = spec.label || `slot${spec.slot || index + 1}`;
-  const weapon = spec.weapon ? ` ${HIDDEN_WEAPON}` : '';
+  const weapon = showWeapons ? weaponSpecSuffix(spec) : (spec.weapon ? ` ${HIDDEN_WEAPON}` : '');
   return `\`${spec.slot || index + 1}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}${weapon}`;
 }
 
 // Daftar tim yang mengalahkan pemain, dipakai sebagai balasan ephemeral.
-function globalLossesEmbed(result, { playerLabel = 'Tim kamu' } = {}) {
+function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = false } = {}) {
   const embed = new EmbedBuilder()
     .setColor(COLOR.error)
     .setTitle('🔍 Tim yang mengalahkan kamu');
@@ -631,7 +634,7 @@ function globalLossesEmbed(result, { playerLabel = 'Tim kamu' } = {}) {
   embed.setDescription(
     `**${playerLabel}** kalah dari **${result.losses.length}** tim`
     + ` (total ${result.tally.enemy.toLocaleString('id-ID')} kekalahan).\n`
-    + '-# Senjata lawan disembunyikan.'
+    + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.')
   );
 
   // Discord membatasi jumlah field; sisanya diringkas dalam satu baris.
@@ -640,7 +643,7 @@ function globalLossesEmbed(result, { playerLabel = 'Tim kamu' } = {}) {
     const { tally } = loss;
     const detail = [
       `Kalah **${tally.enemy.toLocaleString('id-ID')}**× · seri ${tally.tie.toLocaleString('id-ID')}× · menang ${tally.player.toLocaleString('id-ID')}×`,
-      ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i)),
+      ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i, { showWeapons })),
     ].join('\n');
     embed.addFields({
       name: `${loss.label} · L.${loss.level}`.slice(0, 256),

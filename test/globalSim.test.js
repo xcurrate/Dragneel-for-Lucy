@@ -156,6 +156,43 @@ describe('simulasi global', () => {
     assert.ok(!body.includes('Great Sword'), 'nama senjata tidak bocor');
   });
 
+  it('pemilik developer melihat senjata lawan saat toggle aktif', async () => {
+    store.createTeam('me', 'Lemah');
+    store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 5 });
+    store.createTeam('rival', 'Bersenjata');
+    store.setSlot('rival', 'Bersenjata', 1, {
+      custom: { hp: 40, att: 40, pr: 10, wp: 10, mag: 40, mr: 10 },
+      level: 500,
+      weaponId: 1,
+      weaponQuality: 90,
+      passives: [{ id: 12 }],
+    });
+    store.setActiveTeam('me', 'Lemah');
+    store.setGlobalWeapons('me', true);
+
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 5 -s 13'), ['global', '-m', '5', '-s', '13'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    const customId = payload.components[0].toJSON().components[0].custom_id;
+    let reply = null;
+    await handleGlobalLossButton({
+      customId,
+      user: { id: 'me' },
+      client: {},
+      guild: {},
+      reply: p => { reply = p; },
+    }, { isDeveloper: () => true });
+
+    const body = JSON.stringify(reply.embeds[0].toJSON());
+    assert.ok(body.includes('Great Sword'), 'nama senjata tampil');
+    assert.ok(body.includes('Critical'), 'nama pasif tampil');
+    assert.ok(body.includes('Senjata lawan ditampilkan'));
+    assert.ok(!body.includes('❓'), 'tanda tanya hilang saat toggle aktif');
+  });
+
   // Slot tanpa senjata jangan diberi tanda tanya: itu menyiratkan ada senjata
   // yang disembunyikan padahal kosong.
   it('tidak menaruh tanda tanya pada slot tanpa senjata', async () => {
