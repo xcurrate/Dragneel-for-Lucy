@@ -24,29 +24,53 @@ const passiveData = require('../data/owoPassives');
 const emoji = require('../services/battleEmoji');
 const { DEFAULT_LEVEL, MAX_LEVEL } = data;
 const {
-  teamEmbed, teamListEmbed, usageEmbed, errorEmbed, okEmbed, warnEmbed,
+  teamEmbed, teamListEmbed, errorEmbed, okEmbed, warnEmbed,
   teamButtons, isTeamButton, parseTeamButton,
 } = require('../ui/battlePanel');
 const teamPanel = require('../ui/teamPanel');
+const { commandHelpEmbed } = require('../ui/commandHelp');
+
+function usageSections(prefix = 'd') {
+  return [
+    {
+      name: '🐾 Tim',
+      value: [
+        `\`${prefix} tm\` — panel tim (pindah lewat ◀ ▶ atau menu pilih)`,
+        `\`${prefix} team list\` — daftar tim beserta ID`,
+        `\`${prefix} team new <nama>\` — buat tim baru (ID otomatis 1-21)`,
+        `\`${prefix} team pick <id|nama>\` — jadikan tim aktif`,
+        `\`${prefix} team show [id|nama]\` — lihat isi tim`,
+        `\`${prefix} team del <id|nama>\` / \`${prefix} team rename <id|nama> <baru>\``,
+      ].join('\n'),
+    },
+    {
+      name: '🧩 Slot & Senjata',
+      value: [
+        `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
+        `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
+        `\`${prefix} team clear <slot>\` — kosongkan slot`,
+        `\`${prefix} team swap <slot1> <slot2>\` — tukar posisi pet di tim aktif`,
+      ].join('\n'),
+    },
+    {
+      name: '📦 Blueprint',
+      value: [
+        `\`${prefix} team new <nama> | <blueprint>\` — buat tim langsung dari blueprint`,
+        `\`${prefix} team blueprint <nama> | <blueprint>\` — sama, nama perintah eksplisit`,
+      ].join('\n'),
+    },
+    {
+      name: '⚙️ Opsi Slot',
+      value: [
+        'Opsi: `level=50` (default 50), `weapon=gsword`, `quality=80`, `passive=1,12`, `label=tank`',
+        'Stat manual: `hp=14,att=6,pr=2,wp=3,mag=0,mr=1` atau `14,6,2,3,0,1`',
+      ].join('\n'),
+    },
+  ];
+}
 
 function usage(prefix = 'd') {
-  return [
-    `\`${prefix} tm\` — panel tim (pindah lewat ◀ ▶ atau menu pilih)`,
-    `\`${prefix} team list\` — daftar tim beserta ID`,
-    `\`${prefix} team new <nama>\` — buat tim baru (ID otomatis 1-21)`,
-    `\`${prefix} team new <nama> | <blueprint>\` — buat tim langsung dari blueprint`,
-    `\`${prefix} team blueprint <nama> | <blueprint>\` — sama, nama perintah eksplisit`,
-    `\`${prefix} team pick <id|nama>\` — jadikan tim aktif`,
-    `\`${prefix} team show [id|nama]\` — lihat isi tim`,
-    `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
-    `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
-    `\`${prefix} team clear <slot>\` — kosongkan slot`,
-    `\`${prefix} team swap <slot1> <slot2>\` — tukar posisi pet di tim aktif`,
-    `\`${prefix} team del <id|nama>\` / \`${prefix} team rename <id|nama> <baru>\``,
-    '',
-    'Opsi slot: `level=50` (default 50), `weapon=gsword`, `quality=80`, `passive=1,12`, `label=tank`',
-    'Stat manual: `hp=14,att=6,pr=2,wp=3,mag=0,mr=1` atau `14,6,2,3,0,1`',
-  ].join('\n');
+  return usageSections(prefix).map(section => `**${section.name}**\n${section.value}`).join('\n\n');
 }
 
 // Mencari hewan di dex: nama persis dulu, lalu pencarian longgar.
@@ -237,7 +261,7 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
   const rest = args.slice(1);
 
   if (sub === 'help' || sub === 'bantuan') {
-    return send(message, usageEmbed('🐾 Tim Kustom', usage(prefix)));
+    return send(message, commandHelpEmbed({ title: '🐾 Tim Kustom', sections: usageSections(prefix) }));
   }
 
   // Tanpa argumen `dtm` langsung menampilkan panel komposisi tim, bukan daftar
@@ -350,7 +374,11 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     return handleAdd(message, rest, prefix, send, userId);
   }
 
-  return send(message, usageEmbed('🐾 Tim Kustom', ['Perintah tidak dikenal.', '', usage(prefix)]));
+  return send(message, commandHelpEmbed({
+    title: '🐾 Tim Kustom',
+    description: 'Perintah tidak dikenal.',
+    sections: usageSections(prefix),
+  }));
 }
 
 function handleAdd(message, rest, prefix, send, userId) {
@@ -616,5 +644,5 @@ async function handleTeamButton(i, deps = {}) {
 
 module.exports = {
   handleTeamCommand, handleTeamButton, handleTeamPanelNav, sendTeamPanel,
-  findDexAnimal, parseOptions, parseWeapon, usage, isTeamButton,
+  findDexAnimal, parseOptions, parseWeapon, usage, usageSections, isTeamButton,
 };

@@ -6,6 +6,7 @@
 // pencocokan mirip, di sini jawaban dinilai eksak (mathEngine.isCorrect) supaya
 // "3" tidak lolos saat jawabannya "8".
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { commandHelpEmbed } = require('../ui/commandHelp');
 const { getGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const engine = require('./mathEngine');
 const scores = require('../utils/mathStorage');
@@ -344,14 +345,36 @@ async function handleMessage(message) {
   return handleGuess(message);
 }
 
-function helpText(prefix) {
+function helpSections(prefix) {
   return [
-    '**Cepat Tepat (Matematika)** — jawab benar paling dulu untuk dapat poin.',
-    `\`${prefix}math\` — mulai ronde (${DEFAULT_ROUNDS} soal)`,
-    `\`${prefix}math <jumlah>\` — mulai ronde dengan jumlah soal (maks ${MAX_ROUNDS})`,
-    `\`${prefix}math lb [all]\` — leaderboard mingguan/all-time`,
-    `\`${prefix}math stop\` — hentikan ronde (moderator/admin/developer)`
-  ].join('\n');
+    {
+      name: '🎯 Ronde',
+      value: [
+        `\`${prefix}math\` — mulai ronde (${DEFAULT_ROUNDS} soal)`,
+        `\`${prefix}math <jumlah>\` — mulai ronde dengan jumlah soal (maks ${MAX_ROUNDS})`,
+      ].join('\n'),
+    },
+    {
+      name: '🏆 Leaderboard',
+      value: `\`${prefix}math lb [all]\` — leaderboard mingguan/all-time`,
+    },
+    {
+      name: '⚙️ Moderator',
+      value: `\`${prefix}math stop\` — hentikan ronde (moderator/admin/developer)`,
+    },
+  ];
+}
+
+function helpText(prefix) {
+  return helpSections(prefix).map(section => `**${section.name}**\n${section.value}`).join('\n\n');
+}
+
+function helpEmbed(prefix) {
+  return commandHelpEmbed({
+    title: '🧮 Cepat Tepat — Cara Pakai',
+    description: 'Jawab benar paling dulu untuk dapat poin.',
+    sections: helpSections(prefix),
+  });
 }
 
 async function handleCommand(message) {
@@ -382,7 +405,7 @@ async function handleCommand(message) {
     return true;
   }
 
-  if (sub === 'help' || sub === 'bantuan') { await message.reply(helpText(prefix)); return true; }
+  if (sub === 'help' || sub === 'bantuan') { await message.reply({ embeds: [helpEmbed(prefix)] }); return true; }
 
   const active = sessions.get(message.guildId);
   if (active && !active.ended) {
@@ -423,7 +446,7 @@ async function handleNavigation(interaction) {
 }
 
 module.exports = {
-  handleMessage, handleCommand, handleNavigation, isMathNav, navRow, helpText,
+  handleMessage, handleCommand, handleNavigation, isMathNav, navRow, helpText, helpSections, helpEmbed,
   leaderboardView, roundEmbed, weekRange, dayKey, isAdmin,
   DEFAULT_SECONDS, DEFAULT_ROUNDS, MAX_ROUNDS, NEXT_DELAY_MS, SPEED_BONUS, setNextDelay,
   sessions, startSession, endSession, pointsForAnswer, timeoutQuestion, nextQuestion

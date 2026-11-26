@@ -5,6 +5,7 @@
 // jawaban tersembunyi (lihat family100Match). Poin memakai skema total 100 per
 // soal (family100Score), tanpa bonus penutup ronde.
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { commandHelpEmbed } = require('../ui/commandHelp');
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const bank = require('../data/family100Bank');
 const scores = require('../utils/family100Storage');
@@ -481,7 +482,7 @@ async function handleCommand(message) {
   }
 
   if (sub && sub !== 'mulai' && sub !== 'start' && sub !== '') {
-    await message.reply(helpText(prefix));
+    await message.reply({ embeds: [helpEmbed(prefix)] });
     return true;
   }
 
@@ -523,22 +524,46 @@ async function handleNavigation(interaction) {
   await interaction.update({ embeds: [next.embed], components: [navRow(kind)] });
 }
 
-function helpText(prefix) {
+function helpSections(prefix) {
   return [
-    `**Family 100** — ${bank.count()} soal, total 100 poin per soal.`,
-    `\`${prefix}f100\` — mulai ronde; jika sudah jalan, tampilkan ulang soalnya`,
-    `\`${prefix}f100 soal\` — tampilkan ulang soal & jawaban terbuka (alias \`status\`)`,
-    `\`${prefix}f100 clue\` — buka 1 huruf acak di semua jawaban; terkunci saat sisa ${CLUE_HIDDEN} huruf (jatah ${CLUE_MAX}× per pemain)`,
-    `\`${prefix}f100 reveal\` — tampilkan semua jawaban ${REVEAL_MS / 1000} detik lalu hilang (khusus developer)`,
-    `\`${prefix}f100 skip\` — lewati ke soal berikutnya (semua orang)`,
-    `\`${prefix}f100 stop\` — hentikan ronde (moderator/admin/developer)`,
-    `\`${prefix}f100 lb [all]\` — leaderboard mingguan/all-time`,
-    `\`${prefix}f100 on|off\` — aktifkan/matikan (moderator/admin/developer)`
-  ].join('\n');
+    {
+      name: '🎮 Ronde',
+      value: [
+        `\`${prefix}f100\` — mulai ronde; jika sudah jalan, tampilkan ulang soalnya`,
+        `\`${prefix}f100 soal\` — tampilkan ulang soal & jawaban terbuka (alias \`status\`)`,
+        `\`${prefix}f100 clue\` — buka 1 huruf acak di semua jawaban; terkunci saat sisa ${CLUE_HIDDEN} huruf (jatah ${CLUE_MAX}× per pemain)`,
+        `\`${prefix}f100 skip\` — lewati ke soal berikutnya (semua orang)`,
+      ].join('\n'),
+    },
+    {
+      name: '🏆 Leaderboard',
+      value: `\`${prefix}f100 lb [all]\` — leaderboard mingguan/all-time`,
+    },
+    {
+      name: '⚙️ Moderator & Developer',
+      value: [
+        `\`${prefix}f100 reveal\` — tampilkan semua jawaban ${REVEAL_MS / 1000} detik lalu hilang (khusus developer)`,
+        `\`${prefix}f100 stop\` — hentikan ronde (moderator/admin/developer)`,
+        `\`${prefix}f100 on|off\` — aktifkan/matikan (moderator/admin/developer)`,
+      ].join('\n'),
+    },
+  ];
+}
+
+function helpText(prefix) {
+  return helpSections(prefix).map(section => `**${section.name}**\n${section.value}`).join('\n\n');
+}
+
+function helpEmbed(prefix) {
+  return commandHelpEmbed({
+    title: '🎲 Family 100 — Cara Pakai',
+    description: `**Family 100** — ${bank.count()} soal, total 100 poin per soal.`,
+    sections: helpSections(prefix),
+  });
 }
 
 module.exports = {
-  handleCommand, handleMessage, handleNavigation, isF100Nav, navRow, helpText,
+  handleCommand, handleMessage, handleNavigation, isF100Nav, navRow, helpText, helpSections, helpEmbed,
   leaderboardView, roundEmbed, pointsFor, weekRange, dayKey,
   isModerator, isDeveloper, isAdmin, noteChannelActivity, AUTO_BUMP_AFTER, clueMask, letterIndices, addHint, CLUE_MAX, CLUE_HIDDEN, REVEAL_MS,
   revealEmbed, revealTemporarily,

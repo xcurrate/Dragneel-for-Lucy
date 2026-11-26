@@ -765,6 +765,17 @@ describe('embed UI', () => {
     assert.strictEqual(panel.usageEmbed('Judul', ['a', 'b']).toJSON().description, 'a\nb');
   });
 
+  it('commandHelpEmbed menyusun kategori sebagai field', () => {
+    const { commandHelpEmbed } = require(path.join(ROOT, 'src/ui/commandHelp'));
+    const json = commandHelpEmbed({
+      title: 'Judul',
+      description: 'Deskripsi',
+      sections: [{ name: 'Kategori A', value: 'a' }, { name: 'Kategori B', value: 'b' }],
+    }).toJSON();
+    assert.strictEqual(json.description, 'Deskripsi');
+    assert.deepStrictEqual(json.fields.map(f => f.name), ['Kategori A', 'Kategori B']);
+  });
+
   it('tombol tim dibatasi 5 per baris dan memuat index', () => {
     const teams = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, name: `T${i + 1}`, slots: [] }));
     const rows = panel.teamButtons(teams, teams[0], 'u1');
@@ -952,19 +963,27 @@ describe('balasan command memakai embed', () => {
 
   // Regresi: `...usage(prefix)` menyebar string menjadi per karakter, jadi
   // panduan tampil satu huruf satu baris.
-  it('panduan d team tidak dipecah per huruf', async () => {
+  it('panduan d team memakai field kategori', async () => {
     await handleTeamCommand(message('d team zzz'), ['zzz'], 'd', { sendEmbed });
-    const body = replies[0].description;
-    assert.ok(body.includes('Perintah tidak dikenal.'));
-    assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
+    const embed = replies[0];
+    assert.ok(embed.description.includes('Perintah tidak dikenal.'));
+    assert.deepStrictEqual(
+      (embed.fields || []).map(f => f.name),
+      ['🐾 Tim', '🧩 Slot & Senjata', '📦 Blueprint', '⚙️ Opsi Slot'],
+    );
+    const body = (embed.fields || []).map(f => f.value).join('\n');
     assert.ok(body.includes('`d team list` — daftar tim beserta ID'), 'baris utuh');
   });
 
-  it('panduan d sim tidak dipecah per huruf', async () => {
+  it('panduan d sim memakai field kategori', async () => {
     await handleSimCommand(message('d sim help'), ['help'], 'd', { sendEmbed });
-    const body = replies[0].description;
-    assert.ok(body.split('\n').length < 20, 'jumlah baris wajar');
-    assert.ok(body.includes('`d sim <id>`'), 'baris utuh menyebut ID tim');
+    const embed = replies[0];
+    const fields = embed.fields || [];
+    assert.deepStrictEqual(
+      fields.map(f => f.name),
+      ['⚔️ Dasar', '🆚 Dua Sisi', '🌍 Global', '📊 Hasil', '🚩 Opsi', '🎯 Filter Hasil', '📈 Level'],
+    );
+    assert.ok(fields.some(f => f.value.includes('`d sim <id>`')), 'baris utuh menyebut ID tim');
   });
 });
 

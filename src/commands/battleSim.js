@@ -22,6 +22,7 @@ const {
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
   globalLossPageCount, globalLossPageButtons, parseGlobalLossPageButton,
 } = require('../ui/battlePanel');
+const { commandHelpEmbed } = require('../ui/commandHelp');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
 
@@ -56,28 +57,62 @@ const REPEAT_COOLDOWN_ACTION = 'sim_repeat';
 // Jumlah pertarungan saat `-m` tidak disebut, termasuk untuk tombol 🔁.
 const DEFAULT_RUNS = 50;
 
-function usage(prefix = 'd') {
+function usageSections(prefix = 'd') {
   return [
-    `\`${prefix} sim\` — tim aktif vs tim lain milikmu (atau mirror)`,
-    `\`${prefix} sim <id>\` — lawan tim lain milikmu menurut ID (lihat \`${prefix} tm\`)`,
-    `\`${prefix} sim <nama-tim>\` — sama, tapi memakai nama tim`,
-    `\`${prefix} sim hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60\` — lawan stat manual`,
-    `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
-    `\`${prefix} sim A vs B\` — dua tim milikmu; inline: \`${prefix} sim snail sword crit mtap, snail Aegis 100,50 sac 10,10 vs 100 snail\``,
-    `\`${prefix} sim global\` — tim aktif vs **semua** tim tersimpan (lihat \`${prefix} sim global help\`)`,
-    '',
-    'Tanpa `-m` hasilnya **satu** pertarungan (sisa HP/WP tiap hewan).',
-    `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
-    'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
-    '',
-    'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
-    '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (khusus developer);',
-    '  bisa digabung `-win`/`-lose`/`-tie` dan `-m`. Filter hasil: `-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok,',
-    '  lalu hasil itu yang ditampilkan. Bisa digabung `-m`, mis. `' + prefix + ' sim 2 -lose -m 20`.',
-    `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
-    '',
-    'Level: `lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
-  ].join('\n');
+    {
+      name: '⚔️ Dasar',
+      value: [
+        `\`${prefix} sim\` — tim aktif vs tim lain milikmu (atau mirror)`,
+        `\`${prefix} sim <id>\` — lawan tim lain milikmu menurut ID (lihat \`${prefix} tm\`)`,
+        `\`${prefix} sim <nama-tim>\` — sama, tapi memakai nama tim`,
+        `\`${prefix} sim hp=8,att=6,pr=2,wp=3,mag=5,mr=1 level=60\` — lawan stat manual`,
+        `\`${prefix} sim <hewan> level=60\` — lawan dari hewan dex`,
+      ].join('\n'),
+    },
+    {
+      name: '🆚 Dua Sisi',
+      value: [
+        `\`${prefix} sim A vs B\` — dua tim milikmu`,
+        `Inline: \`${prefix} sim snail sword crit mtap, snail Aegis 100,50 sac 10,10 vs 100 snail\``,
+      ].join('\n'),
+    },
+    {
+      name: '🌍 Global',
+      value: `\`${prefix} sim global\` — tim aktif vs **semua** tim tersimpan (lihat \`${prefix} sim global help\`)`,
+    },
+    {
+      name: '📊 Hasil',
+      value: [
+        'Tanpa `-m` hasilnya **satu** pertarungan (sisa HP/WP tiap hewan).',
+        `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
+        `Tombol 🔁 mengulang matchup yang sama sebanyak ${DEFAULT_RUNS} pertarungan (ephemeral).`,
+        `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
+      ].join('\n'),
+    },
+    {
+      name: '🚩 Opsi',
+      value: [
+        'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+        '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (khusus developer).',
+      ].join('\n'),
+    },
+    {
+      name: '🎯 Filter Hasil',
+      value: [
+        '`-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok, lalu hasil itu yang ditampilkan.',
+        `Bisa digabung \`-m\`, mis. \`${prefix} sim 2 -lose -m 20\`.`,
+        'Bisa juga digabung `-log`; dengan `-m`, log diambil dari pertarungan cocok pertama.',
+      ].join('\n'),
+    },
+    {
+      name: '📈 Level',
+      value: '`lvl100` (kedua sisi 100), `lvl100/60` (kita 100, lawan 60), `lvl/40` (kita tetap, lawan 40)',
+    },
+  ];
+}
+
+function usage(prefix = 'd') {
+  return usageSections(prefix).map(section => `**${section.name}**\n${section.value}`).join('\n\n');
 }
 
 // `A vs B` → { playerTokens: ['A'], enemyArgs: ['B'] }. Tanpa `vs`, sisi
@@ -425,33 +460,52 @@ function makeProgressPublisher(message, sendEmbed, sendPayload, labels, mode) {
   return publish;
 }
 
-function globalUsage(prefix = 'd') {
+function globalUsageSections(prefix = 'd') {
   return [
-    `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** (kecuali tim yang dipilih)`,
-    `\`${prefix} sim global <blueprint>\` — blueprint melawan seluruh tim tersimpan`,
-    '',
-    'Hasil berisi: rata-rata streak, streak terpanjang, Max Streak, rata-rata kalah,',
-    'dan rekap menang/seri/kalah',
-    'yang dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
-    'Tombol **Lihat kekalahan** menampilkan tim yang mengalahkan kamu dari 50 pertarungan pertama',
-    '(hanya terlihat olehmu, senjata lawan disembunyikan).',
-    '',
-    `Opsi:`,
-    `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
-    `\`-total <jumlah>\` total pertarungan, dibagi rata ke semua tim lawan`,
-    `\`-qp <0-100>\` kualitas senjata tim kamu (menimpa kualitas slot)`,
-    `\`-qe <0-100>\` kualitas senjata semua tim lawan`,
-    `\`lvl100\` / \`lvl100/60\` / \`lvl/40\` samakan level, seperti \`${prefix} sim\``,
-    `\`-s <seed>\` ulangi hasil yang sama`,
-    `\`${prefix} sim global weapon [on|off]\` tampilkan ikon senjata lawan (developer)`,
-    '',
-    `Batas per tim: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}** pertarungan `
-      + `(diatur developer lewat \`${prefix} sim global limit\`).`,
-    `Batas keras: **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}** pertarungan per perintah.`,
-    'Pertarungan dibagi ke beberapa worker, jadi jutaan pertarungan selesai',
-    'dalam hitungan detik sampai puluhan detik.',
-    `Cooldown: **${Math.round(GLOBAL_COOLDOWN_MS / 1000)} detik** untuk selain developer.`,
-  ].join('\n');
+    {
+      name: '🌍 Pemakaian',
+      value: [
+        `\`${prefix} sim global\` — tim aktif melawan **seluruh tim tersimpan** (kecuali tim yang dipilih)`,
+        `\`${prefix} sim global <blueprint>\` — blueprint melawan seluruh tim tersimpan`,
+      ].join('\n'),
+    },
+    {
+      name: '📊 Hasil',
+      value: [
+        'Rata-rata streak, streak terpanjang, Max Streak, rata-rata kalah, dan rekap menang/seri/kalah.',
+        'Dipisah antara tim lawan berlevel di bawah 35 dan 35 ke atas.',
+        'Tombol **Lihat kekalahan** menampilkan tim yang mengalahkan kamu dari 50 pertarungan pertama',
+        '(hanya terlihat olehmu, senjata lawan disembunyikan).',
+      ].join('\n'),
+    },
+    {
+      name: '🚩 Opsi',
+      value: [
+        `\`-m <jumlah>\` berapa kali tiap tim dilawan (default ${store.DEFAULT_MAX_GLOBAL_RUNS.toLocaleString('id-ID')})`,
+        '`-total <jumlah>` total pertarungan, dibagi rata ke semua tim lawan',
+        '`-qp <0-100>` kualitas senjata tim kamu (menimpa kualitas slot)',
+        '`-qe <0-100>` kualitas senjata semua tim lawan',
+        `\`lvl100\` / \`lvl100/60\` / \`lvl/40\` samakan level, seperti \`${prefix} sim\``,
+        '`-s <seed>` ulangi hasil yang sama',
+        `\`${prefix} sim global weapon [on|off]\` tampilkan ikon senjata lawan (developer)`,
+      ].join('\n'),
+    },
+    {
+      name: '⚙️ Batas',
+      value: [
+        `Batas per tim: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}** pertarungan `
+          + `(diatur developer lewat \`${prefix} sim global limit\`).`,
+        `Batas keras: **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}** pertarungan per perintah.`,
+        'Pertarungan dibagi ke beberapa worker, jadi jutaan pertarungan selesai',
+        'dalam hitungan detik sampai puluhan detik.',
+        `Cooldown: **${Math.round(GLOBAL_COOLDOWN_MS / 1000)} detik** untuk selain developer.`,
+      ].join('\n'),
+    },
+  ];
+}
+
+function globalUsage(prefix = 'd') {
+  return globalUsageSections(prefix).map(section => `**${section.name}**\n${section.value}`).join('\n\n');
 }
 
 // Terima dua bentuk: `-m <per tim>` atau `-total <total pertarungan>`.
@@ -956,7 +1010,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   // `help` tidak kena cooldown: perintah bantuan tidak menjalankan simulasi.
   if ((args[0] || '').toLowerCase() === 'help' || (args[0] || '').toLowerCase() === 'bantuan') {
-    return send(message, usageEmbed('⚔️ Simulasi Battle', usage(prefix)));
+    return send(message, commandHelpEmbed({ title: '⚔️ Simulasi Battle', sections: usageSections(prefix) }));
   }
 
   // `d sim limit [jumlah]` — developer mengatur batas pertarungan semua user.
@@ -969,7 +1023,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (['global', 'g'].includes(mode)) {
     const rest = args.slice(1);
     if (['help', 'bantuan'].includes((rest[0] || '').toLowerCase())) {
-      return send(message, usageEmbed('🌍 Simulasi Global', globalUsage(prefix)));
+      return send(message, commandHelpEmbed({ title: '🌍 Simulasi Global', sections: globalUsageSections(prefix) }));
     }
     if ((rest[0] || '').toLowerCase() === 'limit') {
       return handleGlobalLimitCommand(message, rest.slice(1), prefix, deps);
@@ -1314,6 +1368,6 @@ module.exports = {
   handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalLossPageButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
   handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
-  parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,
+  parseFlags, resolveEnemy, resolveTeamSpecs, usage, usageSections, globalUsage, globalUsageSections, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
 };

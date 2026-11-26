@@ -14,6 +14,7 @@
 // pengingat. Anggota mengatur cara ping (tag/reply/tanpa keduanya) lewat kotak
 // interaksi `lreminder`.
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
+const { commandHelpEmbed } = require('../ui/commandHelp');
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, matchPrefix } = require('../utils/storage');
 const store = require('../utils/lucyActionStorage');
 const lucyStore = require('../utils/lucyCounterStorage');
@@ -769,37 +770,62 @@ function isModerator(message) {
   return Boolean(message.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild));
 }
 
-function helpText(prefix) {
+function helpSections(prefix) {
   return [
-    '**Aksi Lucy** — bot memantau pesan yang memakai prefix bot Lucy.',
-    'Bentuk yang dikenali:',
-    '`lucy pray` / `lpray` • `lucy curse` / `lcurse`',
-    '`lucy battle` / `lucy fight` / `lbattle` / `lfight` / `lb` • `lucy hunt` / `lucy catch` / `lhunt` / `lh`',
-    '',
-    `\`${prefix} lucyprefix\` — lihat prefix bot Lucy yang dipantau (admin)`,
-    `\`${prefix} lucyprefix add|remove|reset <prefix...>\` — kelola prefix tambahan (admin; \`lucy\` selalu aktif)`,
-    `\`${prefix} lreminder\` — kotak interaksi: on/off & cara ping (tag/reply/tanpa keduanya)`,
-    'Pengingat **OFF** secara default — nyalakan sendiri lewat tombol.',
-    'Jenis: pray/curse (5 menit, satu tombol), battle/hunt (15 detik, satu tombol), lucy (10 detik).',
-    `\`${prefix} lreminder reply <jenis> <teks>\` — balasan kustom (khusus premium)`,
-    'Pengaturan reminder berlaku **global di semua server**.',
-    '',
-    '**Leaderboard**',
-    `\`${prefix} top [kategori] [rentang] [halaman] [global]\` — alias \`${prefix} t\``,
-    `  tanpa kategori = leaderboard jumlah LUCY (penghitung yang sama dengan \`${prefix} lcount\`)`,
-    '  kategori: lucy, pray, curse, battle (mencakup hunt)',
-    '  rentang: 7d, all (semua waktu), atau tanggal seperti `5 nov`',
-    `  contoh: \`${prefix} top\`, \`${prefix} top pray\`, \`${prefix} top battle 7d\`, \`${prefix} top lucy all\``,
-    `\`${prefix} global\` (alias \`${prefix} g\`) — leaderboard lintas server, default jumlah LUCY`,
-    `  contoh: \`${prefix} g\`, \`${prefix} g pray\`, \`${prefix} g battle 7d\``,
-    `\`${prefix} lcount\` / \`${prefix} lcountall\` — leaderboard Lucy harian / all-time (dengan tombol)`,
-    `\`${prefix} s count on|off\` — sakelar counter Lucy seluruh server (admin/developer)`,
-    '',
-    '**Chart**',
-    `\`${prefix} chart [user] [rentang]\` — gambar detak jantung "say Lucy"`,
-    `  tanpa rentang = 7 hari terakhir; \`30d\` = 30 hari; \`-sincestart\` = sejak catatan pertama user`,
-    `  contoh: \`${prefix} chart\`, \`${prefix} chart 30d\`, \`${prefix} chart -sincestart\``
-  ].join('\n');
+    {
+      name: '💬 Aksi Lucy',
+      value: [
+        '`lucy pray` / `lpray` • `lucy curse` / `lcurse`',
+        '`lucy battle` / `lucy fight` / `lbattle` / `lfight` / `lb` • `lucy hunt` / `lucy catch` / `lhunt` / `lh`',
+      ].join('\n'),
+    },
+    {
+      name: '⚙️ Pengaturan',
+      value: [
+        `\`${prefix} lucyprefix\` — lihat prefix bot Lucy yang dipantau (admin)`,
+        `\`${prefix} lucyprefix add|remove|reset <prefix...>\` — kelola prefix tambahan (admin; \`lucy\` selalu aktif)`,
+        `\`${prefix} lreminder\` — kotak interaksi: on/off & cara ping (tag/reply/tanpa keduanya)`,
+        'Pengingat **OFF** secara default — nyalakan sendiri lewat tombol.',
+        'Jenis: pray/curse (5 menit, satu tombol), battle/hunt (15 detik, satu tombol), lucy (10 detik).',
+        `\`${prefix} lreminder reply <jenis> <teks>\` — balasan kustom (khusus premium)`,
+        'Pengaturan reminder berlaku **global di semua server**.',
+      ].join('\n'),
+    },
+    {
+      name: '🏆 Leaderboard',
+      value: [
+        `\`${prefix} top [kategori] [rentang] [halaman] [global]\` — alias \`${prefix} t\``,
+        `Tanpa kategori = leaderboard jumlah LUCY (penghitung yang sama dengan \`${prefix} lcount\`).`,
+        'Kategori: lucy, pray, curse, battle (mencakup hunt).',
+        'Rentang: 7d, all (semua waktu), atau tanggal seperti `5 nov`.',
+        `Contoh: \`${prefix} top\`, \`${prefix} top pray\`, \`${prefix} top battle 7d\`, \`${prefix} top lucy all\`.`,
+        `\`${prefix} global\` (alias \`${prefix} g\`) — leaderboard lintas server, default jumlah LUCY.`,
+        `Contoh: \`${prefix} g\`, \`${prefix} g pray\`, \`${prefix} g battle 7d\`.`,
+        `\`${prefix} lcount\` / \`${prefix} lcountall\` — leaderboard Lucy harian / all-time (dengan tombol).`,
+        `\`${prefix} s count on|off\` — sakelar counter Lucy seluruh server (admin/developer).`,
+      ].join('\n'),
+    },
+    {
+      name: '📈 Chart',
+      value: [
+        `\`${prefix} chart [user] [rentang]\` — gambar detak jantung "say Lucy"`,
+        'Tanpa rentang = 7 hari terakhir; `30d` = 30 hari; `-sincestart` = sejak catatan pertama user.',
+        `Contoh: \`${prefix} chart\`, \`${prefix} chart 30d\`, \`${prefix} chart -sincestart\`.`,
+      ].join('\n'),
+    },
+  ];
+}
+
+function helpText(prefix) {
+  return helpSections(prefix).map(section => `**${section.name}**\n${section.value}`).join('\n\n');
+}
+
+function helpEmbed(prefix) {
+  return commandHelpEmbed({
+    title: '💬 Aksi Lucy — Cara Pakai',
+    description: 'Bot memantau pesan yang memakai prefix bot Lucy.',
+    sections: helpSections(prefix),
+  });
 }
 
 async function handleCommand(message) {
@@ -877,7 +903,7 @@ async function handleLucyPrefixCommand(message, prefix, parts) {
     if (!requested.length) { await message.reply(`Format: \`${prefix} lucyprefix remove <prefix...>\`.`); return true; }
     next = extras.filter(p => !requested.includes(p));
   } else {
-    await message.reply(helpText(prefix));
+    await message.reply({ embeds: [helpEmbed(prefix)] });
     return true;
   }
 
@@ -1006,7 +1032,7 @@ async function handleReminderCommand(message, prefix, parts) {
     return true;
   }
 
-  await message.reply(helpText(prefix));
+  await message.reply({ embeds: [helpEmbed(prefix)] });
   return true;
 }
 
@@ -1188,7 +1214,7 @@ async function handleMessage(message) {
 
 module.exports = {
   handleStatsCommand, dailyStats, clockStats, parseStatsTarget, statsBreakdown,
-  handleMessage, handleCommand, handleComponent, isReminderNav, helpText,
+  handleMessage, handleCommand, handleComponent, isReminderNav, helpText, helpSections, helpEmbed,
   handleLeaderboardNav, isLeaderboardNav,
   panelEmbed, panelComponents, leaderboardView, parseRange, rangeLabel,
   scheduleReminder, deliverReminder, scheduledCount, renderTemplate, replyTemplate, deliveryContext,
