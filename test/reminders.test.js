@@ -581,6 +581,12 @@ describe('custom reminder — variables', () => {
     assert.equal(variables().render('{USER_AVATAR}', context), variables().FALLBACK);
   });
 
+  it('menyediakan banyak emoji acak tanpa duplikat', () => {
+    const emojis = variables().EMOJIS;
+    assert.ok(emojis.length >= 100, 'daftar emoji harus banyak');
+    assert.strictEqual(new Set(emojis).size, emojis.length, 'tidak boleh ada duplikat');
+  });
+
   it('resolves random and time variables consistently within one render', () => {
     const context = variables().createRenderContext({ user: { id: '1' } });
     const out = variables().render('{EMOJI} {EMOJI} {FLAG}', context);

@@ -18,8 +18,30 @@ const FALLBACK = '(tidak tersedia)';
 const MAX_VALUE_LENGTH = 1024;
 const MAX_OUTPUT_LENGTH = 6000; // batas konten pesan Discord
 
-// Emoji acak untuk {EMOJI}. Sengaja daftar kecil dan aman (tanpa mention/format).
-const EMOJIS = ['🎉', '🔥', '✨', '🌟', '🎯', '🍀', '💫', '🎁', '🏆', '⚡', '🌈', '💎', '🚀', '🍭', '🧿', '🪄'];
+// Emoji acak untuk {EMOJI}. Aman (tanpa mention/format) dan cukup banyak
+// supaya pesan berulang tidak terasa monoton.
+const EMOJIS = [
+  // Perayaan
+  '🎉', '🎊', '🥳', '🎈', '🎁', '🎂', '🍰', '🧁', '🍾', '🥂', '🎀', '🎗️',
+  // Bintang & efek
+  '✨', '🌟', '⭐', '💫', '🌠', '🔥', '⚡', '💥', '☄️', '🌈', '🪩', '🔆',
+  // Alam
+  '🌸', '🌺', '🌻', '🌹', '🌷', '🌼', '🍀', '🌿', '🍃', '🌵', '🌴', '🌲',
+  '🍁', '🍂', '🌊', '🌙', '☀️', '🌤️', '⛅', '🌦️', '❄️', '⛄',
+  // Hewan
+  '🐱', '🐶', '🐼', '🐨', '🐯', '🦁', '🐸', '🐵', '🦊', '🐰', '🐹', '🐧',
+  '🦄', '🐲', '🐉', '🦋', '🐢', '🐙', '🐳', '🦉',
+  // Makanan
+  '🍕', '🍔', '🍟', '🌮', '🍣', '🍜', '🍩', '🍪', '🍫', '🍭', '🍬', '🍿',
+  '🥑', '🍓', '🍉', '🍊', '🍋', '🍇', '🥝', '🍒',
+  // Benda & petualangan
+  '💎', '👑', '🏆', '🥇', '🎯', '🎮', '🕹️', '🎲', '🧩', '🎨', '🎵', '🎶',
+  '📚', '✏️', '🖊️', '📌', '🔮', '🧿', '🪄', '🛸', '🚀', '✈️', '🚗', '🚲',
+  // Hati
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💖', '💗',
+  // Lain-lain
+  '🔔', '🏅', '🎖️', '🗝️', '🔑', '💡', '🕯️', '🧸', '🪁', '🎪', '🎭', '🛡️',
+];
 // Bendera acak untuk {FLAG}.
 const FLAGS = ['🇮🇩', '🇯🇵', '🇰🇷', '🇸🇬', '🇲🇾', '🇺🇸', '🇬🇧', '🇩🇪', '🇫🇷', '🇧🇷', '🇦🇺', '🇨🇦', '🇮🇳', '🇹🇭', '🇻🇳', '🇵🇭'];
 
@@ -261,7 +283,7 @@ function variableReference() {
 }
 
 module.exports = {
-  VARIABLES, VARIABLE_NAMES, VARIABLE_RE, MENTION_VARIABLES, FALLBACK, MAX_OUTPUT_LENGTH, MAX_VALUE_LENGTH,
+  VARIABLES, VARIABLE_NAMES, VARIABLE_RE, MENTION_VARIABLES, EMOJIS, FALLBACK, MAX_OUTPUT_LENGTH, MAX_VALUE_LENGTH,
   createRenderContext, render, renderEmbed, mentions, variablesUsed, unknownVariables, variableReference,
   wibDayStartUnix, goalContext, dayKey
 };
