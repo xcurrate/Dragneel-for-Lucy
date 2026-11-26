@@ -4175,3 +4175,85 @@ describe('senjata baru: Arbiter\'s Edge, Briar-Heart Staff, Soul Tithe', () => {
     assert.strictEqual(weaponModule.weaponAbility(ctxOf(), me[0].weapon, me[0]), false);
   });
 });
+
+describe('pasif Double Strike', () => {
+  const rng = { next: () => 0.5 };
+  const unit = (name, stats = {}) => ({
+    pid: name, slot: name, nickname: name, level: 60,
+    stats: Object.assign({
+      hp: [5000, 5000, 5000, 0], wp: [2000, 2000, 2000, 0],
+      mag: [1000, 0], att: [500, 0], pr: [0, 0], mr: [0, 0],
+    }, stats),
+    buffs: [], weapon: null, team: [], foes: [],
+  });
+  const link = (mine, theirs) => {
+    for (const u of mine) { u.team = mine; u.foes = theirs; }
+    for (const u of theirs) { u.team = theirs; u.foes = mine; }
+  };
+  const ctxOf = (actionId = 1, chance = 0.1) => ({
+    rng: { next: () => chance }, tags: new Set(), damageDealt: 0, actionId,
+  });
+
+  it('data memakai nama, alias, dan Unique Passive resmi', () => {
+    const def = require(path.join(ROOT, 'src/data/owoPassives')).get('ds');
+    assert.strictEqual(def.id, 26);
+    assert.strictEqual(def.name, 'Double Strike');
+    assert.strictEqual(def.unique, true);
+    assert.deepStrictEqual(def.qualityList, [[10, 25], [15, 30], [35, 20]]);
+  });
+
+  it('menyerang lagi dengan 30% nilai mentah dan biaya 20% pada quality 100', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 200, passives: [createPassive(26, 100, rng)] };
+    const ctx = ctxOf(1, 0.1);
+    engine.inflictDamage(ctx, me[0], them[0], 1000, engine.PHYSICAL);
+    // Hit pertama 1000, hit kedua 30% x 1000 = 300, biaya 20% x 200 = 40 WP.
+    assert.strictEqual(them[0].stats.hp[0], 3700);
+    assert.strictEqual(me[0].stats.wp[0], 1960);
+  });
+
+  it('tidak menyerang lagi bila undian peluang gagal', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 200, passives: [createPassive(26, 100, rng)] };
+    engine.inflictDamage(ctxOf(1, 0.9), me[0], them[0], 1000, engine.PHYSICAL);
+    assert.strictEqual(them[0].stats.hp[0], 4000);
+    assert.strictEqual(me[0].stats.wp[0], 2000);
+  });
+
+  it('hanya mengundi sekali per aksi walau ada beberapa hit', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 200, passives: [createPassive(26, 100, rng)] };
+    const ctx = ctxOf(7, 0.1);
+    engine.inflictDamage(ctx, me[0], them[0], 1000, engine.PHYSICAL);
+    engine.inflictDamage(ctx, me[0], them[0], 1000, engine.PHYSICAL);
+    // Dua hit dasar (2000) + satu hit tambahan (300), bukan dua.
+    assert.strictEqual(them[0].stats.hp[0], 2700);
+    assert.strictEqual(me[0].stats.wp[0], 1960);
+  });
+
+  it('tidak membayar atau menyerang lagi bila WP kurang dari biaya tambahan', () => {
+    const me = [unit('me', { wp: [10, 2000, 2000, 0] })];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 200, passives: [createPassive(26, 100, rng)] };
+    engine.inflictDamage(ctxOf(1, 0.1), me[0], them[0], 1000, engine.PHYSICAL);
+    assert.strictEqual(them[0].stats.hp[0], 4000);
+    assert.strictEqual(me[0].stats.wp[0], 10);
+  });
+
+  it('rollPassives tidak memasang Double Strike dua kali pada senjata yang sama', () => {
+    const { PASSIVES, rollPassives } = require(path.join(ROOT, 'src/services/battlePassives'));
+    const pool = Object.keys(PASSIVES).map(Number).filter(id => id !== 21);
+    const index = pool.indexOf(26);
+    const picks = [index / pool.length, index / pool.length, 0];
+    const seq = { next: () => picks.shift() ?? 0 };
+    const rolled = rollPassives(3, seq, 100);
+    assert.strictEqual(rolled.filter(p => p.id === 26).length, 1);
+  });
+});

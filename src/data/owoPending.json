@@ -42,7 +42,7 @@
   ],
   "passives": [
     {
-      "id": 26,
+      "id": 23,
       "name": "Lone Wolf",
       "emojis": [
         "<:lwolf:1478938455143616566>"
@@ -50,18 +50,6 @@
       "aliases": [
         "lwolf",
         "wolf"
-      ]
-    },
-    {
-      "id": 27,
-      "name": "Deep Strike",
-      "emojis": [
-        "<:dstrike:1478938519769452616>"
-      ],
-      "aliases": [
-        "dstrike",
-        "strike",
-        "ds"
       ]
     }
   ]

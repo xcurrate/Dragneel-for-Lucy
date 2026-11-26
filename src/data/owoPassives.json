@@ -706,6 +706,42 @@
       ]
     },
     {
+      "id": 26,
+      "name": "Double Strike",
+      "emojis": [
+        "<:fds:1550497925132714004>"
+      ],
+      "emojiNote": "Hanya token Fabled (fds) yang tersedia; token ini dipakai untuk semua tier sampai varian rank lain diberikan.",
+      "aliases": [
+        "dstrike",
+        "strike",
+        "ds",
+        "doublestrike"
+      ],
+      "category": "damage",
+      "summary": "Saat menyerang, 10-25% peluang menyerang sekali lagi dengan 15-30% Effectiveness dan 35-20% biaya senjata. Unique: hanya sekali per senjata.",
+      "sourceText": "When this animal attacks, it has a **10-25%** chance to attack one more time with **15-30%** of the weapon's *Effectiveness* and **35-20%** of the weapon's cost.\n> -# - <:one_dim:1479591837646983238> **Unique Passive** - This passive is only available once per weapon.\n*Aliases: dstrike, strike, ds*",
+      "qualityList": [
+        [
+          10,
+          25
+        ],
+        [
+          15,
+          30
+        ],
+        [
+          35,
+          20
+        ]
+      ],
+      "qualityNote": "Slot ketiga adalah biaya senjata dan nilainya TURUN saat quality naik (35 -> 20).",
+      "hooks": [
+        "postAttack"
+      ],
+      "unique": true
+    },
+    {
       "id": 27,
       "name": "Adaptation",
       "emojis": [

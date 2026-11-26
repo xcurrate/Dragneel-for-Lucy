@@ -233,6 +233,34 @@ const PASSIVES = {
     },
   }),
 
+  // Double Strike: sekali per aksi, mengundi peluang lalu menyerang lagi dengan
+  // sebagian nilai mentah serangan pertama. Biaya tambahan memakai persentase
+  // dari biaya senjata, jadi senjata tanpa biaya tidak membayar WP.
+  26: (stats) => ({
+    id: 26, name: 'Double Strike', stats,
+    postAttack(ctx, unit, target, total, type) {
+      const { tagged, withTag, isAlive, useMana, inflictDamage, chooseTarget, PHYSICAL } = engine();
+      if (tagged(ctx, 'doubleStrike', unit) || !isAlive(unit)) return;
+      const action = ctx.actionId ?? null;
+      if (action !== null && this.lastAction === action) return;
+      if (action !== null) this.lastAction = action;
+      if (ctx.rng.next() * 100 > stats[0]) return;
+      let victim = target;
+      if (!isAlive(victim)) {
+        victim = chooseTarget(unit, unit.team, unit.foes, ctx.rng, { ignoreChoose: true });
+      }
+      if (!victim) return;
+      const cost = Math.max(0, Math.round((unit.weapon?.manaCost || 0) * (stats[2] / 100)));
+      if (cost > 0 && unit.stats.wp[0] < cost) return;
+      const raw = ctx.lastHit?.raw ?? total;
+      if (!(raw > 0)) return;
+      withTag(ctx, 'doubleStrike', unit, () => {
+        if (cost > 0) useMana(unit, cost);
+        inflictDamage(ctx, unit, victim, raw * (stats[1] / 100), type || PHYSICAL);
+      });
+    },
+  }),
+
   20: (stats) => ({
     id: 20, name: 'Snail', stats,
     postAttack(ctx, unit, target, total, type) {
@@ -314,12 +342,19 @@ function createPassive(id, quality, rng) {
 
 function rollPassives(count, rng, quality) {
   const pool = Object.keys(PASSIVES).map(Number).filter(id => id !== 21);
+  const uniqueIds = new Set(passiveData.passives.filter(p => p.unique).map(p => p.id));
   const picked = [];
+  const usedUnique = new Set();
   for (let i = 0; i < count; i++) {
-    const id = pool[Math.floor((rng ? rng.next() : Math.random()) * pool.length)];
-    picked.push(createPassive(id, quality ?? null, rng));
+    const candidates = pool.filter(id => !(uniqueIds.has(id) && usedUnique.has(id)));
+    if (!candidates.length) break;
+    const id = candidates[Math.floor((rng ? rng.next() : Math.random()) * candidates.length)];
+    const passive = createPassive(id, quality ?? null, rng);
+    if (!passive) continue;
+    picked.push(passive);
+    if (uniqueIds.has(id)) usedUnique.add(id);
   }
-  return picked.filter(Boolean);
+  return picked;
 }
 
 module.exports = { PASSIVES, createPassive, rollPassives, statsFor, statAt };

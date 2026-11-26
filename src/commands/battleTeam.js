@@ -148,6 +148,11 @@ function parseWeaponArgs(args, prefix = 'd') {
 // 0-2 (boleh tanpa pasif sama sekali).
 function validatePassiveCount(weapon, passives, prefix = 'd') {
   if (!weapon) return null;
+  const duplicateUnique = passives.find((id, index) =>
+    passives.indexOf(id) !== index && passiveData.get(id)?.unique);
+  if (duplicateUnique) {
+    return `**${passiveData.get(duplicateUnique).name}** adalah Unique Passive dan hanya bisa dipasang sekali per senjata.`;
+  }
   const { min, max } = data.passiveRange(weapon);
   const given = passives.length;
   if (given >= min && given <= max) return null;

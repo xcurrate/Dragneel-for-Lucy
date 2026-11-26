@@ -136,6 +136,9 @@ function inflictDamage(ctx, attacker, target, rawDamage, type, { bypassRes = fal
 
   let total = bucket.amount + bucket.bonus;
   if (total < 0) total = 0;
+  // Nilai mentah dipakai pasif yang mengulang serangan (Double Strike) agar
+  // resistensi sasaran dihitung sekali lagi, bukan dua kali dari nilai final.
+  ctx.lastHit = { raw: rawDamage, total, type, target };
   target.stats.hp[0] -= total;
   ctx.damageDealt += total;
   notifyTeamWeapons(attacker.team, 'onAllyDamage', ctx, attacker, target, total, type);
@@ -423,6 +426,9 @@ function runTurn(ctx, player, enemy) {
 }
 
 function act(ctx, actor, allies, foes) {
+  // Satu aksi bisa menghasilkan beberapa hit (ability multi-hit). Pasif seperti
+  // Double Strike memakai nomor ini agar hanya mengundi sekali per aksi.
+  ctx.actionId = (ctx.actionId || 0) + 1;
   const weapon = actor.weapon;
   // `manaCost` bisa 0 (Bleeding Gaze), jadi yang diperiksa keberadaan ability,
   // bukan truthiness biayanya — kalau tidak, senjata berbiaya WP 0 tidak pernah

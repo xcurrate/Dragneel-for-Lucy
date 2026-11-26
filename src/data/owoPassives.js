@@ -1,4 +1,4 @@
-// Data pasif battle OwO (21 pasif), dipakai sebagai acuan fitur simulasi battle.
+// Data pasif battle OwO, dipakai sebagai acuan fitur simulasi battle.
 //
 // Sumber: https://github.com/ChristopherBThai/Discord-OwO-Bot (CC BY-NC-SA 4.0),
 // dibaca dari `src/commands/commandList/battle/passives/`. Angka di
