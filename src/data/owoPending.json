@@ -1,44 +1,6 @@
 {
-  "note": "Senjata dan pasif yang sudah ada nama/alias/emoji-nya tetapi mekaniknya belum dibaca dari sumber OwO. Disimpan di sini supaya alias tetap dikenali dan pesan errornya jelas, bukan 'tidak dikenal'. Pindahkan ke owoBattle.json / owoPassives.json setelah qualityList, ability, dan hook-nya terverifikasi.",
-  "source": "Daftar resmi OwO (emoji + alias) dari pengguna bot.",
-  "weapons": [
-    {
-      "id": 23,
-      "name": "Cursed Staff",
-      "emojis": [
-        "<:cstaff:1464684674684162080>"
-      ],
-      "aliases": [],
-      "aliasNotes": [
-        "Alias `cstaff` dipindah ke Staff of Corruption (id 125) sesuai deskripsi live."
-      ]
-    },
-    {
-      "id": 28,
-      "name": "Burning Gaze",
-      "emojis": [
-        "<:bgaz:1478938043338592451>"
-      ],
-      "aliases": [
-        "bgaz",
-        "gaze"
-      ],
-      "aliasNotes": [
-        "Alias `bgaze` dipindah ke Bleeding Gaze (id 123) sesuai deskripsi live."
-      ]
-    },
-    {
-      "id": 29,
-      "name": "Cursed Claw",
-      "emojis": [
-        "<:cclaw:1480316577478869043>"
-      ],
-      "aliases": [],
-      "aliasNotes": [
-        "Alias `cclaw` dipindah ke Conduit Claw (id 124) sesuai deskripsi live.",
-        "Alias `claw` dipindah ke Conduit Claw (124) sesuai deskripsi live."
-      ]
-    }
-  ],
+  "note": "Senjata dan pasif yang sudah ada nama/alias/emoji-nya tetapi mekaniknya belum tersedia. Disimpan di sini supaya alias tetap dikenali dan pesan errornya jelas, bukan \"tidak dikenal\". Pindahkan ke owoBattle.json / owoPassives.json setelah qualityList, ability, dan hook-nya terverifikasi.",
+  "source": "Daftar nama/alias dari data sebelumnya.",
+  "weapons": [],
   "passives": []
 }

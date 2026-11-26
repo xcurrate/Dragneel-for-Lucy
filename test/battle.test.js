@@ -1912,9 +1912,8 @@ describe('dtm s memasang senjata ke slot', () => {
     assert.ok(run('s', 'bow', 'crit', '9').includes('Slot harus 1-3'));
   });
 
-  it('membedakan senjata belum ada mekanik dari tidak dikenal', () => {
-    // `stithe` sekarang sudah bermekanik, jadi contoh pending memakai Burning Gaze.
-    assert.ok(run('s', 'bgaz', 'crit').includes('belum punya data simulasi'));
+  it('membedakan senjata dikenal dari tidak dikenal', () => {
+    assert.ok(!run('s', 'bgaze', 'crit').includes('tidak dikenal'));
     assert.ok(run('s', 'zzz', 'crit').includes('tidak dikenal'));
   });
 
@@ -1949,6 +1948,9 @@ describe('alias senjata dan pasif', () => {
       csy: 'Culling Scythe', scythe: 'Culling Scythe', cel: 'Rune of Celebration',
       pstaff: 'Staff of Purity', lsy: 'Leeching Scythe', ffish: 'Foul Fish',
       lrune: 'Rune of Luck',
+      corruptionstaff: 'Staff of Corruption', cstaff: 'Staff of Corruption',
+      bleedinggaze: 'Bleeding Gaze', bgaze: 'Bleeding Gaze',
+      conduitclaw: 'Conduit Claw', cclaw: 'Conduit Claw',
     };
     for (const [alias, name] of Object.entries(cases)) {
       const found = battleData.findWeapon(alias);
@@ -1973,7 +1975,7 @@ describe('alias senjata dan pasif', () => {
     }
   });
 
-  it('senjata tanpa data simulasi dilaporkan belum siap, bukan tidak dikenal', () => {
+  it('senjata yang sudah bermekanik tidak dilaporkan pending', () => {
     const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
     const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-pending-'));
@@ -1981,29 +1983,18 @@ describe('alias senjata dan pasif', () => {
     store.createTeam('u', 'T');
     store.setActiveTeam('u', 'T');
     const replies = [];
-    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=bgaz'], 'd', {
+    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=bgaze'], 'd', {
       sendEmbed: (m, e) => replies.push(e.toJSON()),
     });
-    assert.ok(replies[0].description.includes('belum punya data simulasi'));
+    assert.ok(!replies[0].description.includes('belum punya data simulasi'));
     assert.ok(!replies[0].description.includes('tidak dikenal'));
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('data pending tetap punya nama dan alias walau mekanik belum ada', () => {
+  it('data pending tidak lagi menyimpan nama lama yang sudah bermekanik', () => {
     const pending = battleData.pending;
-    assert.ok(pending.weapons.length > 0);
-    assert.ok(Array.isArray(pending.passives));
-    for (const w of pending.weapons) {
-      assert.ok(w.name, `${w.name} punya nama`);
-      // Alias boleh habis bila semuanya sudah dipindah ke senjata yang sudah
-      // bermekanik; `aliasNotes` menjelaskan ke mana perginya.
-      if (!w.aliases.length) {
-        assert.ok(w.aliasNotes?.length, `${w.name} tanpa alias harus punya aliasNotes`);
-        continue;
-      }
-      assert.strictEqual(battleData.findWeapon(w.aliases[0]), null, 'belum masuk data simulasi');
-      assert.ok(battleData.findPendingWeapon(w.aliases[0]), 'terdaftar sebagai pending');
-    }
+    assert.deepStrictEqual(pending.weapons, []);
+    assert.deepStrictEqual(pending.passives, []);
   });
 });
 
