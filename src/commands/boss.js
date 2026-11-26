@@ -32,8 +32,6 @@ const data = new SlashCommandBuilder()
     .addRoleOption(o => o.setName('role').setDescription('Role yang akan ditag').setRequired(true)))
   .addSubcommand(s => s.setName('server-on').setDescription('Aktifkan tracker untuk seluruh server'))
   .addSubcommand(s => s.setName('server-off').setDescription('Matikan tracker untuk seluruh server'))
-  .addSubcommand(s => s.setName('prefix').setDescription('Lihat atau ubah prefix perintah server')
-    .addStringOption(o => o.setName('nilai').setDescription('Prefix baru, 1–10 karakter tanpa spasi').setRequired(false).setMaxLength(10)))
   .addSubcommand(s => s.setName('admin-help').setDescription('Panduan pengaturan khusus moderator/admin'));
 
 function isAdmin(i) {
@@ -55,16 +53,12 @@ function adminHelpEmbed(prefix) {
       { name: '/boss setup channel:#channel role:@role', value: 'Pilih channel notifikasi dan role yang akan ditag.', inline: false },
       { name: '/boss server-on', value: 'Aktifkan tracker untuk semua anggota server.', inline: false },
       { name: '/boss server-off', value: 'Matikan notifikasi server tanpa menghapus konfigurasi.', inline: false },
-      { name: '/boss prefix', value: 'Lihat atau ubah prefix server (1–10 karakter tanpa spasi).', inline: false },
       { name: prefix + ' boss setup #channel @role', value: 'Contoh pengaturan melalui prefix.', inline: false },
       { name: prefix + ' boss server-on', value: 'Aktifkan tracker untuk semua anggota server.', inline: false },
       { name: prefix + ' boss server-off', value: 'Matikan tracker server.', inline: false },
+      { name: '/prefix [nilai]', value: 'Lihat atau ubah prefix server (1–10 karakter tanpa spasi).', inline: false },
       { name: prefix + ' prefix [nilai]', value: 'Lihat prefix; tambahkan nilai baru untuk mengubahnya.', inline: false }
     );
-}
-
-function validPrefix(value) {
-  return typeof value === 'string' && value.length >= 1 && value.length <= 10 && !/\s/.test(value);
 }
 
 async function execute(i, tracker) {
@@ -129,7 +123,7 @@ async function execute(i, tracker) {
     return i.reply({ embeds: [adminHelpEmbed(prefix)], flags: MessageFlags.Ephemeral });
   }
 
-  if (['setup', 'server-on', 'server-off', 'prefix'].includes(sub) && !isAdmin(i)) {
+  if (['setup', 'server-on', 'server-off'].includes(sub) && !isAdmin(i)) {
     return i.reply({ content: 'Pengaturan ini hanya bisa digunakan moderator/admin dengan izin Manage Server.', flags: MessageFlags.Ephemeral });
   }
 
@@ -153,16 +147,6 @@ async function execute(i, tracker) {
     if (enabled && s.lastBossTimestamp) tracker.scheduleGuild(i.guildId, s.lastBossTimestamp);
     else if (!enabled) tracker.stopGuild(i.guildId);
     return i.reply({ content: enabled ? '✅ Tracker aktif untuk seluruh server.' : '🔕 Tracker server dimatikan.', flags: MessageFlags.Ephemeral });
-  }
-
-  if (sub === 'prefix') {
-    const value = i.options.getString('nilai');
-    const current = getGuildSettings(i.guildId).prefix || DEFAULT_PREFIX;
-    if (value === null) return i.reply({ content: 'Prefix server saat ini: `' + current + '`', flags: MessageFlags.Ephemeral });
-    if (!validPrefix(value)) return i.reply({ content: 'Prefix harus 1–10 karakter dan tidak boleh mengandung spasi.', flags: MessageFlags.Ephemeral });
-    const normalized = normalizePrefix(value);
-    updateGuildSettings(i.guildId, s => ({ ...s, prefix: normalized }));
-    return i.reply({ content: '✅ Prefix server diubah menjadi `' + normalized + '`. Contoh: `' + normalized + ' boss status`', flags: MessageFlags.Ephemeral });
   }
 
   return i.reply({ content: 'Subcommand tidak dikenali.', flags: MessageFlags.Ephemeral });
@@ -267,4 +251,4 @@ async function handleComponent(i, tracker) {
   return i.reply({ content: 'Komponen kedaluwarsa. Jalankan /boss menu lagi.', flags: MessageFlags.Ephemeral });
 }
 
-module.exports = { data, execute, handleComponent, helpEmbed, adminHelpEmbed, validPrefix, getMode, setMode, WARN_CHOICES };
+module.exports = { data, execute, handleComponent, helpEmbed, adminHelpEmbed, getMode, setMode, WARN_CHOICES };

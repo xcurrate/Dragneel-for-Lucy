@@ -77,6 +77,8 @@ function parsePrefixInput(content, prefix) {
   // Kategori boss: `<prefix> boss <sub>` — `boss` adalah nama kategorinya.
   if (head !== 'boss') return null;
   const rawSub = (parts[1] || 'help').toLowerCase();
+  // Prefix server bukan bagian dari kategori boss: gunakan `d prefix` / `/prefix`.
+  if (rawSub === 'prefix') return null;
   if (!KNOWN_SUBS.has(rawSub)) return null;
   return { sub: ALIAS_MAP[rawSub] || rawSub, rawSub, args: parts.slice(2) };
 }
@@ -320,7 +322,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
         { name: prefix + ' boss server on / off', value: 'Aktifkan atau matikan tracker server (alias: server-nyalakan/server-matikan).', inline: false },
         { name: prefix + ' prefix <prefix>', value: 'Lihat atau ubah prefix server (alias: awalan).', inline: false },
         { name: prefix + ' s count on / off', value: 'Sakelar seluruh counter Lucy untuk server ini (aksi Lucy, battle/hunt, pray, curse).', inline: false },
-        { name: 'Slash', value: '/boss setup, /boss server-on, /boss server-off, /boss prefix.', inline: false }
+        { name: 'Slash', value: '/boss setup, /boss server-on, /boss server-off, /prefix.', inline: false }
       )] });
   }
 

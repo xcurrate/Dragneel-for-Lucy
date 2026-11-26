@@ -201,7 +201,7 @@ describe('prefix command handler', () => {
     const embed = helpCategoryEmbed('d', 'utility').toJSON();
     const text = embed.fields.map(f => f.value).join('\n');
     assert.match(text, /`d prefix \[nilai\]`/);
-    assert.match(text, /\/boss prefix/);
+    assert.match(text, /\/prefix/);
   });
 
   it('hides the admin section from regular members', async () => {

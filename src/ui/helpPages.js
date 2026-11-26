@@ -153,7 +153,7 @@ const PAGES = {
           `\`${prefix} ping\` — cek latency bot`,
           `\`${prefix} count\` — counter Lucy`,
           `\`${prefix} prefix [nilai]\` — lihat/ubah prefix server (admin)`,
-          '/boss prefix [nilai] — padanan slash command (admin)',
+          '/prefix [nilai] — padanan slash command (admin)',
           `\`${prefix} help\` — panduan ini (alias: \`${prefix}\`)`,
           `\`${prefix} dex <nama>\` — Animal Dex`,
         ].join('\n'),
@@ -169,7 +169,7 @@ const PAGES = {
         value: [
           '`/boss setup channel:#channel role:@role` — atur channel & role',
           '`/boss server-on` / `/boss server-off` — tracker server',
-          '`/boss prefix` — lihat/ubah prefix',
+          '`/prefix` — lihat/ubah prefix',
           '`/boss admin-help` — panduan moderator',
         ].join('\n'),
       },

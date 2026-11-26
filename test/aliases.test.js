@@ -54,7 +54,7 @@ describe('prefix aliases', () => {
     const out = parsePrefixInput('d boss status', 'd');
     assert.strictEqual(out.sub, 'status');
     assert.deepStrictEqual(out.args, []);
-    assert.strictEqual(parsePrefixInput('d boss prefix dragneel', 'd').sub, 'prefix');
+    assert.strictEqual(parsePrefixInput('d boss prefix dragneel', 'd'), null, 'prefix server bukan bagian boss');
   });
 
   it('puts bot-level commands at the top level, without the boss category', () => {

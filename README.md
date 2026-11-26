@@ -953,7 +953,7 @@ pesan jelas.
 Membutuhkan izin Discord Manage Server (Administrator juga diizinkan):
 - /boss setup channel:#channel role:@role — atur channel dan role yang akan ditag.
 - /boss server-on dan /boss server-off — aktifkan atau matikan tracker seluruh server.
-- /boss prefix nilai:$ — ubah prefix server (prefix bawaan `d`).
+- /prefix nilai:$ — ubah prefix server (prefix bawaan `d`).
 - d prefix <prefix-baru> — ubah prefix lewat chat (moderator/admin).
 - /boss admin-help — panduan moderator/admin.
 

@@ -379,13 +379,14 @@ siap untuk integrasi giveaway nanti.
 - Handler: `src/commands/prefix.js`. Di `src/index.js`, handler ini dipanggil untuk **setiap** pesan
   (setelah `family100` dan `tracker`), jadi urutan pemanggilan penting: `family100` hanya menangkap
   `f100`/`family100`/`kuis`, sehingga tidak menelan subcommand lain.
-- Subcommand: `help`, `menu`, `notify`, `on`/`off`, `warn`, `status`, `prefix`, `admin-help`,
-  `setup`, `server on|off`. Alias di `ALIASES` (mis. `awalan`/`pref` → `prefix`).
+- Subcommand: `help`, `menu`, `notify`, `on`/`off`, `warn`, `status`, `admin-help`,
+  `setup`, `server on|off`. Prefix server memakai command terpisah `/prefix` dan
+  `d prefix` (bukan subcommand `boss`). Alias di `ALIASES` (mis. `awalan`/`pref` → `prefix`).
 - **Ubah prefix per server:** `<prefix> prefix <baru>` (moderator, izin Manage Server) atau slash
-  `/boss prefix nilai:<baru>`. Dashboard (developer) punya field `PREFIX PERINTAH` di panel Boss
+  `/prefix nilai:<baru>`. Dashboard (developer) punya field `PREFIX PERINTAH` di panel Boss
   Tracker. Panjang prefix **1–10 karakter** tanpa spasi — batas ini dinaikkan dari 5 agar nama bot
   seperti `dragneel` bisa dipakai, dan harus konsisten di 3 tempat: `prefix.js`, `validPrefix` di
-  `boss.js`, dan `validateSettings` di `dashboard/server.js`.
+  `serverPrefix.js`, dan `validateSettings` di `dashboard/server.js`.
 - **Gotcha:** `helpEmbed(prefix, { isAdmin })` menyembunyikan semua field yang diawali `⚙️` bila
   `isAdmin` tidak diisi. Jalur prefix dulu memanggil `helpEmbed(prefix)` tanpa flag ini, sehingga
   moderator **tidak pernah melihat** bagian Admin (termasuk cara mengubah prefix) — padahal
