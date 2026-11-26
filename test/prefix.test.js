@@ -196,6 +196,14 @@ describe('prefix command handler', () => {
     assert.ok(!values.includes('admin'), 'menu admin tersembunyi dari anggota biasa');
   });
 
+  it('menampilkan pengaturan prefix server di kategori utilitas', () => {
+    const { helpCategoryEmbed } = require('../src/ui/helpPages');
+    const embed = helpCategoryEmbed('d', 'utility').toJSON();
+    const text = embed.fields.map(f => f.value).join('\n');
+    assert.match(text, /`d prefix \[nilai\]`/);
+    assert.match(text, /\/boss prefix/);
+  });
+
   it('hides the admin section from regular members', async () => {
     const { handlePrefixCommand } = require('../src/commands/prefix');
     const deps = makeDeps();
