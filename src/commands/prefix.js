@@ -1,5 +1,6 @@
 const { getGuildSettings, updateGuildSettings, setUserMode, setUserWarnSeconds, DEFAULT_PREFIX, matchPrefix, normalizePrefix } = require('../utils/storage');
 const { modeLabel, warnLabel, personalPanel, statusEmbed, helpEmbed } = require('../ui/panel');
+const { helpCategoryRow } = require('../ui/helpPages');
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { handlePersonalCommand } = require('./bossRewardNotify');
 const { buildDexResponse } = require('../services/animalDex');
@@ -168,11 +169,12 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
   if (sub === 'help') {
     // statusEmbed() sekarang string biasa → dipindah ke `content`,
     // helpEmbed() tetap EmbedBuilder → tetap di `embeds`.
-    // Teruskan isAdmin agar moderator melihat bagian ⚙️ Admin (termasuk cara
-    // mengubah prefix); tanpa ini bagian tersebut selalu tersembunyi.
+    // Menu kategori membuka detail tanpa membanjiri channel dengan semua command.
+    const admin = _isAdmin(message);
     return _send(message, {
       content: statusEmbed(settings, message.author.id),
-      embeds: [helpEmbed(prefix, { isAdmin: _isAdmin(message) })]
+      embeds: [helpEmbed(prefix, { isAdmin: admin })],
+      components: [helpCategoryRow(message.author.id, { isAdmin: admin })],
     });
   }
 

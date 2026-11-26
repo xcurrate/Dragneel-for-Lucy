@@ -191,6 +191,9 @@ describe('prefix command handler', () => {
     );
     assert.ok(fields.every(f => f.value.split('\n').length <= 4), 'tiap kategori tetap ringkas');
     assert.ok(fields.some(f => f.value.includes('`d team help`')), 'detail tim ditautkan');
+    const values = deps.calls[0].components[0].components[0].options.map(o => o.data.value);
+    assert.ok(values.includes('battle'), 'ada menu detail battle');
+    assert.ok(!values.includes('admin'), 'menu admin tersembunyi dari anggota biasa');
   });
 
   it('hides the admin section from regular members', async () => {

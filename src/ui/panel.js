@@ -6,6 +6,7 @@ const IDS = {
   off: 'boss_dm_off',
   warn: 'boss_warn_select',
   help: 'boss_panel_help',
+  helpCategory: 'boss_help_select',
   status: 'boss_panel_status',
   adminHelp: 'boss_panel_admin_help',
   refresh: 'boss_panel_refresh'
@@ -206,7 +207,7 @@ function helpEmbed(prefix, { isAdmin = false } = {}) {
   ];
   const embed = new EmbedBuilder().setColor(0x5865F2)
     .setTitle('🐉 Bantuan Boss Tracker')
-    .setDescription('Panduan ringkas per kategori. Buka detail lewat perintah `help` di tiap kategori.')
+    .setDescription('Panduan ringkas per kategori. Pilih detail lewat menu di bawah.')
     .addFields(isAdmin ? fields : fields.filter(f => !f.name.startsWith('⚙️')));
   embed.setFooter({ text: 'Mode channel server berlaku untuk seluruh server; panel ini hanya mengubah pengaturan pribadimu.' });
   return embed;

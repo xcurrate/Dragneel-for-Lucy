@@ -3,6 +3,7 @@ const { getGuildSettings, updateGuildSettings, setUserMode, setUserWarnSeconds, 
 const {
   IDS, MODE_VALUES, WARN_VALUES, modeLabel, warnLabel, personalPanel, statusEmbed, statusText, helpEmbed, parseCustomId
 } = require('../ui/panel');
+const { helpCategoryRow, helpCategoryEmbed } = require('../ui/helpPages');
 
 const ADMIN = PermissionFlagsBits.ManageGuild;
 
@@ -72,10 +73,14 @@ async function execute(i, tracker) {
   const settings = getGuildSettings(i.guildId);
   const prefix = settings.prefix || DEFAULT_PREFIX;
 
-  if (sub === 'help') return i.reply({
-    embeds: [helpEmbed(prefix, { isAdmin: isAdmin(i) })],
-    flags: MessageFlags.Ephemeral
-  });
+  if (sub === 'help') {
+    const admin = isAdmin(i);
+    return i.reply({
+      embeds: [helpEmbed(prefix, { isAdmin: admin })],
+      components: [helpCategoryRow(i.user.id, { isAdmin: admin })],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
   if (sub === 'menu') return i.reply({ ...refreshView(i), flags: MessageFlags.Ephemeral });
 
@@ -188,6 +193,21 @@ async function handleComponent(i, tracker) {
     return i.reply({ content: 'Panel ini hanya bisa digunakan oleh pemiliknya. Jalankan /boss menu untuk panel kamu sendiri.', flags: MessageFlags.Ephemeral });
   }
 
+  if (i.isStringSelectMenu() && p.base === IDS.helpCategory) {
+    const category = i.values[0];
+    const admin = isAdmin(i);
+    if (!['overview', 'boss', 'battle', 'games', 'lucy', 'utility', 'admin'].includes(category)) {
+      return i.reply({ content: 'Kategori bantuan tidak dikenal.', flags: MessageFlags.Ephemeral });
+    }
+    if (category === 'admin' && !admin) {
+      return i.reply({ content: 'Kategori Admin khusus moderator/admin server.', flags: MessageFlags.Ephemeral });
+    }
+    return i.update({
+      embeds: [helpCategoryEmbed(prefix, category, { isAdmin: admin })],
+      components: [helpCategoryRow(i.user.id, { isAdmin: admin, selected: category })],
+    });
+  }
+
   if (i.isStringSelectMenu() && p.base === IDS.notifyMode) {
     const mode = i.values[0];
     if (!MODE_VALUES.includes(mode)) return i.reply({ content: 'Mode tidak dikenal.', flags: MessageFlags.Ephemeral });
@@ -226,7 +246,12 @@ async function handleComponent(i, tracker) {
   }
 
   if (i.isButton() && p.base === IDS.help) {
-    return i.reply({ embeds: [helpEmbed(prefix, { isAdmin: isAdmin(i) })], flags: MessageFlags.Ephemeral });
+    const admin = isAdmin(i);
+    return i.reply({
+      embeds: [helpEmbed(prefix, { isAdmin: admin })],
+      components: [helpCategoryRow(i.user.id, { isAdmin: admin })],
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   if (i.isButton() && p.base === IDS.adminHelp) {

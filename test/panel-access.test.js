@@ -51,7 +51,7 @@ describe('panel ownership guard', () => {
 
   it('mengabaikan interaksi milik user lain', async () => {
     const owner = 'userA';
-    const roles = ['boss_dm_on', 'boss_dm_off', 'boss_warn_select', 'boss_notify_mode', 'boss_panel_status', 'boss_panel_help', 'boss_panel_admin_help', 'boss_panel_refresh'];
+    const roles = ['boss_dm_on', 'boss_dm_off', 'boss_warn_select', 'boss_notify_mode', 'boss_help_select', 'boss_panel_status', 'boss_panel_help', 'boss_panel_admin_help', 'boss_panel_refresh'];
     for (const base of roles) {
       const i = makeInteraction(base + ':' + owner, 'userB');
       await handleComponent(i, null);
@@ -69,6 +69,28 @@ describe('panel ownership guard', () => {
     await handleComponent(i, null);
     assert.strictEqual(i.updates.length, 1);
     assert.strictEqual(getGuildSettings('guild1').userModes[owner], 'both');
+  });
+
+  it('membuka detail kategori bantuan lewat select menu', async () => {
+    const owner = 'userA';
+    const i = makeInteraction('boss_help_select:' + owner, owner);
+    i.values = ['battle'];
+    await handleComponent(i, null);
+    assert.strictEqual(i.updates.length, 1);
+    const embed = i.updates[0].embeds[0].toJSON();
+    assert.match(embed.title, /Tim & Battle/);
+    const selected = i.updates[0].components[0].components[0].options.find(o => o.data.default);
+    assert.strictEqual(selected.data.value, 'battle');
+  });
+
+  it('menolak kategori admin untuk non-admin', async () => {
+    const owner = 'userA';
+    const i = makeInteraction('boss_help_select:' + owner, owner);
+    i.values = ['admin'];
+    await handleComponent(i, null);
+    assert.strictEqual(i.replies.length, 1);
+    assert.match(i.replies[0].content, /khusus moderator/);
+    assert.strictEqual(i.updates.length, 0);
   });
 
   it('menolak customId tak dikenal / tidak ter-scope', async () => {
