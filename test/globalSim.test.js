@@ -10,7 +10,7 @@ const globalSim = require(path.join(ROOT, 'src/services/globalSim'));
 const panel = require(path.join(ROOT, 'src/ui/battlePanel'));
 const battleEmoji = require(path.join(ROOT, 'src/services/battleEmoji'));
 const {
-  handleSimCommand, handleGlobalLossButton, resolveRunCount,
+  handleSimCommand, handleGlobalLossButton, handleGlobalLossPageButton, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES,
 } = require(path.join(ROOT, 'src/commands/battleSim'));
 const engine = require(path.join(ROOT, 'src/services/battleEngine'));
@@ -285,6 +285,58 @@ describe('simulasi global', () => {
     });
     assert.ok(reply.flags & 64, 'balasan ephemeral');
     assert.ok(reply.embeds[0].toJSON().title.includes('mengalahkan'));
+  });
+
+  it('membagi daftar kekalahan 10 tim per halaman dengan tombol navigasi', async () => {
+    store.createTeam('me', 'Lemah');
+    store.setSlot('me', 'Lemah', 1, { custom: COEFFS_WEAK, level: 5 });
+    store.setActiveTeam('me', 'Lemah');
+    for (let i = 1; i <= 12; i++) {
+      store.createTeam('rival', 'Kuat ' + i);
+      store.setSlot('rival', 'Kuat ' + i, 1, {
+        custom: { hp: 40, att: 40, pr: 10, wp: 10, mag: 40, mr: 10 }, level: 500,
+      });
+    }
+
+    let payload = null;
+    await handleSimCommand(message('d sim global -m 1 -s 8'), ['global', '-m', '1', '-s', '8'], 'd', {
+      sendEmbed,
+      sendPayload: (m, p) => { payload = p; return { edit: async () => {} }; },
+      isDeveloper: () => true,
+    });
+    assert.ok(payload?.components?.length, 'hasil global mengirim tombol');
+
+    const openId = payload.components[0].components[0].toJSON().custom_id;
+    let first = null;
+    await handleGlobalLossButton({
+      customId: openId,
+      user: { id: 'me' },
+      reply: async p => { first = p; },
+    });
+    const firstJson = first.embeds[0].toJSON();
+    assert.strictEqual(firstJson.fields.length, 10, 'halaman pertama 10 tim');
+    assert.ok(firstJson.description.includes('Halaman 1/2'), firstJson.description);
+    assert.strictEqual(first.components.length, 1);
+    const firstButtons = first.components[0].toJSON().components;
+    assert.strictEqual(firstButtons[0].label, 'Sebelumnya');
+    assert.strictEqual(firstButtons[0].disabled, true);
+    assert.strictEqual(firstButtons[1].label, 'Berikutnya');
+    assert.strictEqual(firstButtons[1].disabled, false);
+
+    const next = panel.parseGlobalLossPageButton(firstButtons[1].custom_id);
+    assert.ok(next.ok, 'customId halaman berikutnya valid');
+    let second = null;
+    await handleGlobalLossPageButton({
+      customId: firstButtons[1].custom_id,
+      user: { id: 'me' },
+      update: async p => { second = p; },
+    });
+    const secondJson = second.embeds[0].toJSON();
+    assert.strictEqual(secondJson.fields.length, 2, 'halaman kedua 2 tim');
+    assert.ok(secondJson.description.includes('Halaman 2/2'), secondJson.description);
+    const secondButtons = second.components[0].toJSON().components;
+    assert.strictEqual(secondButtons[0].disabled, false);
+    assert.strictEqual(secondButtons[1].disabled, true);
   });
 
   it('membuka tombol milik user lain (satu-satunya pengecualian)', async () => {

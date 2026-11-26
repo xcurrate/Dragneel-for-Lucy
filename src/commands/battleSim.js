@@ -20,6 +20,7 @@ const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
   globalSimEmbed, globalLossesEmbed, globalLossButton, parseGlobalLossButton,
+  globalLossPageCount, globalLossPageButtons, parseGlobalLossPageButton,
 } = require('../ui/battlePanel');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
@@ -704,10 +705,52 @@ async function handleGlobalLossButton(i, deps = {}) {
   // Hanya pemilik hasil yang boleh melihat senjata lawan, dan hanya jika
   // toggle developer untuk user itu aktif.
   const showWeapons = isDev && i.user.id === parsed.userId && store.getGlobalWeapons(parsed.userId);
-  return i.reply({
-    embeds: [globalLossesEmbed(entry.result, { playerLabel: entry.playerLabel, showWeapons })],
-    flags: MessageFlags.Ephemeral,
-  });
+  return i.reply(globalLossPayload(entry, {
+    userId: parsed.userId, token: parsed.token, showWeapons, page: 0,
+  }));
+}
+
+// Navigasi halaman daftar kekalahan. Data tetap milik hasil yang sama; halaman
+// hanya menggeser daftar 10 tim, bukan menjalankan simulasi baru.
+async function handleGlobalLossPageButton(i, deps = {}) {
+  const prefix = deps.prefix || 'd';
+  const parsed = parseGlobalLossPageButton(i.customId);
+  if (!parsed.ok) {
+    return i.reply({ content: `Tombol kedaluwarsa. Jalankan \`${prefix} sim global\` lagi.`, flags: MessageFlags.Ephemeral });
+  }
+  const entry = getGlobalResult(parsed.userId, parsed.token);
+  if (!entry) {
+    return i.reply({
+      content: `Hasil simulasi ini sudah kedaluwarsa. Jalankan \`${prefix} sim global\` lagi.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+  await animalDex.ensureAnimalEmojis(
+    entry.result.losses.flatMap(loss => loss.specs.map(spec => spec.animal))
+  );
+  const isDev = deps.isDeveloper
+    ? deps.isDeveloper({ author: i.user, client: i.client, guild: i.guild })
+    : false;
+  const showWeapons = isDev && i.user.id === parsed.userId && store.getGlobalWeapons(parsed.userId);
+  return i.update(globalLossPayload(entry, {
+    userId: parsed.userId, token: parsed.token, showWeapons, page: parsed.page, ephemeral: false,
+  }));
+}
+
+// Payload balasan "Lihat Kekalahan": 10 tim per halaman + tombol navigasi.
+function globalLossPayload(entry, { userId, token, showWeapons, page, ephemeral = true }) {
+  const totalPages = globalLossPageCount(entry.result);
+  const safePage = Math.min(Math.max(0, Number(page) || 0), totalPages - 1);
+  const payload = {
+    embeds: [globalLossesEmbed(entry.result, {
+      playerLabel: entry.playerLabel, showWeapons, page: safePage,
+    })],
+  };
+  if (ephemeral) payload.flags = MessageFlags.Ephemeral;
+  if (totalPages > 1) {
+    payload.components = [globalLossPageButtons(userId, token, safePage, totalPages)];
+  }
+  return payload;
 }
 
 // `d sim global weapon [on|off]` — pengganti tombol toggle senjata.
@@ -1258,7 +1301,7 @@ function resolveEnemy(userId, args, overrideLevel, prefix = 'd') {
 }
 
 module.exports = {
-  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
+  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalLossPageButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
   handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
   parseFlags, resolveEnemy, resolveTeamSpecs, usage, globalUsage, resolveRunCount,

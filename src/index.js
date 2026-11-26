@@ -152,6 +152,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && reminders.isPanelNav(i.customId)) { await reminders.handleComponent(i); return; }
     if (i.isButton() && battleTeam.isTeamButton(i.customId)) { await battleTeam.handleTeamButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
     if (i.isButton() && battlePanel.isGlobalLossButton(i.customId)) { await battleSim.handleGlobalLossButton(i, { prefix: prefixForGuild(i.guildId), isDeveloper }); return; }
+    if (i.isButton() && battlePanel.isGlobalLossPageButton(i.customId)) { await battleSim.handleGlobalLossPageButton(i, { prefix: prefixForGuild(i.guildId), isDeveloper }); return; }
     if (i.isButton() && battlePanel.isRepeatButton(i.customId)) { await battleSim.handleRepeatButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
     if ((i.isButton() || i.isStringSelectMenu()) && teamPanel.isTeamPanelNav(i.customId)) {
       await battleTeam.handleTeamPanelNav(i, { prefix: prefixForGuild(i.guildId) });

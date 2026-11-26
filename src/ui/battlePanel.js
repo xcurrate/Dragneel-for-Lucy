@@ -437,6 +437,8 @@ function isTeamButton(customId) {
 // supaya hasil milik orang lain tidak bisa dibuka, dan `token` supaya tombol
 // lama tidak menampilkan data dari simulasi yang sudah digantikan.
 const GLOBAL_BUTTON = 'battle_global_losses';
+const GLOBAL_LOSS_PAGE_BUTTON = 'battle_global_losses_page';
+const LOSS_PAGE_SIZE = 10;
 // Tombol 🔁 pada hasil satu pertarungan: ulangi sebagai `-m <runs>`.
 const REPEAT_BUTTON = 'battle_sim_repeat';
 
@@ -458,6 +460,43 @@ function parseGlobalLossButton(customId) {
   const parts = String(customId || '').split(ID_SEP);
   if (parts.length !== 3 || parts[0] !== GLOBAL_BUTTON) return { ok: false };
   return { ok: true, userId: parts[1], token: parts[2] };
+}
+
+// Navigasi halaman daftar kekalahan. Halaman disimpan di customId supaya
+// tombol lama tidak menampilkan halaman dari hasil simulasi yang berbeda.
+function globalLossPageButtons(userId, token, page, totalPages) {
+  const row = new ActionRowBuilder();
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_LOSS_PAGE_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}${ID_SEP}${page - 1}`)
+      .setLabel('Sebelumnya')
+      .setEmoji('◀️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page <= 0),
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_LOSS_PAGE_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}${ID_SEP}${page + 1}`)
+      .setLabel('Berikutnya')
+      .setEmoji('▶️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page >= totalPages - 1)
+  );
+  return row;
+}
+
+function isGlobalLossPageButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${GLOBAL_LOSS_PAGE_BUTTON}${ID_SEP}`);
+}
+
+function parseGlobalLossPageButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 4 || parts[0] !== GLOBAL_LOSS_PAGE_BUTTON) return { ok: false };
+  const page = Number(parts[3]);
+  if (!Number.isInteger(page) || page < 0) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2], page };
+}
+
+function globalLossPageCount(result, pageSize = LOSS_PAGE_SIZE) {
+  return Math.max(1, Math.ceil(result.losses.length / pageSize));
 }
 
 // Tombol ulang: `battle_sim_repeat:<userId>:<token>`.
@@ -599,7 +638,9 @@ function hiddenSpecLine(spec, index, { showWeapons = false } = {}) {
 }
 
 // Daftar tim yang mengalahkan pemain, dipakai sebagai balasan ephemeral.
-function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = false } = {}) {
+function globalLossesEmbed(result, {
+  playerLabel = 'Tim kamu', showWeapons = false, page = 0, pageSize = LOSS_PAGE_SIZE,
+} = {}) {
   const embed = new EmbedBuilder()
     .setColor(COLOR.error)
     .setTitle('🔍 Tim yang mengalahkan kamu');
@@ -612,19 +653,23 @@ function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = fal
 
   const panelLosses = result.losses.reduce((sum, loss) => sum + loss.tally.enemy, 0);
   const sampled = result.lossPanelRuns && result.runs > result.lossPanelRuns;
+  const totalPages = globalLossPageCount(result, pageSize);
+  const safePage = Math.min(Math.max(0, Number(page) || 0), totalPages - 1);
+  const start = safePage * pageSize;
+  const pageLosses = result.losses.slice(start, start + pageSize);
   const description = `**${playerLabel}** kalah dari **${result.losses.length}** tim`
     + ` (total ${panelLosses.toLocaleString('id-ID')} kekalahan).\n`
+    + (totalPages > 1 ? `-# Halaman ${safePage + 1}/${totalPages} · ${pageSize} tim per halaman.\n` : '')
     + (sampled ? `-# Menampilkan ${result.lossPanelRuns} pertarungan pertama per tim.\n` : '')
     + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.');
   embed.setDescription(description);
 
-  // Discord membatasi 20 field DAN total 6.000 karakter per embed. Tanpa
-  // anggaran karakter, 20 tim dengan tiga pet bisa melewati batas itu.
+  // Discord membatasi 20 field DAN total 6.000 karakter per embed. Halaman
+  // ini maksimal 10 tim, tetapi anggaran karakter tetap dijaga.
   const MAX_EMBED_CHARS = 5900;
   let used = embed.data.title.length + description.length;
   const shown = [];
-  for (const loss of result.losses) {
-    if (shown.length >= 20) break;
+  for (const loss of pageLosses) {
     const name = `${loss.label} · L.${loss.level}`.slice(0, 256);
     const detail = [
       `Kalah **${loss.tally.enemy.toLocaleString('id-ID')}**× · seri ${loss.tally.tie.toLocaleString('id-ID')}× · menang ${loss.tally.player.toLocaleString('id-ID')}×`,
@@ -637,8 +682,8 @@ function globalLossesEmbed(result, { playerLabel = 'Tim kamu', showWeapons = fal
     used += name.length + value.length;
     shown.push(loss);
   }
-  if (result.losses.length > shown.length) {
-    const footer = `…dan ${result.losses.length - shown.length} tim lain tidak ditampilkan.`;
+  if (pageLosses.length > shown.length) {
+    const footer = `…${pageLosses.length - shown.length} tim di halaman ini tidak ditampilkan.`;
     if (used + footer.length <= 6000) embed.setFooter({ text: footer });
   }
   return embed;
@@ -659,5 +704,6 @@ module.exports = {
   turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
   teamButtons, isTeamButton, parseTeamButton,
   GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
+  LOSS_PAGE_SIZE, globalLossPageCount, globalLossPageButtons, isGlobalLossPageButton, parseGlobalLossPageButton,
   REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,
 };
