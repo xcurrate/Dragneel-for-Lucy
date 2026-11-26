@@ -152,6 +152,7 @@ const PAGES = {
         value: [
           `\`${prefix} ping\` — cek latency bot`,
           `\`${prefix} count\` — counter Lucy`,
+          `\`${prefix} hbcalc\` — kalkulator HuntBot (MAX ALL/target)`,
           `\`${prefix} s\` / \`${prefix} settings\` — ringkasan pengaturan server`,
           `\`${prefix} s count on|off\` — sakelar counter Lucy (admin/developer)`,
           `\`${prefix} s <aksi> set text <teks>\` — pengingat default server (admin/pemilik)`,

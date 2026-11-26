@@ -20,6 +20,7 @@ const animalDex = require('./services/animalDex');
 const battleEmoji = require('./services/battleEmoji');
 const reminders = require('./services/reminders');
 const lucyTeamImport = require('./services/lucyTeamImport');
+const huntbotCalc = require('./services/huntbotCalc');
 
 logBuffer.install();
 if (!process.env.DISCORD_TOKEN || !process.env.LUCY_BOT_ID) {
@@ -114,6 +115,8 @@ client.on(Events.MessageCreate, async message => {
   bossRewards.enqueue(message);
   captureAnimalDex(message);
   lucyTeamImport.prepareLucyTeamMessage(message).catch(e => console.error('[LucyTeamImport] prepare:', e));
+  huntbotCalc.autoReact(message).catch(e => console.error('[HuntBotCalc] react:', e));
+  huntbotCalc.handleMessage(message).catch(e => console.error('[HuntBotCalc]', e));
   handlePrefixMessage(message).catch(e => {
     console.error('[PrefixCommand]', e);
     message.reply({ content: 'Terjadi kesalahan saat menjalankan perintah.' }).catch(() => {});
@@ -133,6 +136,8 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       await reaction.message.channel.send({ content: `ℹ️ ${result.error}`, allowedMentions: { parse: [] } });
     }
   } catch (e) { console.error('[LucyTeamImport] reaction:', e); }
+  try { await huntbotCalc.handleReaction(reaction, user); }
+  catch (e) { console.error('[HuntBotCalc] reaction:', e); }
 });
 client.on(Events.MessageUpdate, async (_old, message) => {
   try {
@@ -140,6 +145,7 @@ client.on(Events.MessageUpdate, async (_old, message) => {
     await tracker.handleMessage(message);
     bossRewards.enqueue(message);
     captureAnimalDex(message);
+    huntbotCalc.autoReact(message).catch(e => console.error('[HuntBotCalc] update react:', e));
   } catch (e) { console.error('[MessageUpdate]', e.message); }
 });
 client.on(Events.InteractionCreate, async i => {

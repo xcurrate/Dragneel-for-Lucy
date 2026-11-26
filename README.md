@@ -592,6 +592,32 @@ Bot membutuhkan intent dan izin Discord berikut untuk fitur ini:
 - `GuildMessageReactions` dan partial `Message`/`Channel`/`Reaction`.
 - View Channel, Read Message History, Add Reactions, dan Send Messages.
 
+## Kalkulator HuntBot
+
+Bot membaca kartu **HuntBot** Lucy dari pesan Components V2 atau embed, lalu
+memberi reaksi **📊**. User yang menekan reaksi itu mendapat hitungan **MAX ALL**.
+Pesan sumber untuk perintah teks bisa berupa reply, link, ID, atau kartu HuntBot
+terakhir di channel.
+
+```text
+d hbcalc
+d hbcalc radar=250
+d hbcalc all=100
+d hbcalc radar=+25
+d hbcalc essence=1000000
+d hbcalc animals
+d hbcalc help
+```
+
+`all=<level>` menargetkan semua trait, `<trait>=<level>` menargetkan satu trait,
+dan `<trait>=+<n>` menambah level dari level sekarang. `essence=` menimpa owned
+essence dari kartu. Ekuivalen hewan/hunt/lucent memakai baris **Max Autohunt**
+pada kartu; cowoncy hanya ditampilkan bila kartu memuat konversinya.
+
+Rumus memakai `cumulativeXp(L) = sum(trunc(inc * i^pow))` untuk `i=1..L`.
+Nilai validasi: MAX ALL `451.002.857.406`, Radar level 100 `145.367.518`,
+Efficiency 100→200 `6.556.464`.
+
 ## Data pasif battle (referensi simulasi)
 
 `src/data/owoPassives.json` berisi 21 pasif battle dari
