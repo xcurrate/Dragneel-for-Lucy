@@ -3323,6 +3323,28 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     assert.ok(!embed.fields.some(f => f.name.includes('seri')), names);
   });
 
+  it('filter hasil bisa digabung `-log`', async () => {
+    const previous = process.env.BATTLE_LOG_BASE_URL;
+    process.env.BATTLE_LOG_BASE_URL = 'https://example.test';
+    try {
+      store.clearCooldown('u', 'sim');
+      const mass = await run([STRONG, '-lose', '-m', '5', '-s', '11', '-log'], { isDeveloper: () => true });
+      const massLog = (mass.fields || []).find(f => f.name.includes('Battle log'));
+      assert.ok(massLog, 'log tersedia saat filter digabung -m');
+      assert.ok(massLog.value.includes('https://example.test/battle-log#'), massLog.value);
+      assert.ok(mass.footer.text.includes('5 simulasi'), mass.footer.text);
+
+      store.clearCooldown('u', 'sim');
+      const single = await run([WEAK, '-win', '-s', '7', '-log'], { isDeveloper: () => true });
+      const singleLog = (single.fields || []).find(f => f.name.includes('Battle log'));
+      assert.ok(singleLog, 'log tersedia saat filter tanpa -m');
+      assert.ok(singleLog.value.includes('https://example.test/battle-log#'), singleLog.value);
+    } finally {
+      if (previous == null) delete process.env.BATTLE_LOG_BASE_URL;
+      else process.env.BATTLE_LOG_BASE_URL = previous;
+    }
+  });
+
   it('opsi tak dikenal ditolak sebagai opsi, bukan dianggap nama lawan', async () => {
     const embed = await run(['2', '-zzz']);
     assert.ok(embed.description.includes('tidak dikenal'), embed.description);

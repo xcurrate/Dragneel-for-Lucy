@@ -345,7 +345,9 @@ function duelEmbed(battle, {
   return embed;
 }
 
-function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null } = {}) {
+function simEmbed(result, {
+  playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null, logUrl = null,
+} = {}) {
   const { tally, runs } = result;
   const color = simColor(result.winRate, result.lossRate, result.tieRate);
   const turns = `**Turns:** ${turnDistribution(result.turnHistogram)}`;
@@ -386,6 +388,7 @@ function simEmbed(result, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matc
 
   // Discord menolak description kosong, jadi hanya dipasang bila ada isinya.
   if (matchup) embed.setDescription(matchup);
+  if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
   return embed;
 }
 

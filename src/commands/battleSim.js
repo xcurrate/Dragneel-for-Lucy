@@ -34,6 +34,16 @@ function battleLogUrl(id) {
   return `${base}/battle-log#${id}`;
 }
 
+// Simpan satu log pertarungan. Dipakai jalur satu pertarungan maupun filter
+// `-win`/`-lose`/`-tie` yang digabung `-m`.
+function saveBattleLog(log) {
+  if (!log) return null;
+  const saved = battleLogStore.save(log);
+  if (saved.id) return battleLogUrl(saved.id);
+  console.error('[BattleLog]', saved.error);
+  return null;
+}
+
 // Jeda minimum antar-edit pesan progres; Discord membatasi edit pesan.
 const PROGRESS_EDIT_MS = 1000;
 
@@ -61,8 +71,8 @@ function usage(prefix = 'd') {
     'Tombol 🔁 mengulang matchup yang sama sebanyak ' + DEFAULT_RUNS + ' pertarungan (ephemeral).',
     '',
     'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
-    '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (satu pertarungan; khusus developer).',
-    'Filter hasil: `-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok,',
+    '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (khusus developer);',
+    '  bisa digabung `-win`/`-lose`/`-tie` dan `-m`. Filter hasil: `-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok,',
     '  lalu hasil itu yang ditampilkan. Bisa digabung `-m`, mis. `' + prefix + ' sim 2 -lose -m 20`.',
     `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
     '',
@@ -225,20 +235,13 @@ function findBattleWithOutcome(playerSpecs, enemySpecs, {
 }) {
   const rng = createRng(seed == null ? randomSeed() : seed);
   for (let tried = 1; tried <= OUTCOME_SEARCH_LIMIT; tried++) {
+    // Log hanya diminta developer. Mencatat percobaan yang tidak cocok tidak
+    // masalah karena batas pencariannya kecil, dan pertarungan yang cocok
+    // tercatat persis seperti yang ditampilkan.
     const battle = engine.runBattle(playerSpecs, enemySpecs, {
-      rng: rng.fork(), playerQuality, enemyQuality,
+      rng: rng.fork(), playerQuality, enemyQuality, log,
     });
     if (battle.winner !== wanted) continue;
-    // Percobaan yang tidak ditampilkan tidak perlu dicatat. Yang cocok dijalankan
-    // ulang dengan RNG yang sama supaya hasilnya identik sekaligus berlog.
-    if (log) {
-      return {
-        battle: engine.runBattle(playerSpecs, enemySpecs, {
-          rng: rng.fork(), playerQuality, enemyQuality, log: true,
-        }),
-        tried,
-      };
-    }
     return { battle, tried };
   }
   return { battle: null, tried: OUTCOME_SEARCH_LIMIT };
@@ -248,7 +251,7 @@ function findBattleWithOutcome(playerSpecs, enemySpecs, {
 // cocok. Tanpa pengali tambahan — jumlah yang dijalankan persis yang diminta
 // user, jadi tidak ada angka lain yang muncul di pesan.
 async function simulateMatching(playerSpecs, enemySpecs, {
-  wanted, runs, seed, playerQuality, enemyQuality,
+  wanted, runs, seed, playerQuality, enemyQuality, log = false,
 }) {
   const maxAttempts = Math.max(1, Math.floor(Number(runs) || 1));
   const startedAt = Date.now();
@@ -260,17 +263,26 @@ async function simulateMatching(playerSpecs, enemySpecs, {
   let matched = 0;
   let attempts = 0;
   let timeouts = 0;
+  let loggedBattle = null;
 
   while (attempts < maxAttempts) {
     attempts++;
+    // Simpan seed anak supaya pertarungan yang cocok bisa dijalankan ulang
+    // dengan hasil identik saat `-log` diminta, tanpa mencatat semua percobaan.
+    const childSeed = Math.floor(base.next() * 4294967296);
     const battle = engine.runBattle(playerSpecs, enemySpecs, {
-      rng: base.fork(), playerQuality, enemyQuality,
+      rng: createRng(childSeed), playerQuality, enemyQuality,
     });
     if (battle.winner !== wanted) continue;
     matched++;
     tally[battle.winner] += 1;
     histogram[Math.min(battle.turns, data.limits.maxTurns + 1)] += 1;
     if (battle.timeout) timeouts += 1;
+    if (log && !loggedBattle) {
+      loggedBattle = engine.runBattle(playerSpecs, enemySpecs, {
+        rng: createRng(childSeed), playerQuality, enemyQuality, log: true,
+      });
+    }
     if (attempts % 500 === 0) await new Promise(r => setImmediate(r));
   }
   if (!matched) return null;
@@ -301,6 +313,7 @@ async function simulateMatching(playerSpecs, enemySpecs, {
     winRate: rate(tally.player),
     lossRate: rate(tally.enemy),
     tieRate: rate(tally.tie),
+    log: loggedBattle?.log || null,
   };
 }
 
@@ -1133,12 +1146,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     // `-log` menyimpan jalannya pertarungan lalu menautkannya di embed.
     // Gagal menyimpan tidak boleh membatalkan hasil battle yang sudah dihitung:
     // embed tetap dikirim, hanya tautannya yang tidak muncul.
-    let logUrl = null;
-    if (flags.log && battle.log) {
-      const saved = battleLogStore.save(battle.log);
-      if (saved.id) logUrl = battleLogUrl(saved.id);
-      else console.error('[BattleLog]', saved.error);
-    }
+    const logUrl = flags.log ? saveBattleLog(battle.log) : null;
     const embed = duelEmbed(battle, {
       ...labels,
       elapsedMs: Date.now() - startedAt,
@@ -1165,7 +1173,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (wanted) {
     result = await simulateMatching(playerSpecs, enemySpecs, {
       wanted, runs: runCount, seed: seed != null ? Number(seed) : undefined,
-      playerQuality, enemyQuality,
+      playerQuality, enemyQuality, log: Boolean(flags.log),
     });
     if (!result) {
       store.clearCooldown(userId, SIM_COOLDOWN_ACTION);
@@ -1191,9 +1199,11 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     ...enemySpecs.map(spec => spec.animal),
   ]);
 
+  const logUrl = flags.log ? saveBattleLog(result.log) : null;
   const finalEmbed = simEmbed(result, {
     ...labels,
     matchup: renderMatchup(playerSpecs, enemySpecs, labels),
+    logUrl,
   });
 
   // Tombol 🔁 mengulang matchup yang sama sebanyak `DEFAULT_RUNS`. Spec
