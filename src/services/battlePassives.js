@@ -100,6 +100,20 @@ const PASSIVES = {
     },
   }),
 
+  // Lone Wolf: hanya aktif saat komposisi tim berisi satu hewan. Bonus damage
+  // keluar dan pengurangan damage masuk memakai rentang quality yang sama.
+  23: (stats) => ({
+    id: 23, name: 'Lone Wolf', stats,
+    attack(ctx, unit, target, bucket) {
+      if (unit.team?.length !== 1) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * (stats[0] / 100);
+    },
+    attacked(ctx, unit, attacker, bucket) {
+      if (unit.team?.length !== 1) return;
+      bucket.bonus -= (bucket.amount + bucket.bonus) * (stats[1] / 100);
+    },
+  }),
+
   27: (stats) => ({
     id: 27, name: 'Adaptation', stats,
     stackType: null, // 'p' (Stoneskin) | 'm' (Spellskin) | null

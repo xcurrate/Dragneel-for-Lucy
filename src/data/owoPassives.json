@@ -655,6 +655,35 @@
       ]
     },
     {
+      "id": 23,
+      "name": "Lone Wolf",
+      "emojis": [
+        "<:lwolf:1550295461062123651>"
+      ],
+      "emojiNote": "Token dari URL emoji yang diberikan (id 1550295461062123651); varian rank lain belum tersedia.",
+      "aliases": [
+        "lwolf",
+        "wolf"
+      ],
+      "category": "damage",
+      "summary": "Jika hanya satu hewan di tim, damage keluar +10-30% dan damage masuk -10-30%.",
+      "sourceText": "If you are the only animal in your team, deal +**10-30%** more damage and take -**10-30%** less damage.\n*Aliases: lwolf, wolf*",
+      "qualityList": [
+        [
+          10,
+          30
+        ],
+        [
+          10,
+          30
+        ]
+      ],
+      "hooks": [
+        "attack",
+        "attacked"
+      ]
+    },
+    {
       "id": 24,
       "name": "Frost Armor",
       "emojis": [

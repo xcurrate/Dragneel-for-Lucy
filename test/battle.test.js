@@ -1991,7 +1991,8 @@ describe('alias senjata dan pasif', () => {
 
   it('data pending tetap punya nama dan alias walau mekanik belum ada', () => {
     const pending = battleData.pending;
-    assert.ok(pending.weapons.length > 0 && pending.passives.length > 0);
+    assert.ok(pending.weapons.length > 0);
+    assert.ok(Array.isArray(pending.passives));
     for (const w of pending.weapons) {
       assert.ok(w.name, `${w.name} punya nama`);
       // Alias boleh habis bila semuanya sudah dipindah ke senjata yang sudah
@@ -4255,5 +4256,59 @@ describe('pasif Double Strike', () => {
     const seq = { next: () => picks.shift() ?? 0 };
     const rolled = rollPassives(3, seq, 100);
     assert.strictEqual(rolled.filter(p => p.id === 26).length, 1);
+  });
+});
+
+describe('pasif Lone Wolf', () => {
+  const rng = { next: () => 0.5 };
+  const unit = (name, stats = {}) => ({
+    pid: name, slot: name, nickname: name, level: 60,
+    stats: Object.assign({
+      hp: [5000, 5000, 5000, 0], wp: [2000, 2000, 2000, 0],
+      mag: [1000, 0], att: [500, 0], pr: [0, 0], mr: [0, 0],
+    }, stats),
+    buffs: [], weapon: null, team: [], foes: [],
+  });
+  const link = (mine, theirs) => {
+    for (const u of mine) { u.team = mine; u.foes = theirs; }
+    for (const u of theirs) { u.team = theirs; u.foes = mine; }
+  };
+  const ctxOf = () => ({ rng, tags: new Set(), damageDealt: 0, turn: 1 });
+
+  it('data memakai id, nama, dan alias resmi', () => {
+    const def = require(path.join(ROOT, 'src/data/owoPassives')).get('lwolf');
+    assert.strictEqual(def.id, 23);
+    assert.strictEqual(def.name, 'Lone Wolf');
+    assert.deepStrictEqual(def.qualityList, [[10, 30], [10, 30]]);
+    assert.strictEqual(require(path.join(ROOT, 'src/data/owoPassives')).get('wolf').id, 23);
+  });
+
+  it('saat sendirian menambah damage keluar 30% pada quality 100', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 0, passives: [createPassive(23, 100, rng)] };
+    engine.inflictDamage(ctxOf(), me[0], them[0], 1000, engine.PHYSICAL);
+    assert.strictEqual(them[0].stats.hp[0], 3700);
+  });
+
+  it('saat sendirian mengurangi damage masuk 30% pada quality 100', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 0, passives: [createPassive(23, 100, rng)] };
+    engine.inflictDamage(ctxOf(), them[0], me[0], 1000, engine.PHYSICAL);
+    assert.strictEqual(me[0].stats.hp[0], 4300);
+  });
+
+  it('tidak aktif bila tim berisi lebih dari satu hewan', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = { manaCost: 0, passives: [createPassive(23, 100, rng)] };
+    engine.inflictDamage(ctxOf(), me[0], them[0], 1000, engine.PHYSICAL);
+    engine.inflictDamage(ctxOf(), them[0], me[0], 1000, engine.PHYSICAL);
+    assert.strictEqual(them[0].stats.hp[0], 4000);
+    assert.strictEqual(me[0].stats.hp[0], 4000);
   });
 });

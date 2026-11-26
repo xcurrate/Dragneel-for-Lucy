@@ -40,17 +40,5 @@
       ]
     }
   ],
-  "passives": [
-    {
-      "id": 23,
-      "name": "Lone Wolf",
-      "emojis": [
-        "<:lwolf:1478938455143616566>"
-      ],
-      "aliases": [
-        "lwolf",
-        "wolf"
-      ]
-    }
-  ]
+  "passives": []
 }
