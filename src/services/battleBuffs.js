@@ -334,6 +334,44 @@ const FACTORIES = {
       unit.buffs = unit.buffs.filter(b => b.id !== 19);
     },
   }),
+
+  // Thorn Tether: damage yang masuk ke target dipindahkan sebagian ke pemilik,
+  // lalu heal/replenish yang masuk ke target juga dipindahkan sebagian. Pindah
+  // damage memakai tipe aslinya supaya resistensi pemilik tetap berlaku.
+  22: (def, stats, from) => ({
+    id: 22, name: def.name, debuff: false, defenseBuff: true, stats, duration: 2, from,
+    attacked(ctx, unit, attacker, bucket, type) {
+      const e = engine();
+      const owner = from;
+      if (!owner || owner === unit || !e.isAlive(owner)) return;
+      const incoming = Math.max(0, bucket.amount + bucket.bonus);
+      const absorbed = incoming * eff(this, stats[0]);
+      if (absorbed <= 0) return;
+      bucket.bonus -= absorbed;
+      // Tag mencegah tether memindahkan damage hasil pantulan secara rekursif.
+      e.withTag(ctx, 'tether', unit, () => e.inflictDamage(ctx, owner, owner, absorbed, type));
+    },
+    healed(ctx, unit, healer, bucket) {
+      const e = engine();
+      const owner = from;
+      if (!owner || owner === unit || !e.isAlive(owner)) return;
+      const incoming = Math.max(0, bucket.amount + bucket.bonus);
+      const intercepted = incoming * eff(this, stats[1]);
+      if (intercepted <= 0) return;
+      bucket.bonus -= intercepted;
+      e.withTag(ctx, 'tether', unit, () => e.heal(ctx, owner, intercepted, healer || owner));
+    },
+    replenished(ctx, unit, healer, bucket) {
+      const e = engine();
+      const owner = from;
+      if (!owner || owner === unit || !e.isAlive(owner)) return;
+      const incoming = Math.max(0, bucket.amount + bucket.bonus);
+      const intercepted = incoming * eff(this, stats[2]);
+      if (intercepted <= 0) return;
+      bucket.bonus -= intercepted;
+      e.withTag(ctx, 'tether', unit, () => e.replenish(ctx, owner, intercepted, healer || owner));
+    },
+  }),
 };
 
 // `quality` 0-100, atau array sepanjang `qualityList`. Tanpa nilai, di-roll dari

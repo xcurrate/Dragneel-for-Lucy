@@ -1456,6 +1456,120 @@
       "abilityNote": "Dua fase: memuat panah gratis (tanpa WP, tanpa damage), lalu menembak dengan 220-300% STR + 10-25 stack Exposed. Biaya 480-280 WP hanya dibayar saat menembak.",
       "manaCostNote": "manaRange 480-280: biaya TURUN saat quality naik, dan hanya dipakai saat panah dilepas.",
       "sourceText": "If **Heavy Arrow** is not loaded, load one. Otherwise, consume it. Loading an arrow does not cost WP. Heavy Arrow: deal **220-300%** of your STR and apply **10-25** stacks of **Exposed** to an enemy. Exposed: the next instance of damage taken is increased by 1% per stack; consume all stacks after triggering."
+    },
+    {
+      "id": 126,
+      "name": "Soul Tithe",
+      "owoId": 126,
+      "aliases": [
+        "stithe",
+        "soul",
+        "tithe",
+        "soultithe"
+      ],
+      "emojis": [
+        "<:fstithe:1550633888559145021>"
+      ],
+      "emojiNote": "Sumber hanya memberikan token Fabled; token ini dipakai untuk semua tier sampai varian rank lain tersedia.",
+      "qualityList": [
+        [
+          10,
+          25
+        ],
+        [
+          0.35,
+          0.45
+        ]
+      ],
+      "manaRange": [
+        100,
+        50
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "soul_tithe",
+        "stat": "mag"
+      },
+      "sourceText": "Absorb **10-25%** of all allies' current WP to deal damage to an enemy. Deals **0.35-0.45%** of your MAG for every 1 WP absorbed."
+    },
+    {
+      "id": 127,
+      "name": "Briar-Heart Staff",
+      "owoId": 127,
+      "aliases": [
+        "bhstaff",
+        "briarheart",
+        "briarheartstaff",
+        "briar"
+      ],
+      "emojis": [
+        "<:fbhstaff:1552755035350499348>"
+      ],
+      "emojiNote": "Sumber hanya memberikan token Fabled; token ini dipakai untuk semua tier sampai varian rank lain tersedia.",
+      "qualityList": [
+        [
+          25,
+          50
+        ],
+        [
+          20,
+          30
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "manaRange": [
+        240,
+        140
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        22
+      ],
+      "ability": {
+        "kind": "thorn_tether",
+        "duration": 2
+      },
+      "sourceText": "At the start of the turn, apply **Thorn Tether** to your allies for 2 turns. Thorn Tether: create a tether from the weapon owner to this animal. The owner absorbs **25-50%** of the incoming damage dealt, but also intercepts **20-30%** of healing and **20-30%** replenishing from the target. Cannot be applied if the animal already has a defense buff."
+    },
+    {
+      "id": 128,
+      "name": "Arbiter's Edge",
+      "owoId": 128,
+      "aliases": [
+        "aedge",
+        "edge",
+        "arbitersedge"
+      ],
+      "emojis": [
+        "<:faedge:1552763230584180857>"
+      ],
+      "emojiNote": "Sumber hanya memberikan token Fabled; token ini dipakai untuk semua tier sampai varian rank lain tersedia.",
+      "qualityList": [
+        [
+          10,
+          20
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "manaRange": [
+        225,
+        125
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "arbiters_edge",
+        "sinLimit": 10,
+        "virtueLimit": 10
+      },
+      "sourceText": "Unleash judgement upon an enemy. Consume all stacks of Sin and Virtue. Gain a stack of Sin when an ally deals damage to an animal. Gain a stack of Virtue when an ally heals or replenishes an animal. Sin: when consumed, each stack deals 10-20% of your highest offense stat as physical damage to an enemy; stack limit 10. Virtue: when consumed, each stack deals 20-30% of your lowest offense stat as magical damage to an enemy; stack limit 10."
     }
   ],
   "buffs": [
@@ -1712,6 +1826,27 @@
       "qualityList": [],
       "note": "Damage berikutnya yang diterima naik 1% per stack, lalu semua stack dihapus.",
       "stackingNote": "Independent: tiap stack instance terpisah, jumlahnya dijumlahkan saat menghitung bonus."
+    },
+    {
+      "id": 22,
+      "name": "Thorn Tether",
+      "debuff": false,
+      "defenseBuff": true,
+      "qualityList": [
+        [
+          25,
+          50
+        ],
+        [
+          20,
+          30
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "note": "Pemilik senjata menyerap 25-50% damage masuk ke hewan yang ditautkan, serta menyerap 20-30% heal dan 20-30% replenish WP yang diterima hewan itu. Tidak bisa dipasang jika hewan sudah punya defense buff."
     }
   ],
   "limits": {

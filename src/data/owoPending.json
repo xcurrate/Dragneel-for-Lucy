@@ -14,39 +14,6 @@
       ]
     },
     {
-      "id": 24,
-      "name": "Soul Tithe",
-      "emojis": [
-        "<:stithe:1464696399223324713>"
-      ],
-      "aliases": [
-        "stithe",
-        "soul",
-        "tithe"
-      ]
-    },
-    {
-      "id": 25,
-      "name": "Blood Harvest Staff",
-      "emojis": [
-        "<:bhstaff:1464696336409559173>"
-      ],
-      "aliases": [
-        "bhstaff"
-      ]
-    },
-    {
-      "id": 26,
-      "name": "Abyssal Edge",
-      "emojis": [
-        "<:aedge:1464695939452113168>"
-      ],
-      "aliases": [
-        "aedge",
-        "edge"
-      ]
-    },
-    {
       "id": 28,
       "name": "Burning Gaze",
       "emojis": [

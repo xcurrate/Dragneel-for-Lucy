@@ -51,6 +51,15 @@ function withTag(ctx, tag, unit, fn) {
   }
 }
 
+// Senjata seperti Arbiter's Edge perlu tahu aktivitas seluruh tim, bukan hanya
+// pemiliknya. Hook dipanggil pada senjata tiap rekan yang masih hidup.
+function notifyTeamWeapons(team, hook, ctx, ...args) {
+  for (const owner of team || []) {
+    if (!isAlive(owner) || !owner.weapon) continue;
+    owner.weapon[hook]?.(ctx, owner, ...args);
+  }
+}
+
 // (res / (100 + res)) * 0.8 — resistensi jenuh, plafon 80%.
 function resToPercent(res) {
   const total = res[0] + res[1];
@@ -129,6 +138,7 @@ function inflictDamage(ctx, attacker, target, rawDamage, type, { bypassRes = fal
   if (total < 0) total = 0;
   target.stats.hp[0] -= total;
   ctx.damageDealt += total;
+  notifyTeamWeapons(attacker.team, 'onAllyDamage', ctx, attacker, target, total, type);
 
   for (const buff of target.buffs) buff.postAttacked?.(ctx, target, attacker, total, type);
   if (target.weapon) for (const p of target.weapon.passives) p.postAttacked?.(ctx, target, attacker, total, type);
@@ -159,6 +169,7 @@ function heal(ctx, target, amount, from, { overheal = false, revive = false } = 
   if (total > room) total = room;
 
   target.stats.hp[0] += total;
+  if (from) notifyTeamWeapons(from.team, 'onAllyHeal', ctx, from, target, total);
 
   const prevHealBudget = ctx.healBudget;
   // Hook postHealed menerima jumlah yang benar-benar masuk, bukan angka mentah:
@@ -199,6 +210,7 @@ function replenish(ctx, target, amount, from, { overreplenish = false } = {}) {
   if (total > room) total = room;
 
   target.stats.wp[0] += total;
+  if (from) notifyTeamWeapons(from.team, 'onAllyReplenish', ctx, from, target, total);
 
   const prevReplenishBudget = ctx.replenishBudget;
   ctx.replenishBudget = { remaining: total };

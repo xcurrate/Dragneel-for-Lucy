@@ -21,8 +21,8 @@ const COEFFS_WEAK = { hp: 4, att: 2, pr: 3, wp: 1, mag: 1, mr: 2 };
 describe('data battle OwO', () => {
   it('memuat hewan, senjata, dan buff dengan jumlah yang diharapkan', () => {
     assert.strictEqual(data.animals().length, 20);
-    assert.strictEqual(data.weapons().length, 29);
-    assert.strictEqual(data.buffs().length, 19);
+    assert.strictEqual(data.weapons().length, 32);
+    assert.strictEqual(data.buffs().length, 20);
   });
 
   it('mencari hewan lewat alias', () => {
@@ -1913,8 +1913,8 @@ describe('dtm s memasang senjata ke slot', () => {
   });
 
   it('membedakan senjata belum ada mekanik dari tidak dikenal', () => {
-    // `cstaff` sekarang sudah bermekanik, jadi contoh pending memakai Soul Tithe.
-    assert.ok(run('s', 'stithe', 'crit').includes('belum punya data simulasi'));
+    // `stithe` sekarang sudah bermekanik, jadi contoh pending memakai Burning Gaze.
+    assert.ok(run('s', 'bgaz', 'crit').includes('belum punya data simulasi'));
     assert.ok(run('s', 'zzz', 'crit').includes('tidak dikenal'));
   });
 
@@ -1981,7 +1981,7 @@ describe('alias senjata dan pasif', () => {
     store.createTeam('u', 'T');
     store.setActiveTeam('u', 'T');
     const replies = [];
-    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=stithe'], 'd', {
+    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, ['add', '1', 'snail', 'weapon=bgaz'], 'd', {
       sendEmbed: (m, e) => replies.push(e.toJSON()),
     });
     assert.ok(replies[0].description.includes('belum punya data simulasi'));
@@ -3997,3 +3997,181 @@ describe('label perintah memakai prefix server', () => {
   });
 });
 
+
+describe('senjata baru: Arbiter\'s Edge, Briar-Heart Staff, Soul Tithe', () => {
+  const rng = { next: () => 0.5 };
+  const unit = (name, stats = {}) => ({
+    pid: name, slot: name, nickname: name, level: 60,
+    stats: Object.assign({
+      hp: [5000, 5000, 5000, 0], wp: [2000, 2000, 2000, 0],
+      mag: [1000, 0], att: [500, 0], pr: [0, 0], mr: [0, 0],
+    }, stats),
+    buffs: [], weapon: null, team: [], foes: [],
+  });
+  const link = (mine, theirs) => {
+    for (const u of mine) { u.team = mine; u.foes = theirs; }
+    for (const u of theirs) { u.team = theirs; u.foes = mine; }
+  };
+  const ctxOf = () => ({ rng, damageDealt: 0, tags: new Set(), turn: 1 });
+
+  it('mengenali nama, alias, dan ID resmi ketiga senjata', () => {
+    const pairs = {
+      aedge: 128, edge: 128, arbitersedge: 128,
+      bhstaff: 127, briarheart: 127, briarheartstaff: 127,
+      stithe: 126, soul: 126, tithe: 126, soultithe: 126,
+    };
+    for (const [alias, id] of Object.entries(pairs)) {
+      assert.strictEqual(data.findWeapon(alias).id, id, `alias ${alias}`);
+    }
+    for (const id of [126, 127, 128]) {
+      assert.strictEqual(data.weapons().find(w => w.id === id).owoId, id);
+    }
+  });
+
+  it('Soul Tithe menyerap WP semua rekan dan mengubahnya menjadi damage MAG', () => {
+    const me = [unit('me', { wp: [1000, 2000, 2000, 0] }), unit('ally', { wp: [2000, 2000, 2000, 0] })];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 126, quality: 100 }, rng, 100);
+    assert.deepStrictEqual(me[0].weapon.stats, [25, 0.45]);
+    assert.strictEqual(me[0].weapon.manaCost, 50);
+    const hp0 = them[0].stats.hp[0];
+    assert.strictEqual(weaponModule.weaponAbility(ctxOf(), me[0].weapon, me[0]), true);
+    // Biaya 50 dibayar dulu, lalu 25% dari WP tersisa: 237,5 + 500 = 737,5 WP.
+    // 737,5 x 0,45% x 1000 MAG = 3318,75 -> dibulatkan 3319.
+    assert.strictEqual(me[0].stats.wp[0], 712.5);
+    assert.strictEqual(me[1].stats.wp[0], 1500);
+    assert.strictEqual(hp0 - them[0].stats.hp[0], 3319);
+  });
+
+  it('Soul Tithe tidak memakai WP bila tidak ada WP yang bisa diserap', () => {
+    const me = [unit('me', { wp: [0, 2000, 2000, 0] }), unit('ally', { wp: [0, 2000, 2000, 0] })];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 126, quality: 100 }, rng, 100);
+    assert.strictEqual(weaponModule.weaponAbility(ctxOf(), me[0].weapon, me[0]), false);
+    assert.strictEqual(me[0].stats.wp[0], 0);
+    assert.strictEqual(them[0].stats.hp[0], 5000);
+  });
+
+  it('Arbiter\'s Edge mendapat Sin dari damage rekan dan Virtue dari heal/replenish rekan', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 128, quality: 100 }, rng, 100);
+    const ctx = ctxOf();
+    engine.inflictDamage(ctx, me[1], them[0], 100, engine.PHYSICAL);
+    assert.strictEqual(me[0].weapon.sinStacks, 1, 'damage rekan menambah Sin');
+    engine.inflictDamage(ctx, me[0], them[0], 100, engine.PHYSICAL);
+    assert.strictEqual(me[0].weapon.sinStacks, 1, 'damage pemilik tidak menambah Sin');
+
+    me[0].stats.hp[0] = 4000;
+    engine.heal(ctx, me[0], 100, me[1]);
+    assert.strictEqual(me[0].weapon.virtueStacks, 1, 'heal rekan menambah Virtue');
+    me[0].stats.wp[0] = 1000;
+    engine.replenish(ctx, me[0], 100, me[1]);
+    assert.strictEqual(me[0].weapon.virtueStacks, 2, 'replenish rekan menambah Virtue');
+  });
+
+  it('Arbiter\'s Edge membatasi Sin dan Virtue maksimal 10 stack', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 128, quality: 100 }, rng, 100);
+    const ctx = ctxOf();
+    for (let i = 0; i < 12; i++) engine.inflictDamage(ctx, me[1], them[0], 10, engine.PHYSICAL);
+    for (let i = 0; i < 12; i++) {
+      me[0].stats.hp[0] = 4000;
+      engine.heal(ctx, me[0], 10, me[1]);
+    }
+    assert.strictEqual(me[0].weapon.sinStacks, 10);
+    assert.strictEqual(me[0].weapon.virtueStacks, 10);
+  });
+
+  it('Arbiter\'s Edge mengonsumsi semua stack: Sin fisik dari offense tertinggi, Virtue magis dari offense terendah', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 128, quality: 100 }, rng, 100);
+    me[0].weapon.sinStacks = 2;
+    me[0].weapon.virtueStacks = 2;
+    const hp0 = them[0].stats.hp[0];
+    assert.strictEqual(weaponModule.weaponAbility(ctxOf(), me[0].weapon, me[0]), true);
+    // MAG 1000 adalah offense tertinggi -> 2 x 20% x 1000 = 400.
+    // ATT 500 adalah offense terendah -> 2 x 30% x 500 = 300.
+    assert.strictEqual(hp0 - them[0].stats.hp[0], 700);
+    assert.strictEqual(me[0].weapon.sinStacks, 0);
+    assert.strictEqual(me[0].weapon.virtueStacks, 0);
+    assert.strictEqual(me[0].stats.wp[0], 2000 - 125);
+  });
+
+  it('Arbiter\'s Edge tidak memakai WP bila belum punya stack', () => {
+    const me = [unit('me')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 128, quality: 100 }, rng, 100);
+    assert.strictEqual(weaponModule.weaponAbility(ctxOf(), me[0].weapon, me[0]), false);
+    assert.strictEqual(me[0].stats.wp[0], 2000);
+    assert.strictEqual(them[0].stats.hp[0], 5000);
+  });
+
+  it('Briar-Heart Staff memasang Thorn Tether ke rekan, bukan ke pemilik', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 127, quality: 100 }, rng, 100);
+    assert.deepStrictEqual(me[0].weapon.stats, [50, 30, 30]);
+    assert.strictEqual(me[0].weapon.manaCost, 140);
+    assert.strictEqual(me[0].weapon.preTurn(ctxOf(), me[0], me, them), true);
+    const tether = me[1].buffs.find(b => b.id === 22);
+    assert.ok(tether, 'Thorn Tether menempel ke rekan');
+    assert.deepStrictEqual(tether.stats, [50, 30, 30]);
+    assert.strictEqual(tether.duration, 2);
+    assert.strictEqual(me[0].buffs.some(b => b.id === 22), false, 'pemilik tidak ditautkan ke diri sendiri');
+    assert.strictEqual(me[0].skippedAttack, true);
+    assert.strictEqual(me[0].stats.wp[0], 1860);
+  });
+
+  it('Briar-Heart Staff tidak memasang tether pada rekan yang sudah punya defense buff', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[1].buffs.push(createBuff(4, { quality: [100], from: me[1], rng }));
+    me[0].weapon = weaponModule.buildWeapon({ id: 127, quality: 100 }, rng, 100);
+    assert.strictEqual(me[0].weapon.preTurn(ctxOf(), me[0], me, them), false);
+    assert.strictEqual(me[1].buffs.some(b => b.id === 22), false);
+    assert.strictEqual(me[0].stats.wp[0], 2000, 'tidak membayar WP tanpa target sah');
+  });
+
+  it('Thorn Tether memindahkan 50% damage dan 30% heal/replenish ke pemilik', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 127, quality: 100 }, rng, 100);
+    me[0].weapon.preTurn(ctxOf(), me[0], me, them);
+
+    engine.inflictDamage(ctxOf(), them[0], me[1], 1000, engine.PHYSICAL);
+    assert.strictEqual(me[1].stats.hp[0], 4500, 'target hanya menerima 50%');
+    assert.strictEqual(me[0].stats.hp[0], 4500, 'pemilik menyerap 50%');
+
+    me[0].stats.hp[0] = 3000;
+    me[1].stats.hp[0] = 3000;
+    engine.heal(ctxOf(), me[1], 1000, me[0]);
+    assert.strictEqual(me[1].stats.hp[0], 3700, 'target hanya menerima 70% heal');
+    assert.strictEqual(me[0].stats.hp[0], 3300, 'pemilik menerima 30% heal');
+
+    me[0].stats.wp[0] = 1000;
+    me[1].stats.wp[0] = 1000;
+    engine.replenish(ctxOf(), me[1], 1000, me[0]);
+    assert.strictEqual(me[1].stats.wp[0], 1700, 'target hanya menerima 70% replenish');
+    assert.strictEqual(me[0].stats.wp[0], 1300, 'pemilik menerima 30% replenish');
+  });
+
+  it('Thorn Tether bukan ability aktif', () => {
+    const me = [unit('me'), unit('ally')];
+    const them = [unit('e')];
+    link(me, them);
+    me[0].weapon = weaponModule.buildWeapon({ id: 127, quality: 100 }, rng, 100);
+    assert.strictEqual(weaponModule.weaponAbility(ctxOf(), me[0].weapon, me[0]), false);
+  });
+});

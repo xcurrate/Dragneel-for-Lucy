@@ -165,7 +165,38 @@ function buildWeapon(spec, rng, globalQuality) {
   if (def.ability?.kind === 'anniversary') {
     weapon.preTurn = (ctx, unit) => ABILITIES.anniversary(ctx, weapon, unit);
   }
+  if (def.ability?.kind === 'thorn_tether') {
+    weapon.preTurn = (ctx, unit) => ABILITIES.thorn_tether(ctx, weapon, unit);
+  }
+  if (def.ability?.kind === 'arbiters_edge') {
+    // Stack disimpan di senjata, bukan buff, karena Sin/Virtue bukan efek yang
+    // bisa dicuri/dispel dan tidak boleh ikut dihitung sebagai buff tim.
+    weapon.sinStacks = 0;
+    weapon.virtueStacks = 0;
+    weapon.onAllyDamage = (ctx, owner, source, target, total) => {
+      if (!owner || owner === source || !(total > 0)) return;
+      if (owner.stats.hp[0] <= 0) return;
+      weapon.sinStacks = Math.min(weapon.ability.sinLimit ?? 10, weapon.sinStacks + 1);
+    };
+    weapon.onAllyHeal = (ctx, owner, source, target, total) => {
+      if (!owner || owner === source || !(total > 0)) return;
+      if (owner.stats.hp[0] <= 0) return;
+      weapon.virtueStacks = Math.min(weapon.ability.virtueLimit ?? 10, weapon.virtueStacks + 1);
+    };
+    weapon.onAllyReplenish = (ctx, owner, source, target, total) => {
+      if (!owner || owner === source || !(total > 0)) return;
+      if (owner.stats.hp[0] <= 0) return;
+      weapon.virtueStacks = Math.min(weapon.ability.virtueLimit ?? 10, weapon.virtueStacks + 1);
+    };
+  }
   return weapon;
+}
+
+// Defense buff yang sudah ada di mesin: Taunt, Defense Up, Sacred Ward, dan
+// Thorn Tether sendiri. OwO tidak menyimpan daftar terpusat, jadi id dipakai
+// langsung agar perilaku senjata lama tidak berubah.
+function hasDefenseBuff(unit) {
+  return unit.buffs.some(b => b.id === 1 || b.id === 4 || b.id === 13 || b.id === 22);
 }
 
 // Ability aktif. Mengembalikan true bila benar-benar dipakai; false berarti
@@ -465,6 +496,81 @@ const ABILITIES = {
     return true;
   },
 
+  // Briar-Heart Staff: pasang Thorn Tether ke rekan yang belum punya defense
+  // buff. Pemilik tidak ikut ditautkan karena tether ke diri sendiri tidak punya
+  // arti; biaya WP baru dibayar setelah ada minimal satu target sah.
+  thorn_tether(ctx, weapon, actor) {
+    const e = engine();
+    const ab = weapon.ability;
+    const targets = e.aliveOf(actor.team || [])
+      .filter(unit => unit !== actor && !hasDefenseBuff(unit));
+    if (!targets.length) return false;
+    if (actor.stats.wp[0] < weapon.manaCost) return false;
+    e.useMana(actor, weapon.manaCost);
+    let applied = false;
+    for (const target of targets) {
+      applyBuff(ctx, 22, actor, target, ab.duration, buffQuality(weapon.def, weapon.quality));
+      if (target.buffs.some(b => b.id === 22)) applied = true;
+    }
+    if (!applied) return false;
+    actor.skippedAttack = true;
+    return true;
+  },
+
+  // Soul Tithe: ambil WP dari semua rekan (termasuk pemakai), lalu ubah total
+  // WP yang diserap menjadi damage MAG. Persen kedua adalah persen MAG per 1 WP.
+  soul_tithe(ctx, weapon, actor) {
+    const e = engine();
+    const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
+    if (!target) return false;
+    const allies = e.aliveOf(actor.team || []);
+    const pct = weapon.stats[0] / 100;
+    const totalWp = allies.reduce((sum, unit) => sum + Math.max(0, unit.stats.wp[0]), 0);
+    if (totalWp <= 0) return false;
+    e.useMana(actor, weapon.manaCost);
+    let absorbed = 0;
+    for (const unit of allies) {
+      const amount = Math.max(0, unit.stats.wp[0]) * pct;
+      unit.stats.wp[0] = Math.max(0, unit.stats.wp[0] - amount);
+      absorbed += amount;
+    }
+    if (absorbed <= 0) return false;
+    const raw = e.getDamage(actor.stats.mag, absorbed * (weapon.stats[1] / 100), ctx.rng);
+    e.inflictDamage(ctx, actor, target, raw, e.MAGICAL);
+    return true;
+  },
+
+  // Arbiter's Edge: konsumsi semua Sin/Virtue. Tiap stack memilih satu musuh
+  // hidup secara acak; Sin memakai offense tertinggi (fisik), Virtue memakai
+  // offense terendah (magis). Stack dibersihkan sebelum damage agar damage dari
+  // ability ini tidak langsung menambah stack baru.
+  arbiters_edge(ctx, weapon, actor) {
+    const e = engine();
+    const sin = weapon.sinStacks || 0;
+    const virtue = weapon.virtueStacks || 0;
+    if (!sin && !virtue) return false;
+    if (!e.aliveOf(actor.foes || []).length) return false;
+    e.useMana(actor, weapon.manaCost);
+    weapon.sinStacks = 0;
+    weapon.virtueStacks = 0;
+    const high = actor.stats.att[0] + actor.stats.att[1] >= actor.stats.mag[0] + actor.stats.mag[1]
+      ? 'att' : 'mag';
+    const low = high === 'att' ? 'mag' : 'att';
+    for (let i = 0; i < sin; i++) {
+      const target = e.pickRandom(e.aliveOf(actor.foes || []), ctx.rng);
+      if (!target) break;
+      const raw = e.getDamage(actor.stats[high], weapon.stats[0] / 100, ctx.rng);
+      e.inflictDamage(ctx, actor, target, raw, e.PHYSICAL);
+    }
+    for (let i = 0; i < virtue; i++) {
+      const target = e.pickRandom(e.aliveOf(actor.foes || []), ctx.rng);
+      if (!target) break;
+      const raw = e.getDamage(actor.stats[low], weapon.stats[1] / 100, ctx.rng);
+      e.inflictDamage(ctx, actor, target, raw, e.MAGICAL);
+    }
+    return true;
+  },
+
   luck_hits(ctx, weapon, actor) {
     const e = engine();
     const target = e.chooseTarget(actor, actor.team, actor.foes, ctx.rng);
@@ -520,7 +626,7 @@ function weaponAbility(ctx, weapon, actor) {
   if (!ab || ab.kind === 'none') return false;
   // Dipasang di awal turn (preTurn), bukan sebagai ability aktif.
   if (ab.kind === 'taunt' || ab.kind === 'attack_up_chain' || ab.kind === 'curse_all') return false;
-  if (ab.kind === 'anniversary') return false;
+  if (ab.kind === 'anniversary' || ab.kind === 'thorn_tether') return false;
   const handler = ABILITIES[ab.kind];
   if (!handler) return false;
   return handler(ctx, weapon, actor) === true;
