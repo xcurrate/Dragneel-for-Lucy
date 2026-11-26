@@ -191,6 +191,7 @@ function helpEmbed(prefix, { isAdmin = false } = {}) {
       value: [
         `\`${prefix} ping\` — cek latency bot`,
         `\`${prefix} count\` — counter Lucy`,
+        `\`${prefix} s\` / \`${prefix} settings\` — pengaturan server (admin)`,
         `\`${prefix} help\` — panduan ini (alias: \`${prefix}\`)`,
       ].join('\n'),
       inline: false,

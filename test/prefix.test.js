@@ -200,6 +200,7 @@ describe('prefix command handler', () => {
     const { helpCategoryEmbed } = require('../src/ui/helpPages');
     const embed = helpCategoryEmbed('d', 'utility').toJSON();
     const text = embed.fields.map(f => f.value).join('\n');
+    assert.match(text, /`d s` \/ `d settings`/);
     assert.match(text, /`d prefix \[nilai\]`/);
     assert.match(text, /\/prefix/);
   });

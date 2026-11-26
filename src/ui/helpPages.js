@@ -152,6 +152,10 @@ const PAGES = {
         value: [
           `\`${prefix} ping\` — cek latency bot`,
           `\`${prefix} count\` — counter Lucy`,
+          `\`${prefix} s\` / \`${prefix} settings\` — ringkasan pengaturan server`,
+          `\`${prefix} s count on|off\` — sakelar counter Lucy (admin/developer)`,
+          `\`${prefix} s <aksi> set text <teks>\` — pengingat default server (admin/pemilik)`,
+          `\`${prefix} s <aksi> reset\` — kembalikan pengingat ke bawaan`,
           `\`${prefix} prefix [nilai]\` — lihat/ubah prefix server (admin)`,
           '/prefix [nilai] — padanan slash command (admin)',
           `\`${prefix} help\` — panduan ini (alias: \`${prefix}\`)`,
@@ -180,6 +184,15 @@ const PAGES = {
           `\`${prefix} boss server on\` / \`${prefix} boss server off\` — tracker server`,
           `\`${prefix} prefix [nilai]\` — lihat/ubah prefix`,
           `\`${prefix} boss admin-help\` — panduan moderator`,
+        ].join('\n'),
+      },
+      {
+        name: '🛠️ Pengaturan Server',
+        value: [
+          `\`${prefix} s\` / \`${prefix} settings\` — ringkasan pengaturan`,
+          `\`${prefix} s count on|off\` — sakelar counter Lucy`,
+          `\`${prefix} s <aksi> set text <teks>\` — pengingat default server`,
+          `\`${prefix} s <aksi> reset\` — kembalikan ke bawaan`,
         ].join('\n'),
       },
     ],

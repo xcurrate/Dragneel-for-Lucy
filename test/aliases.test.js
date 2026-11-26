@@ -65,6 +65,12 @@ describe('prefix aliases', () => {
     assert.strictEqual(parsePrefixInput('d status', 'd'), null);
   });
 
+  it('mengenali s/settings dengan atau tanpa spasi setelah prefix', () => {
+    for (const text of ['h s', 'hs', 'h settings', 'hsettings']) {
+      assert.strictEqual(parsePrefixInput(text, 'h').sub, 'settings', text);
+    }
+  });
+
   it('ignores ordinary chat that merely starts with the prefix', () => {
     for (const text of ['duh', 'dah', 'dulu aku pergi', 'dong', 'dadu']) {
       assert.strictEqual(parsePrefixInput(text, 'd'), null, text + ' harus diabaikan');
