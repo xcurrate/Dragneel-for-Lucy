@@ -180,6 +180,19 @@ describe('prefix command handler', () => {
     assert.match(text, /prefix/);
   });
 
+  it('shows a compact category overview instead of the full command list', async () => {
+    const { handlePrefixCommand } = require('../src/commands/prefix');
+    const deps = makeDeps();
+    await handlePrefixCommand(makeMessage('d help', 'guild1', 'user1', false), null, deps);
+    const fields = deps.calls[0].embeds[0].data.fields;
+    assert.deepStrictEqual(
+      fields.map(f => f.name),
+      ['🐉 Boss Tracker', '🐾 Tim & Battle', '🎮 Game & Dex', '💬 Lucy & Reminder', '🛠️ Utilitas'],
+    );
+    assert.ok(fields.every(f => f.value.split('\n').length <= 4), 'tiap kategori tetap ringkas');
+    assert.ok(fields.some(f => f.value.includes('`d team help`')), 'detail tim ditautkan');
+  });
+
   it('hides the admin section from regular members', async () => {
     const { handlePrefixCommand } = require('../src/commands/prefix');
     const deps = makeDeps();

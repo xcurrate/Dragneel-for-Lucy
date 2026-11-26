@@ -147,67 +147,67 @@ function statusEmbed(settings, userId) {
 
 function helpEmbed(prefix, { isAdmin = false } = {}) {
   const fields = [
-    // 👤 Pengguna — daftar perintah slash yang bisa dipakai semua anggota.
-    { name: '👤 Pengguna — Slash Command', value: [
-      '`/boss menu` — panel pengaturan pribadi (dropdown + tombol)',
-      '`/boss notify mode:` — pilih DM, channel, atau keduanya',
-      '`/boss warn detik:` — peringatan DM sebelum boss muncul',
-      '`/boss on` / `/boss off` — aktifkan/matikan DM pribadi',
-      '`/boss status` — cek status tracker & waktu boss berikutnya',
-      '`/boss help` — panduan ini'
-    ].join('\n'), inline: false },
-
-    // 👤 Pengguna — padanan prefix, prefix server diambil dari settings.
-    { name: '📝 Pengguna — Prefix Command', value: [
-      '`' + prefix + ' boss menu` — panel pengaturan pribadi',
-      '`' + prefix + ' boss notify dm|channel|both` — pilih mode notifikasi',
-      '`' + prefix + ' boss warn <detik>` — peringatan DM (0 = matikan)',
-      '`' + prefix + ' boss on` / `' + prefix + ' boss off` — aktifkan/matikan DM',
-      '`' + prefix + ' boss status` — cek status tracker',
-      '`' + prefix + ' help` — panduan ini (alias: `' + prefix + '`)',
-      '`' + prefix + ' ping` — cek latency bot (alias: `' + prefix + ' p`)',
-      '`' + prefix + ' dex <nama...> [-c]` — lihat Animal Dex; `-c` = tabel stat ringkas (alias: `' + prefix + ' d`)',
-      '`' + prefix + ' f100` — game Family 100 (tebak jawaban survei)',
-      '`' + prefix + ' math [jumlah]` — game Cepat Tepat matematika (alias: `' + prefix + ' mtk`)',
-      '`lucy battle` / `lb` / `l hunt` — aksi Lucy + pengingat otomatis (prefix bisa diatur admin)',
-      '`' + prefix + ' lreminder` — kotak interaksi pengingat (on/off + cara ping, berlaku global)',
-      '`' + prefix + ' lucyprefix set <prefix>` — atur prefix bot Lucy di server ini (admin)',
-      '`' + prefix + ' llb <pray|curse|battle|hunt|lucy|all> [rentang]` — leaderboard aksi Lucy',
-      '`' + prefix + ' team` — tim battle kustom (new/add/pick/show, tombol pilih tim)',
-      '`' + prefix + ' sim [-m jumlah] [-s seed]` — simulasi battle gaya OwO'
-    ].join('\n'), inline: false },
-
-    // ⚙️ Admin — daftar perintah slash admin, hanya tampil jika isAdmin.
-    { name: '⚙️ Admin — Slash Command', value: [
-      '`/boss setup channel:#channel role:@role` — atur channel & role tag',
-      '`/boss server-on` — aktifkan tracker seluruh server',
-      '`/boss server-off` — matikan tracker server',
-      '`/boss prefix` — lihat prefix server',
-      '`/boss admin-help` — panduan moderator'
-    ].join('\n'), inline: false },
-
-    // ⚙️ Admin — padanan prefix untuk perintah admin, hanya tampil jika isAdmin.
-    { name: '⚙️ Admin — Prefix Command', value: [
-      '`' + prefix + ' boss setup #channel @role` — atur channel & role tag',
-      '`' + prefix + ' boss server on` — aktifkan tracker seluruh server',
-      '`' + prefix + ' boss server off` — matikan tracker server',
-      '`' + prefix + ' prefix` — lihat/ubah prefix server',
-      '`' + prefix + ' boss admin-help` — panduan moderator'
-    ].join('\n'), inline: false },
-
-    // 🎛️ Panel — menjelaskan elemen interaktif pada panel /boss menu.
-    { name: '🎛️ Panel Interaktif', value: [
-      '**Dropdown notifikasi** — pilih DM saja, tanpa DM, atau DM + channel.',
-      '**Dropdown peringatan** — atur berapa detik sebelum boss kamu diingatkan via DM.',
-      '**Tombol DM ON/OFF** — nyalakan atau matikan DM pribadi dengan cepat.',
-      '**Tombol bawah** — Status, Bantuan, Admin Help, dan tombol 🔄 untuk memperbarui panel.'
-    ].join('\n'), inline: false }
+    {
+      name: '🐉 Boss Tracker',
+      value: [
+        '`/boss menu` — panel pengaturan pribadi',
+        '`/boss notify mode:` / `/boss warn detik:` — atur notifikasi & peringatan',
+        '`/boss on` / `/boss off` / `/boss status` — DM & status',
+        `\`${prefix} boss menu\` · \`${prefix} boss notify dm|channel|both\` · \`${prefix} boss status\``,
+      ].join('\n'),
+      inline: false,
+    },
+    {
+      name: '🐾 Tim & Battle',
+      value: [
+        `\`${prefix} tm\` — panel tim`,
+        `\`${prefix} team help\` — semua perintah tim (add/set/clear/swap/blueprint)`,
+        `\`${prefix} sim help\` — simulasi battle`,
+        `\`${prefix} sim global help\` — simulasi melawan semua tim`,
+      ].join('\n'),
+      inline: false,
+    },
+    {
+      name: '🎮 Game & Dex',
+      value: [
+        `\`${prefix} f100 help\` — Family 100`,
+        `\`${prefix} math help\` — Cepat Tepat`,
+        `\`${prefix} dex <nama>\` — Animal Dex`,
+      ].join('\n'),
+      inline: false,
+    },
+    {
+      name: '💬 Lucy & Reminder',
+      value: [
+        `\`${prefix} lreminder\` — pengingat aksi Lucy`,
+        `\`${prefix} top\` / \`${prefix} global\` / \`${prefix} chart\` — leaderboard & chart`,
+        `\`${prefix} reminder help\` — Custom Reminder`,
+      ].join('\n'),
+      inline: false,
+    },
+    {
+      name: '🛠️ Utilitas',
+      value: [
+        `\`${prefix} ping\` — cek latency bot`,
+        `\`${prefix} count\` — counter Lucy`,
+        `\`${prefix} help\` — panduan ini (alias: \`${prefix}\`)`,
+      ].join('\n'),
+      inline: false,
+    },
+    {
+      name: '⚙️ Admin',
+      value: [
+        `\`${prefix} boss admin-help\` — panduan moderator`,
+        `\`${prefix} prefix\` — lihat/ubah prefix server`,
+        `\`${prefix} boss setup #channel @role\` — channel & role notifikasi`,
+      ].join('\n'),
+      inline: false,
+    },
   ];
   const embed = new EmbedBuilder().setColor(0x5865F2)
     .setTitle('🐉 Bantuan Boss Tracker')
-    .setDescription('Boss Tracker memberi pengingat saat boss Lucy diperkirakan muncul.')
+    .setDescription('Panduan ringkas per kategori. Buka detail lewat perintah `help` di tiap kategori.')
     .addFields(isAdmin ? fields : fields.filter(f => !f.name.startsWith('⚙️')));
-  // Footer: jelaskan bahwa pengaturan server bersifat global, panel hanya pribadi.
   embed.setFooter({ text: 'Mode channel server berlaku untuk seluruh server; panel ini hanya mengubah pengaturan pribadimu.' });
   return embed;
 }
