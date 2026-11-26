@@ -770,3 +770,19 @@ Port dari `battle/` OwO. Beberapa perilaku **tidak** boleh "dirapikan" karena me
   `validatePassiveCount`, `createTeam`) menerima parameter prefix; default `'d'`
   hanya untuk tes. Jangan menulis literal `d ...`, `dtm`, atau `dteam` di string
   yang dilihat user — server bisa memakai prefix lain.
+
+## Rencana tier user (belum dikerjakan)
+
+- Arah: tier per user, default **Free**, developer tetap bypass.
+- Tabel `user_tiers` (`user_id` PK, `tier`, `source`, `expires_at`, `updated_at`).
+- Modul `src/services/tiers.js`: `getTier(userId)`, `can(userId, feature)`,
+  `limit(userId, key)`.
+- Gating dilakukan di command/UI layer, **bukan** di `battleEngine`.
+- Kandidat fitur: tampilan senjata, battle log, batas `sim`/`sim global`,
+  jumlah tim, dan balasan reminder custom.
+- Command: `d tier`, `d tier list`, `d tier set @user <tier> [durasi]`,
+  `d tier reset @user`.
+- Catatan teknis: `MAX_TEAMS = 21` masih hardcoded; `getMaxGlobalUser()`
+  sebenarnya setting global, bukan per user; `lucyReminder.premium` masih
+  per guild dan belum aktif.
+- Belum diimplementasikan; jangan dicampur ke PR #10, buat PR terpisah.
