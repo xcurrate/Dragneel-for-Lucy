@@ -11,6 +11,7 @@
 //   dteam add <slot> <hewan|stat> [level=N] [weapon=senjata] [label=teks]
 //   dteam set ...               sama dengan add (menimpa slot)
 //   dteam clear <slot>          kosongkan slot
+//   dteam swap <slot1> <slot2>  tukar posisi pet
 const { MessageFlags } = require('discord.js');
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
@@ -40,6 +41,7 @@ function usage(prefix = 'd') {
     `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
     `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
     `\`${prefix} team clear <slot>\` — kosongkan slot`,
+    `\`${prefix} team swap <slot1> <slot2>\` — tukar posisi pet di tim aktif`,
     `\`${prefix} team del <id|nama>\` / \`${prefix} team rename <id|nama> <baru>\``,
     '',
     'Opsi slot: `level=50` (default 50), `weapon=gsword`, `quality=80`, `passive=1,12`, `label=tank`',
@@ -310,6 +312,26 @@ async function handleTeamCommand(message, args, prefix, deps = {}) {
     const result = store.renameTeam(userId, from, to);
     if (result.error) return say(send, message, `❌ ${result.error}`);
     return say(send, message, `✅ Tim **${labelOf(result.team)}** sekarang bernama **${result.team.name}**.`);
+  }
+
+  if (sub === 'swap' || sub === 'tukar' || sub === 'pindah') {
+    const team = store.getActiveTeam(userId);
+    if (!team) return say(send, message, `Belum ada tim aktif. Buat dengan \`${prefix} team new <nama>\`.`);
+    // Terima `1 2`, `1 ke 2`, `1->2`, dan bentuk lain yang memuat dua angka.
+    const numbers = rest.join(' ').match(/\d+/g)?.map(Number) || [];
+    if (numbers.length !== 2) {
+      return say(send, message, `Format: \`${prefix} team swap <slot1> <slot2>\`. Contoh: \`${prefix} team swap 1 2\`.`);
+    }
+    const [from, to] = numbers;
+    if (from < 1 || from > store.MAX_SLOTS || to < 1 || to > store.MAX_SLOTS) {
+      return say(send, message, `Slot harus 1-${store.MAX_SLOTS}.`);
+    }
+    const result = store.swapSlots(userId, team.name, from, to);
+    if (result.error) return say(send, message, `❌ ${result.error}`);
+    if (result.moved) {
+      return say(send, message, `✅ Pet dari slot ${from} dipindahkan ke slot ${to} pada tim **${team.name}**.`);
+    }
+    return say(send, message, `✅ Posisi pet ditukar: slot ${from} ↔ slot ${to} pada tim **${team.name}**.`);
   }
 
   if (sub === 'clear' || sub === 'kosongkan') {

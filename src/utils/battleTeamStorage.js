@@ -480,6 +480,44 @@ function clearSlot(userId, teamName, slot) {
   return { team: getTeamById(team.id) };
 }
 
+// Menukar isi dua slot. Kalau tujuan kosong, pet dipindahkan ke slot tujuan.
+// Slot sementara 0 dipakai agar pertukaran tidak melanggar primary key
+// (team_id, slot); slot 0 tidak pernah dipakai oleh perintah lain.
+function swapSlots(userId, teamName, from, to) {
+  const team = findTeam(userId, teamName);
+  if (!team) return { error: `Tim **${teamName}** tidak ditemukan.` };
+  const a = Number(from);
+  const b = Number(to);
+  for (const slot of [a, b]) {
+    if (!Number.isInteger(slot) || slot < 1 || slot > MAX_SLOTS) {
+      return { error: `Slot harus 1-${MAX_SLOTS}.` };
+    }
+  }
+  if (a === b) return { error: 'Slot asal dan tujuan harus berbeda.' };
+
+  const database = getDb();
+  const source = database.prepare(
+    'SELECT 1 FROM team_slots WHERE team_id = ? AND slot = ?'
+  ).get(team.id, a);
+  if (!source) return { error: `Slot ${a} masih kosong.` };
+  const target = database.prepare(
+    'SELECT 1 FROM team_slots WHERE team_id = ? AND slot = ?'
+  ).get(team.id, b);
+
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    database.prepare('UPDATE team_slots SET slot = 0 WHERE team_id = ? AND slot = ?').run(team.id, a);
+    database.prepare('UPDATE team_slots SET slot = ? WHERE team_id = ? AND slot = ?').run(a, team.id, b);
+    database.prepare('UPDATE team_slots SET slot = ? WHERE team_id = ? AND slot = 0').run(b, team.id);
+    database.prepare('UPDATE teams SET updated_at = ? WHERE id = ?').run(Date.now(), team.id);
+    database.exec('COMMIT');
+  } catch (error) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+  return { team: getTeamById(team.id), moved: !target, from: a, to: b };
+}
+
 function touch(teamId) {
   getDb().prepare('UPDATE teams SET updated_at = ? WHERE id = ?').run(Date.now(), teamId);
 }
@@ -669,6 +707,7 @@ module.exports = {
   deleteTeam,
   setSlot,
   clearSlot,
+  swapSlots,
   setActiveTeam,
   getActiveTeam,
   hasTeamImport,

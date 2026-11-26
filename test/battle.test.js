@@ -1668,6 +1668,69 @@ describe('emoji battle', () => {
   });
 });
 
+describe('dtm swap memindahkan posisi pet', () => {
+  const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
+  const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
+  const STATS_A = { hp: 10, att: 2, pr: 1, wp: 1, mag: 1, mr: 1 };
+  const STATS_B = { hp: 20, att: 4, pr: 2, wp: 2, mag: 2, mr: 2 };
+
+  let dir;
+  const run = (...args) => {
+    const out = [];
+    handleTeamCommand({ guildId: 'g', author: { id: 'u' } }, args, 'd', {
+      sendEmbed: (m, e) => out.push(e.toJSON()),
+    });
+    return out[0]?.description || '';
+  };
+  const slotOf = n => store.getActiveTeam('u').slots.find(s => s.slot === n);
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucy-dtm-swap-'));
+    process.chdir(dir);
+    store.createTeam('u', 'Alpha');
+    store.setActiveTeam('u', 'Alpha');
+    store.setSlot('u', 'Alpha', 1, {
+      custom: STATS_A, level: 100, label: 'Satu', weaponId: 1, weaponQuality: 80, passives: [{ id: 12 }],
+    });
+    store.setSlot('u', 'Alpha', 2, {
+      custom: STATS_B, level: 80, label: 'Dua', weaponId: 4, weaponQuality: [100, 50], passives: [{ id: 19, quality: [10, 10] }],
+    });
+  });
+
+  afterEach(() => {
+    process.chdir(ROOT);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('menukar isi dua slot beserta level dan senjatanya', () => {
+    const text = run('swap', '1', '2');
+    assert.ok(text.includes('ditukar'), text);
+    assert.strictEqual(slotOf(1).label, 'Dua');
+    assert.deepStrictEqual(slotOf(1).custom, STATS_B);
+    assert.strictEqual(slotOf(1).level, 80);
+    assert.strictEqual(slotOf(1).weaponId, 4);
+    assert.deepStrictEqual(slotOf(1).weaponQuality, [100, 50]);
+    assert.strictEqual(slotOf(2).label, 'Satu');
+    assert.deepStrictEqual(slotOf(2).custom, STATS_A);
+    assert.strictEqual(slotOf(2).level, 100);
+    assert.strictEqual(slotOf(2).weaponId, 1);
+    assert.deepStrictEqual(slotOf(2).passives, [{ id: 12 }]);
+  });
+
+  it('menerima bentuk `1 ke 2` dan memindahkan ke slot kosong', () => {
+    const text = run('swap', '1', 'ke', '3');
+    assert.ok(text.includes('dipindahkan'), text);
+    assert.strictEqual(slotOf(1), undefined, 'slot asal kosong');
+    assert.strictEqual(slotOf(3).label, 'Satu');
+  });
+
+  it('menolak slot sama, slot kosong, dan format tanpa dua angka', () => {
+    assert.ok(run('swap', '2', '2').includes('harus berbeda'));
+    assert.ok(run('swap', '3', '2').includes('masih kosong'));
+    assert.ok(run('swap', '1').includes('Format:'));
+  });
+});
+
 describe('dtm s memasang senjata ke slot', () => {
   const { handleTeamCommand } = require(path.join(ROOT, 'src/commands/battleTeam'));
   const store = require(path.join(ROOT, 'src/utils/battleTeamStorage'));
