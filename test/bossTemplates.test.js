@@ -122,6 +122,42 @@ test('simulasi template mengurutkan damage dan menampilkan min-max', async () =>
   assert.match(templates.formatDamageRange({ playerMin: 10, playerMax: 20 }), /^10–20$/);
 });
 
+test('benchmark hanya menampilkan 5 hasil teratas tanpa mengubah template tersimpan', () => {
+  cleanup();
+  for (let i = 0; i < 6; i++) templates.addTemplate(GUILD, OTHER);
+  const stored = templates.templatesOf(GUILD);
+  assert.equal(stored.length, 7, 'tujuh template tetap tersimpan');
+  assert.equal(templates.MAX_VISIBLE_RESULTS, 5);
+
+  const results = Array.from({ length: 7 }, (_, i) => ({
+    display: `T${i + 1}`,
+    damage: { playerMin: i + 1, playerMax: i + 2 },
+  }));
+  const section = templates.renderTemplateSection(results, 2);
+  for (let i = 1; i <= 5; i++) assert.match(section, new RegExp(`${i}\\. T${i}:`));
+  assert.doesNotMatch(section, /T6:/, 'hasil keenam tidak ditampilkan');
+  assert.doesNotMatch(section, /T7:/, 'hasil ketujuh tidak ditampilkan');
+  assert.deepEqual(templates.templatesOf(GUILD), stored, 'daftar tersimpan tidak berubah');
+});
+
+test('benchmark tidak menampilkan logo rank F/Fabled', async () => {
+  cleanup();
+  const dex = require(path.join(ROOT, 'src/services/animalDex'));
+  const be = require(path.join(ROOT, 'src/services/battleEmoji'));
+  const ids = [...be.RANK_TOKENS, ...be.allTokens()]
+    .map(token => /:(\d+)>$/.exec(token)?.[1])
+    .filter(Boolean);
+  dex.setClient({ emojis: { cache: new Map(ids.map(id => [id, true])) }, application: { emojis: { cache: new Map() } } });
+  try {
+    const result = await templates.simulateTemplates(GUILD, bossBlueprint(), { runs: 2, seed: 11 });
+    const display = result.results[0].display;
+    assert.doesNotMatch(display, /<a:(?:legendary|fabled):/, 'logo rank F/Fabled tidak tampil');
+    assert.match(display, /<:/, 'emoji senjata/pasif tetap tampil');
+  } finally {
+    dex.setClient(null);
+  }
+});
+
 test('command template bisa menambah dan menampilkan daftar', async () => {
   cleanup();
   const replies = [];

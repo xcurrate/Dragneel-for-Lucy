@@ -16,6 +16,8 @@ const { randomSeed } = require('./battleRng');
 
 const DEFAULT_TEMPLATE = '60 lizard pdagger gslay, 60 void2 pdagger gslay, 60 ellie crune dc';
 const MAX_TEMPLATES = 10;
+// Hanya jumlah hasil yang ditampilkan; daftar template tersimpan tetap penuh.
+const MAX_VISIBLE_RESULTS = 5;
 const TEMPLATE_RUNS = 500;
 const MAX_TEMPLATE_UNITS = 3;
 const GLOBAL_KEY = '__global__';
@@ -73,7 +75,7 @@ function dexAnimalFor(spec) {
   return dexStore.resolveAnimal(animal.nameKey || animal.name);
 }
 
-function formatSpec(spec) {
+function formatSpec(spec, { showRank = true } = {}) {
   const animal = dexAnimalFor(spec);
   const name = spec.animal?.name || spec.label || '??';
   const pet = animal ? emoji.animalEmoji(animal) : '🐾';
@@ -84,7 +86,8 @@ function formatSpec(spec) {
     // `crune 100,100,85`), dan rank memakai rata-rata semua quality.
     const quality = spec.weapon.quality ?? data.DEFAULT_QUALITY;
     const rankQuality = averageQuality(quality, spec.weapon.passives);
-    parts.push(emoji.rankEmoji(rankQuality), emoji.weaponEmoji(spec.weapon.id, rankQuality));
+    if (showRank) parts.push(emoji.rankEmoji(rankQuality));
+    parts.push(emoji.weaponEmoji(spec.weapon.id, rankQuality));
     for (const passive of spec.weapon.passives || []) {
       const id = passive && typeof passive === 'object' ? passive.id : passive;
       // Pasif tanpa quality mengikuti quality senjata; kalau quality senjata
@@ -184,7 +187,8 @@ async function simulateTemplates(guildId, blueprint, {
     results.push({
       index: index + 1,
       text: templates[index],
-      display: parsed.specs.map(formatSpec).join(' + '),
+      // Benchmark tidak menampilkan logo rank/tier (mis. F/Fabled).
+      display: parsed.specs.map(spec => formatSpec(spec, { showRank: false })).join(' + '),
       damage: result.damage,
       result,
     });
@@ -195,7 +199,8 @@ async function simulateTemplates(guildId, blueprint, {
 
 function renderTemplateSection(results, runs = TEMPLATE_RUNS) {
   if (!results?.length) return null;
-  const lines = results.map((entry, i) => (
+  const visible = results.slice(0, MAX_VISIBLE_RESULTS);
+  const lines = visible.map((entry, i) => (
     `${i + 1}. ${entry.display}: **${formatDamageRange(entry.damage)}** damage`
   ));
   return [
@@ -214,6 +219,7 @@ async function sectionForBlueprint(guildId, blueprint, options = {}) {
 module.exports = {
   DEFAULT_TEMPLATE,
   MAX_TEMPLATES,
+  MAX_VISIBLE_RESULTS,
   GLOBAL_KEY,
   setTemplateStore,
   TEMPLATE_RUNS,
