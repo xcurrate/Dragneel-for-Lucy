@@ -99,6 +99,7 @@ test('quality senjata dari template dipakai di tampilan rank', () => {
 
 test('simulasi template mengurutkan damage dan menampilkan min-max', async () => {
   cleanup();
+  assert.equal(templates.TEMPLATE_RUNS, 500, 'benchmark default 500 simulasi');
   templates.addTemplate(GUILD, OTHER);
   const result = await templates.simulateTemplates(GUILD, bossBlueprint(), { runs: 2, seed: 11 });
   assert.equal(result.error, undefined);
@@ -106,8 +107,9 @@ test('simulasi template mengurutkan damage dan menampilkan min-max', async () =>
   assert.ok(result.results[0].damage.player >= result.results[1].damage.player, 'urut damage terbesar');
   assert.ok(result.results[0].damage.playerMin <= result.results[0].damage.playerMax);
 
-  const section = templates.renderTemplateSection(result.results);
+  const section = templates.renderTemplateSection(result.results, result.runs);
   assert.match(section, /__\*\*Template Penghasil Kerusakan Terbaik\*\*__/);
+  assert.match(section, /2 simulasi/, 'footer mengikuti jumlah run');
   assert.match(section, /1\. .+: \*\*[\d.]+–[\d.]+\*\* damage/);
   assert.match(section, /Gunakan Copy Command/);
   assert.match(templates.formatDamageRange({ playerMin: 10, playerMax: 20 }), /^10–20$/);

@@ -16,7 +16,7 @@ const { randomSeed } = require('./battleRng');
 
 const DEFAULT_TEMPLATE = '60 lizard pdagger gslay, 60 void2 pdagger gslay, 60 ellie crune dc';
 const MAX_TEMPLATES = 10;
-const TEMPLATE_RUNS = 10;
+const TEMPLATE_RUNS = 500;
 const MAX_TEMPLATE_UNITS = 3;
 const GLOBAL_KEY = '__global__';
 
@@ -193,7 +193,7 @@ async function simulateTemplates(guildId, blueprint, {
   return { results, runs, seed, enemySpecs };
 }
 
-function renderTemplateSection(results) {
+function renderTemplateSection(results, runs = TEMPLATE_RUNS) {
   if (!results?.length) return null;
   const lines = results.map((entry, i) => (
     `${i + 1}. ${entry.display}: **${formatDamageRange(entry.damage)}** damage`
@@ -201,14 +201,14 @@ function renderTemplateSection(results) {
   return [
     '__**Template Penghasil Kerusakan Terbaik**__',
     ...lines,
-    '-# ℹ️ Ini adalah simulasi L.60 dari HP penuh. Gunakan Copy Command untuk melakukan simulasi yang lebih akurat.',
+    `-# ℹ️ Ini adalah ${runs} simulasi L.60 dari HP penuh. Gunakan Copy Command untuk melakukan simulasi yang lebih akurat.`,
   ].join('\n');
 }
 
 async function sectionForBlueprint(guildId, blueprint, options = {}) {
   const result = await simulateTemplates(guildId, blueprint, options);
   if (result.error) return null;
-  return renderTemplateSection(result.results);
+  return renderTemplateSection(result.results, result.runs);
 }
 
 module.exports = {
