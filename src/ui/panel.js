@@ -210,6 +210,7 @@ function helpEmbed(prefix, { isAdmin = false } = {}) {
         `\`${prefix} boss admin-help\` — panduan moderator`,
         `\`${prefix} prefix\` — lihat/ubah prefix server`,
         `\`${prefix} boss setup #channel @role\` — channel & role notifikasi`,
+        `\`${prefix} steal emoji/sticker\` — ambil emoji/sticker (developer)`,
       ].join('\n'),
       inline: false,
     },

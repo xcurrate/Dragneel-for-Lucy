@@ -7,6 +7,7 @@ const { buildDexResponse } = require('../services/animalDex');
 const { handleTeamCommand } = require('./battleTeam');
 const { handleSimCommand } = require('./battleSim');
 const { buildDonationPayload } = require('./donation');
+const { handleStealCommand } = require('./steal');
 const reminderStore = require('../utils/reminderStorage');
 const reminderCategories = require('../utils/reminderCategories');
 const reminderValidate = require('../utils/reminderValidate');
@@ -29,7 +30,8 @@ const ALIASES = {
   settings: ['s', 'settings', 'setelan'],
   team: ['team', 'tim', 'timku', 'tm'],
   sim: ['sim', 'simulasi', 'simbattle', 'battle-sim'],
-  donation: ['donasi', 'donate', 'dukung']
+  donation: ['donasi', 'donate', 'dukung'],
+  steal: ['steal', 'steel', 'curi', 'ambil']
 };
 
 function expandAliases() {
@@ -47,7 +49,7 @@ const ALIAS_MAP = expandAliases();
 // mis. "duh"/"dah" saat prefix = "d" — tidak memicu balasan bot.
 const KNOWN_SUBS = new Set(Object.keys(ALIAS_MAP));
 // Perintah tingkat bot, tidak di bawah kategori `boss`: bantuan & ubah prefix.
-const TOP_SUBS = new Set(['help', 'prefix', 'count', 'settings', 'team', 'sim', 'donation']);
+const TOP_SUBS = new Set(['help', 'prefix', 'count', 'settings', 'team', 'sim', 'donation', 'steal']);
 
 function parsePrefixInput(content, prefix) {
   const matched = matchPrefix(content, prefix);
@@ -184,6 +186,10 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
 
   if (sub === 'donation') {
     return _send(message, buildDonationPayload());
+  }
+
+  if (sub === 'steal') {
+    return handleStealCommand(message, args, prefix, { send: _send, isDeveloper: _isDeveloper });
   }
 
   if (sub === 'team') {
@@ -330,7 +336,9 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
         { name: prefix + ' boss server on / off', value: 'Aktifkan atau matikan tracker server (alias: server-nyalakan/server-matikan).', inline: false },
         { name: prefix + ' prefix <prefix>', value: 'Lihat atau ubah prefix server (alias: awalan).', inline: false },
         { name: prefix + ' s count on / off', value: 'Sakelar seluruh counter Lucy untuk server ini (aksi Lucy, battle/hunt, pray, curse).', inline: false },
-        { name: 'Slash', value: '/boss setup, /boss server-on, /boss server-off, /prefix.', inline: false }
+        { name: 'Slash', value: '/boss setup, /boss server-on, /boss server-off, /prefix, /steal emoji, /steal sticker.', inline: false },
+        { name: prefix + ' steal emoji <emoji>', value: 'Ambil emoji custom ke server ini (developer).', inline: false },
+        { name: prefix + ' steal sticker <id>', value: 'Ambil sticker ke server ini (developer).', inline: false }
       )] });
   }
 
