@@ -109,7 +109,7 @@ const fingerprints = fingerprintData.items.map(item => {
     ...item,
     variant,
     variantCount: variantCounts.get(key),
-    quality: variantQuality(variant, variantCounts.get(key)),
+    quality: item.quality ?? variantQuality(variant, variantCounts.get(key)),
     fp: raw,
     normalized: normalize(raw),
     histogram: histogram(raw),

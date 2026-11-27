@@ -82,17 +82,28 @@ test('blueprint bisa diparse oleh dsim', async t => {
   assert.match(built.command, /^d sim timku vs /);
   assert.match(built.command, /-eboss$/);
 
-  assert.match(built.blueprint, /rank=uncommon 28 rabbit poison dagger 10/);
-  assert.match(built.blueprint, /rank=rare 53 cat bow 96/);
-  assert.match(built.blueprint, /rank=mythical 72 \?\? orb of potency 100/);
+  assert.match(built.blueprint, /rank=uncommon 28 rabbit poison dagger 50 sacrifice 30 enrage 10/);
+  assert.match(built.blueprint, /rank=rare 53 cat bow 10 giant slayer 10 weapon point 30/);
+  assert.match(built.blueprint, /rank=mythical 72 \?\? orb of potency 87 adaptation 30 magical resistance 30/);
 
   const inline = simParser.parseInlineSide(built.blueprint, { prefix: 'd' });
   assert.equal(inline.error, undefined);
   assert.equal(inline.specs.length, 3);
   assert.deepEqual(inline.specs.map(spec => spec.weapon.id), [8, 3, 6]);
   assert.deepEqual(inline.specs.map(spec => spec.animalRank), ['uncommon', 'rare', 'mythical']);
-  assert.deepEqual(inline.specs.map(spec => spec.weapon.quality), [10, 96, 100]);
+  assert.deepEqual(inline.specs.map(spec => spec.weapon.quality), [50, 10, 87]);
   assert.deepEqual(inline.specs.map(spec => spec.finalStats.hpCurrent), [80160, 98160, 94560]);
+});
+
+test('fingerprint menyimpan rank dan quality eksplisit', () => {
+  const fingerprints = require('../src/data/battleIconFingerprints.json');
+  assert.equal(fingerprints.version, 2);
+  for (const item of fingerprints.items) {
+    assert.ok(Number.isFinite(item.quality), `${item.kind} ${item.id} ${item.name}`);
+    assert.ok(['common', 'uncommon', 'rare', 'epic', 'mythic', 'legendary', 'fabled'].includes(item.rank));
+  }
+  const hive = fingerprints.items.filter(item => item.kind === 'passive' && item.id === 25);
+  assert.deepEqual(hive.map(item => item.quality), [10, 30, 50, 70, 87, 96, 100]);
 });
 
 test('ikon Living Hive dari kartu raid dikenali sebagai Living Hive', () => {
@@ -100,6 +111,7 @@ test('ikon Living Hive dari kartu raid dikenali sebagai Living Hive', () => {
   const match = matchIcon(image, 'passive');
   assert.equal(match.id, 25);
   assert.equal(match.name, 'Living Hive');
+  assert.equal(match.quality, 30, 'warna uncommon terbaca sebagai quality 30');
   assert.ok(match.margin > 0, 'punya jarak skor dari kandidat kedua');
 });
 
