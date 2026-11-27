@@ -99,12 +99,13 @@ test('perintah sim raid membaca gambar dari lampiran', async t => {
     attachments: new Map([['a', { name: 'raid.png', contentType: 'image/png', url: 'https://example.test/raid.png' }]]),
   };
   await handleRaidBlueprint(message, [], 'd', {
-    sendEmbed: (_message, embed) => { sent = embed; },
+    sendText: (_message, text) => { sent = text; },
     isDeveloper: () => true,
   });
   assert.ok(sent);
-  assert.match(sent.data.description, /d sim <tim> vs 28 \?\? poison dagger/);
-  assert.match(sent.data.description, /-eboss/);
+  assert.match(sent, /d sim <tim> vs 28 \?\? poison dagger/);
+  assert.match(sent, /-eboss/);
+  assert.doesNotMatch(sent, /Kartu 1/);
 });
 
 test('perintah sim raid membaca gambar dari components pesan Lucy', async t => {
@@ -134,11 +135,11 @@ test('perintah sim raid membaca gambar dari components pesan Lucy', async t => {
   };
   let sent = null;
   await handleRaidBlueprint(message, [], 'd', {
-    sendEmbed: (_message, embed) => { sent = embed; },
+    sendText: (_message, text) => { sent = text; },
     isDeveloper: () => true,
   });
   assert.ok(sent);
-  assert.match(sent.data.description, /28 \?\? poison dagger/);
+  assert.match(sent, /28 \?\? poison dagger/);
 });
 
 test('perintah sim raid meminta gambar', async t => {

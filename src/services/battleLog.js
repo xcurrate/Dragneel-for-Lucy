@@ -155,6 +155,7 @@ function createRecorder({ seed, playerSpecs, enemySpecs } = {}) {
         winner: result.winner,
         turns: result.turns,
         timeout: Boolean(result.timeout),
+        damage: result.damage || null,
         units: units.map(u => ({ ...u, hp: hpOf(live[u.ref]) })),
         events,
         actions,

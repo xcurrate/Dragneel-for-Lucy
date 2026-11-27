@@ -559,6 +559,19 @@ function buildBossBlueprint(cards, { prefix = 'd', player = '<tim>' } = {}) {
   };
 }
 
+function blueprintText(built, { title = 'Blueprint siap salin' } = {}) {
+  return [
+    `**${title}**`,
+    '```',
+    built.blueprint,
+    '```',
+    '**Command siap salin**',
+    '```',
+    built.command,
+    '```',
+  ].join('\n');
+}
+
 async function closeBossOcrWorker() {
   if (!workerPromise) return;
   const worker = await workerPromise.catch(() => null);
@@ -570,6 +583,7 @@ async function closeBossOcrWorker() {
 module.exports = {
   parseBossRaidImage,
   buildBossBlueprint,
+  blueprintText,
   findRaidImageUrl,
   matchIcon,
   closeBossOcrWorker,

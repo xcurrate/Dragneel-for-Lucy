@@ -1,9 +1,9 @@
 // Deteksi otomatis kartu boss Lucy dan kirim blueprint `d sim` tanpa command.
-const { EmbedBuilder } = require('discord.js');
 const { getGuildSettings, DEFAULT_PREFIX } = require('../utils/storage');
 const {
   parseBossRaidImage,
   buildBossBlueprint,
+  blueprintText,
   findRaidImageUrl,
 } = require('./bossRaidBlueprint');
 
@@ -39,35 +39,6 @@ function isBossSpawn(message) {
   const combined = text.join('\n');
   return /boss\s+telah\s+muncul/i.test(combined)
     && !/boss\s+(?:telah\s+)?(?:dikalahkan|kabur)/i.test(combined);
-}
-
-function cardLines(card) {
-  const parts = [];
-  if (card.name) parts.push(card.name);
-  if (card.weapon) parts.push(card.weapon.name);
-  if (card.passives.length) parts.push(card.passives.map(passive => passive.name).join(', '));
-  if (card.stats) {
-    const s = card.stats;
-    parts.push(`HP ${s.hpCurrent}/${s.hpMax} · ATT ${s.att} · PR ${s.pr} · WP ${s.wp} · MAG ${s.mag} · MR ${s.mr}`);
-  }
-  return parts.join(' · ') || 'tidak terbaca';
-}
-
-function blueprintEmbed(parsed, built) {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('🖼️ Blueprint Boss Otomatis')
-    .setDescription([
-      `**Blueprint musuh**\n\`\`\`\n${built.blueprint}\n\`\`\``,
-      `**Jalankan**\n\`\`\`\n${built.command}\n\`\`\``,
-      'Ganti `<tim>` dengan timmu. `-eboss` menandai ketiga unit sebagai boss (Giant Slayer).',
-      ...(built.warnings.length ? [`⚠️ ${built.warnings.join('\n⚠️ ')}`] : []),
-    ].join('\n\n'))
-    .setFooter({ text: 'Dibuat otomatis dari kartu boss Lucy' });
-  for (const card of parsed.cards) {
-    embed.addFields({ name: `Kartu ${card.slot}`, value: cardLines(card).slice(0, 1024) });
-  }
-  return embed;
 }
 
 async function downloadImage(url, fetchImpl = global.fetch) {
@@ -107,12 +78,12 @@ async function handleMessage(message, deps = {}) {
     const prefix = (getGuildSettings(message.guildId).prefix || DEFAULT_PREFIX);
     const built = buildBossBlueprint(parsed.cards, { prefix });
     if (built.error) throw new Error(built.error);
-    const embed = blueprintEmbed(parsed, built);
-    if (deps.send) await deps.send(message, embed);
+    const text = blueprintText(built, { title: 'Blueprint Boss Otomatis' });
+    if (deps.send) await deps.send(message, text);
     else if (typeof message.reply === 'function') {
-      await message.reply({ embeds: [embed], allowedMentions: { parse: [], repliedUser: false } });
+      await message.reply({ content: text, allowedMentions: { parse: [], repliedUser: false } });
     } else {
-      await message.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+      await message.channel.send({ content: text, allowedMentions: { parse: [] } });
     }
     remember(id);
     return { parsed, built };
@@ -134,7 +105,6 @@ function resetAutoState() {
 module.exports = {
   handleMessage,
   isBossSpawn,
-  blueprintEmbed,
   downloadImage,
   resetAutoState,
 };

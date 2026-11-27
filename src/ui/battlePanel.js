@@ -314,6 +314,16 @@ function duelTeamField(label, units) {
 // `stats` = hasil agregat `sim.simulate` untuk matchup yang sama (opsional).
 // Kalau ada, footer menampilkan rekap menang/seri/kalah sekaligus supaya user
 // tidak perlu menjalankan `-m` terpisah hanya untuk tahu rasio akhirnya.
+function damageText(damage, runs = 1) {
+  if (!damage) return null;
+  const perRun = runs > 0 ? Math.round(damage.player / runs) : 0;
+  return [
+    `Kita: **${Number(damage.player || 0).toLocaleString('id-ID')}** total`
+      + (runs > 1 ? ` · **${perRun.toLocaleString('id-ID')}**/pertarungan` : ''),
+    `Lawan: **${Number(damage.enemy || 0).toLocaleString('id-ID')}** total`,
+  ].join('\n');
+}
+
 function duelEmbed(battle, {
   playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null, stats = null,
   logUrl = null,
@@ -340,6 +350,8 @@ function duelEmbed(battle, {
     ])
     .setFooter({ text: footer });
 
+  const damage = damageText(battle.damage);
+  if (damage) embed.addFields({ name: '⚔️ Total damage', value: damage, inline: false });
   // Tautan log hanya ada bila `-log` dipakai DAN URL publik dashboard diisi.
   if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
   return embed;
@@ -376,6 +388,8 @@ function simEmbed(result, {
       inline: false,
     });
   }
+  const damage = damageText(result.damage, runs);
+  if (damage) fields.push({ name: '⚔️ Total damage', value: damage, inline: false });
 
   const embed = new EmbedBuilder()
     .setColor(color)

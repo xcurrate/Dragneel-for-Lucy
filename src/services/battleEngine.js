@@ -141,6 +141,9 @@ function inflictDamage(ctx, attacker, target, rawDamage, type, { bypassRes = fal
   ctx.lastHit = { raw: rawDamage, total, type, target };
   target.stats.hp[0] -= total;
   ctx.damageDealt += total;
+  if (!ctx.damageBySide) ctx.damageBySide = { player: 0, enemy: 0 };
+  if (attacker.side === 'player') ctx.damageBySide.player += total;
+  else if (attacker.side === 'enemy') ctx.damageBySide.enemy += total;
   notifyTeamWeapons(attacker.team, 'onAllyDamage', ctx, attacker, target, total, type);
 
   for (const buff of target.buffs) buff.postAttacked?.(ctx, target, attacker, total, type);
@@ -481,12 +484,13 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
   const rng = options.rng || createRng(options.seed ?? 1);
   const player = playerSpecs.map(s => buildUnit(s, rng, options.playerQuality));
   const enemy = enemySpecs.map(s => buildUnit(s, rng, options.enemyQuality));
-  for (const unit of player) { unit.team = player; unit.foes = enemy; }
-  for (const unit of enemy) { unit.team = enemy; unit.foes = player; }
+  for (const unit of player) { unit.team = player; unit.foes = enemy; unit.side = 'player'; }
+  for (const unit of enemy) { unit.team = enemy; unit.foes = player; unit.side = 'enemy'; }
   const ctx = {
     rng,
     tags: new Set(),
     damageDealt: 0,
+    damageBySide: { player: 0, enemy: 0 },
     playerFirst: options.playerFirst ?? true,
     // Pencatatan hanya aktif bila diminta; simulasi massal tidak membayarnya.
     log: null,
@@ -529,7 +533,17 @@ function runBattle(playerSpecs, enemySpecs, options = {}) {
     if (turns >= MAX_TURNS) { timeout = true; winner = 'tie'; }
   }
 
-  const battle = { winner, turns, timeout, units: { player, enemy } };
+  const battle = {
+    winner,
+    turns,
+    timeout,
+    units: { player, enemy },
+    damage: {
+      player: Math.round(ctx.damageBySide.player),
+      enemy: Math.round(ctx.damageBySide.enemy),
+      total: Math.round(ctx.damageDealt),
+    },
+  };
   if (ctx.log) battle.log = ctx.log.finish(battle);
   return battle;
 }

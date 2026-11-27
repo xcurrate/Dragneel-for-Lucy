@@ -467,6 +467,10 @@ async function main() {
   };
   add('Dibuat', new Date(payload.createdAt).toLocaleString('id-ID'));
   add('Kedaluwarsa', new Date(payload.expiresAt).toLocaleString('id-ID'));
+  if (log.damage) {
+    add('Damage kita', Number(log.damage.player || 0).toLocaleString('id-ID'));
+    add('Damage lawan', Number(log.damage.enemy || 0).toLocaleString('id-ID'));
+  }
   if (log.timeout) add('Catatan', 'battle mentok di batas turn');
   if (log.dropped) add('Kejadian dipotong', String(log.dropped));
 

@@ -25,7 +25,7 @@ const {
 const { commandHelpEmbed } = require('../ui/commandHelp');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
-const { parseBossRaidImage, buildBossBlueprint, findRaidImageUrl } = require('../services/bossRaidBlueprint');
+const { parseBossRaidImage, buildBossBlueprint, blueprintText, findRaidImageUrl } = require('../services/bossRaidBlueprint');
 
 // Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
 // dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
@@ -56,7 +56,7 @@ const SIM_COOLDOWN_ACTION = 'sim';
 const REPEAT_COOLDOWN_ACTION = 'sim_repeat';
 
 // Jumlah pertarungan saat `-m` tidak disebut, termasuk untuk tombol 🔁.
-const DEFAULT_RUNS = 50;
+const DEFAULT_RUNS = 10;
 
 function usageSections(prefix = 'd') {
   return [
@@ -88,6 +88,7 @@ function usageSections(prefix = 'd') {
         `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
         `Tombol 🔁 mengulang matchup yang sama sebanyak ${DEFAULT_RUNS} pertarungan (ephemeral).`,
         `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
+        'Total damage kita dan damage lawan ikut ditampilkan.',
       ].join('\n'),
     },
     {
@@ -112,6 +113,7 @@ function usageSections(prefix = 'd') {
       name: '🖼️ Kartu Raid',
       value: [
         `\`${prefix} sim raid\` — balas gambar kartu boss/general; bot membaca senjata, pasif, dan stat final.`,
+        'Saat boss Lucy muncul, blueprint juga dikirim otomatis sebagai teks siap salin.',
         `Hasilnya dipakai sebagai lawan: \`${prefix} sim <timmu> vs <blueprint> -eboss\`.`,
       ].join('\n'),
     },
@@ -336,6 +338,7 @@ async function simulateMatching(playerSpecs, enemySpecs, {
   const usedSeed = seed == null ? randomSeed() : Number(seed);
   const base = createRng(usedSeed);
   const tally = { player: 0, enemy: 0, tie: 0 };
+  const damage = { player: 0, enemy: 0, total: 0 };
   const histogram = new Uint32Array(data.limits.maxTurns + 2);
   let matched = 0;
   let attempts = 0;
@@ -354,6 +357,9 @@ async function simulateMatching(playerSpecs, enemySpecs, {
     matched++;
     tally[battle.winner] += 1;
     histogram[Math.min(battle.turns, data.limits.maxTurns + 1)] += 1;
+    damage.player += battle.damage?.player || 0;
+    damage.enemy += battle.damage?.enemy || 0;
+    damage.total += battle.damage?.total || 0;
     if (battle.timeout) timeouts += 1;
     if (log && !loggedBattle) {
       loggedBattle = engine.runBattle(playerSpecs, enemySpecs, {
@@ -385,6 +391,7 @@ async function simulateMatching(playerSpecs, enemySpecs, {
     tally,
     timeouts,
     turnHistogram,
+    damage,
     elapsedMs: Date.now() - startedAt,
     turns: { min, max },
     winRate: rate(tally.player),
@@ -1059,32 +1066,21 @@ async function raidImageFromMessage(message) {
   }
 }
 
-function raidCardLines(card) {
-  const parts = [];
-  if (card.name) parts.push(card.name);
-  if (card.weapon) parts.push(card.weapon.name);
-  if (card.passives.length) parts.push(card.passives.map(passive => passive.name).join(', '));
-  if (card.stats) {
-    const s = card.stats;
-    parts.push(`HP ${s.hpCurrent}/${s.hpMax} · ATT ${s.att} · PR ${s.pr} · WP ${s.wp} · MAG ${s.mag} · MR ${s.mr}`);
-  }
-  return parts.join(' · ') || 'tidak terbaca';
-}
-
 async function handleRaidBlueprint(message, args, prefix, deps = {}) {
-  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  const sendEmbed = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  const sendText = deps.sendText || ((m, content) => m.reply({ content, allowedMentions: { parse: [] } }));
   if (['help', 'bantuan'].includes((args[0] || '').toLowerCase())) {
-    return send(message, usageEmbed('🖼️ Blueprint Kartu Raid', usageSections(prefix).find(section => section.name === '🖼️ Kartu Raid').value));
+    return sendEmbed(message, usageEmbed('🖼️ Blueprint Kartu Raid', usageSections(prefix).find(section => section.name === '🖼️ Kartu Raid').value));
   }
   const image = await raidImageFromMessage(message);
   if (!image) {
-    return send(message, errorEmbed('Kirim/balas gambar kartu raid OwO. Contoh: `d sim raid` sebagai balasan gambar boss.'));
+    return sendEmbed(message, errorEmbed('Kirim/balas gambar kartu raid OwO. Contoh: `d sim raid` sebagai balasan gambar boss.'));
   }
   const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
   if (!isDev) {
     const waiting = store.cooldownRemaining(message.author.id, 'raid_blueprint');
     if (waiting > 0) {
-      return send(message, warnEmbed(`Tunggu ${(waiting / 1000).toFixed(1)} detik sebelum membaca kartu lagi.`));
+      return sendEmbed(message, warnEmbed(`Tunggu ${(waiting / 1000).toFixed(1)} detik sebelum membaca kartu lagi.`));
     }
   }
 
@@ -1094,23 +1090,14 @@ async function handleRaidBlueprint(message, args, prefix, deps = {}) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     result = await parseBossRaidImage(Buffer.from(await response.arrayBuffer()));
   } catch (error) {
-    return send(message, errorEmbed(`Gagal membaca gambar: ${error.message}`));
+    return sendEmbed(message, errorEmbed(`Gagal membaca gambar: ${error.message}`));
   }
-  if (result.error) return send(message, errorEmbed(result.error));
+  if (result.error) return sendEmbed(message, errorEmbed(result.error));
   const built = buildBossBlueprint(result.cards, { prefix });
-  if (built.error) return send(message, errorEmbed(built.error));
+  if (built.error) return sendEmbed(message, errorEmbed(built.error));
   if (!isDev) store.setCooldown(message.author.id, 'raid_blueprint', Date.now() + SIM_COOLDOWN_MS);
 
-  const embed = usageEmbed('🖼️ Blueprint Kartu Raid', [
-    `**Blueprint musuh**\n\`\`\`\n${built.blueprint}\n\`\`\``,
-    `**Jalankan**\n\`\`\`\n${built.command}\n\`\`\``,
-    'Ganti `<tim>` dengan timmu. `-eboss` menandai ketiga unit sebagai boss (Giant Slayer).',
-    ...(built.warnings.length ? [`⚠️ ${built.warnings.join('\n⚠️ ')}`] : []),
-  ].join('\n\n'));
-  for (const card of result.cards) {
-    embed.addFields({ name: `Kartu ${card.slot}`, value: raidCardLines(card).slice(0, 1024) });
-  }
-  return send(message, embed);
+  return sendText(message, blueprintText(built, { title: '🖼️ Blueprint Kartu Raid' }));
 }
 
 async function handleSimCommand(message, args, prefix, deps = {}) {
@@ -1208,7 +1195,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // tombol 🔁 untuk mengulanginya sebanyak `DEFAULT_RUNS`. Dengan `-m N`
   // hasilnya statistik dari N pertarungan.
   // Dicek dari keberadaan flag, bukan nilainya: `-m` tanpa angka tetap berarti
-  // simulasi massal 50 pertarungan, bukan satu pertarungan.
+  // simulasi massal 10 pertarungan, bukan satu pertarungan.
   const singleBattle = !['-m', '-n', '-runs'].some(key => key in flags);
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? DEFAULT_RUNS;
   const runCount = Number(runs);

@@ -189,6 +189,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
     // (embed + components) selain jalur embed biasa.
     return handleSimCommand(message, args, prefix, {
       sendEmbed: _sendEmbed,
+      sendText: _sendText,
       sendPayload: _send,
       isDeveloper: _isDeveloper,
     });
