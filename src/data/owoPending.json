@@ -2,5 +2,38 @@
   "note": "Senjata dan pasif yang sudah ada nama/alias/emoji-nya tetapi mekaniknya belum tersedia. Disimpan di sini supaya alias tetap dikenali dan pesan errornya jelas, bukan \"tidak dikenal\". Pindahkan ke owoBattle.json / owoPassives.json setelah qualityList, ability, dan hook-nya terverifikasi.",
   "source": "Daftar nama/alias dari data sebelumnya.",
   "weapons": [],
-  "passives": []
+  "passives": [
+    {
+      "name": "Conserve",
+      "aliases": [
+        "conser"
+      ],
+      "emojis": [
+        "<:cconser:1571810107728334850>",
+        "<:uconser:1571810129744240680>",
+        "<:rconser:1571810151508217908>",
+        "<:econser:1571810173700411452>",
+        "<:mconser:1571810194281992253>",
+        "<:lconser:1571810217069379634>",
+        "<:fconser:1571810234870009978>"
+      ],
+      "note": "Emoji dari list.md; mekanik belum diimplementasikan."
+    },
+    {
+      "name": "Purify",
+      "aliases": [
+        "purif"
+      ],
+      "emojis": [
+        "<:cpurif:1570897255173722143>",
+        "<:upurif:1570897284005236789>",
+        "<:rpurif:1570897305295388682>",
+        "<:epurif:1570897327139590215>",
+        "<:mpurif:1570897346554757223>",
+        "<:lpurif:1570897364439273593>",
+        "<:fpurif:1570897383355588729>"
+      ],
+      "note": "Emoji dari list.md; mekanik belum diimplementasikan."
+    }
+  ]
 }

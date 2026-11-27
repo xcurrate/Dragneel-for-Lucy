@@ -316,13 +316,13 @@
       "id": 1,
       "name": "Great Sword",
       "emojis": [
-        "<:cgreatsword:535279248253124638>",
-        "<:ugreatsword:535279249028808735>",
-        "<:rgreatsword:535279249129472014>",
-        "<:egreatsword:535279248991191081>",
-        "<:mgreatsword:535279249125539858>",
-        "<:lgreatsword:535279249058168852>",
-        "<:fgreatsword:535279248923951116>"
+        "<:csword:1551274046103101602>",
+        "<:usword:1551274097411887175>",
+        "<:rsword:1551274161266233344>",
+        "<:esword:1551274194292056154>",
+        "<:msword:1541875011047002113>",
+        "<:lsword:1551274227791831225>",
+        "<:fsword:1541875058526388304>"
       ],
       "aliases": [
         "gsword",
@@ -348,19 +348,28 @@
         "stat": "att",
         "target": "all_enemies"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcsword:1541874517318828113>",
+        "<:pusword:1541874543788822598>",
+        "<:prsword:1541874588860948621>",
+        "<:pesword:1541874621110812724>",
+        "<:pmsword:1541874653881180271>",
+        "<:plsword:1541874698885922919>",
+        "<:pfsword:1541874757186883594>"
+      ]
     },
     {
       "id": 2,
       "name": "Healing Staff",
       "emojis": [
-        "<:chealstaff:535283616016498688>",
-        "<:uhealstaff:535283616096321547>",
-        "<:rhealstaff:535283616100646912>",
-        "<:ehealstaff:535283615664439300>",
-        "<:mhealstaff:535283616242991115>",
-        "<:lhealstaff:535283616209567764>",
-        "<:fhealstaff:535283617019068426>"
+        "<:chealstaff:1541875725249020045>",
+        "<:uhealstaff:1541875761634476104>",
+        "<:rhealstaff:1541875806740021430>",
+        "<:ehealstaff:1541875828164399134>",
+        "<:mhealstaff:1541875867901235350>",
+        "<:lhealstaff:1541875906212143134>",
+        "<:fhealstaff:1541875942928949319>"
       ],
       "aliases": [
         "hstaff",
@@ -385,19 +394,28 @@
         "stat": "mag",
         "overheal": true
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pchstaff:1541876027523997736>",
+        "<:puhstaff:1541876070800822453>",
+        "<:prhstaff:1541876105986834484>",
+        "<:pehstaff:1541876152178704415>",
+        "<:pmhstaff:1541876172743245954>",
+        "<:plhstaff:1541876206318784553>",
+        "<:pfhstaff:1541876226178813962>"
+      ]
     },
     {
       "id": 3,
       "name": "Bow",
       "emojis": [
-        "<:cbow:535283611260420096>",
-        "<:ubow:535283613198188594>",
-        "<:rbow:535283613374349316>",
-        "<:ebow:535283614334844937>",
-        "<:mbow:535283613802168323>",
-        "<:lbow:535283613391126529>",
-        "<:fbow:535283614099832872>"
+        "<:cbow:1541853184895483914>",
+        "<:ubow:1541853223558717550>",
+        "<:rbow:1541853278394912798>",
+        "<:ebow:1541853322107945050>",
+        "<:mbow:1541853372926140497>",
+        "<:lbow:1541853413783113799>",
+        "<:fbow:1541853458812899350>"
       ],
       "aliases": [
         "bow"
@@ -419,19 +437,28 @@
         "kind": "damage_one",
         "stat": "att"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcbow:1541853509597528134>",
+        "<:pubow:1541853559362945034>",
+        "<:prbow:1541853616267071498>",
+        "<:pebow:1541853676317057155>",
+        "<:pmbow:1541853741765099520>",
+        "<:plbow:1541853779006197838>",
+        "<:pfbow:1541853834979184742>"
+      ]
     },
     {
       "id": 4,
       "name": "Rune of the Forgotten",
       "emojis": [
-        "<:crune:543662985558884363>",
-        "<:urune:543662986384900107>",
-        "<:rrune:543662986565255168>",
-        "<:erune:543662986393419787>",
-        "<:mrune:543662986749804544>",
-        "<:lrune:543662986837884928>",
-        "<:frune:543662986753998874>"
+        "<:crune:1541883016094162974>",
+        "<:urune:1541882963342528553>",
+        "<:rrune:1541883066518085805>",
+        "<:erune:1541883090211831808>",
+        "<:mrune:1541883130179231814>",
+        "<:lrune:1541883173372436610>",
+        "<:frune:1541883206633132152>"
       ],
       "aliases": [
         "rune",
@@ -460,19 +487,28 @@
       },
       "disabled": true,
       "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
-      "passiveBonus": 2
+      "passiveBonus": 2,
+      "pristineEmojis": [
+        "<:pcrune:1541883260647243886>",
+        "<:purune:1541883281132490835>",
+        "<:prrune:1541883324644204634>",
+        "<:perune:1541883353991487548>",
+        "<:pmrune:1541883385688105130>",
+        "<:plrune:1541883412355223664>",
+        "<:pfrune:1541883433435930744>"
+      ]
     },
     {
       "id": 5,
       "name": "Defender's Aegis",
       "emojis": [
-        "<:cshield:546552025828163585>",
-        "<:ushield:546552083348848641>",
-        "<:rshield:546552083600506900>",
-        "<:eshield:546552026088210434>",
-        "<:mshield:546552083621609482>",
-        "<:lshield:546552083353174026>",
-        "<:fshield:546552026084016149>"
+        "<:cshield:1541885988043890738>",
+        "<:ushield:1541886033405284372>",
+        "<:rshield:1541886079467135049>",
+        "<:eshield:1541886102347186206>",
+        "<:mshield:1541886150711574642>",
+        "<:lshield:1541886177727226026>",
+        "<:fshield:1541886215303991517>"
       ],
       "aliases": [
         "aegis",
@@ -493,19 +529,28 @@
         "kind": "taunt",
         "duration": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcshield:1541886242197741621>",
+        "<:pushield:1541886278398906428>",
+        "<:prshield:1541886304378429550>",
+        "<:peshield:1541886329430867968>",
+        "<:pmshield:1541886364323287051>",
+        "<:plshield:1541886407734460498>",
+        "<:pfshield:1541888266599665694>"
+      ]
     },
     {
       "id": 6,
       "name": "Orb of Potency",
       "emojis": [
-        "<:corb:548783035051409408>",
-        "<:uorb:548783216669097994>",
-        "<:rorb:548783216610246657>",
-        "<:eorb:548783035168849930>",
-        "<:morb:548783162646462464>",
-        "<:lorb:548783162566901770>",
-        "<:forb:548783035244478474>"
+        "<:corb:1541879108047347883>",
+        "<:uorb:1541879148040032337>",
+        "<:rorb:1541879181107920968>",
+        "<:eorb:1541879240302002236>",
+        "<:morb:1541879304311283763>",
+        "<:lorb:1541879366630244402>",
+        "<:forb:1541880180379746458>"
       ],
       "aliases": [
         "orb",
@@ -519,19 +564,28 @@
       "ability": {
         "kind": "none"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcorb:1541880235778384081>",
+        "<:puorb:1541880273845747843>",
+        "<:prorb:1541880308193042579>",
+        "<:peorb:1541880339037814867>",
+        "<:pmorb:1541880376761520268>",
+        "<:plorb:1541880415458172969>",
+        "<:pforb:1541880446894481528>"
+      ]
     },
     {
       "id": 7,
       "name": "Vampiric Staff",
       "emojis": [
-        "<:cvampstaff:562175259797880839>",
-        "<:uvampstaff:562175261374677002>",
-        "<:rvampstaff:562175261500506122>",
-        "<:evampstaff:562175261215293440>",
-        "<:mvampstaff:562175261509156864>",
-        "<:lvampstaff:562175261496442880>",
-        "<:fvampstaff:562175261173612555>"
+        "<:cvampstaff:1541887299476914247>",
+        "<:uvampstaff:1541887341109452841>",
+        "<:rvampstaff:1541887381811105923>",
+        "<:evampstaff:1541887423653478410>",
+        "<:mvampstaff:1541887473486139574>",
+        "<:lvampstaff:1541887506385997915>",
+        "<:fvampstaff:1541887529886683196>"
       ],
       "aliases": [
         "vstaff",
@@ -556,19 +610,28 @@
         "stat": "mag",
         "target": "all_enemies"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcvstaff:1541887625265418290>",
+        "<:puvstaff:1541887678885273651>",
+        "<:prvstaff:1541887711454044261>",
+        "<:pevstaff:1541887732211523614>",
+        "<:pmvstaff:1541887762570154024>",
+        "<:plvstaff:1541887794291408906>",
+        "<:pfvstaff:1541887832002531378>"
+      ]
     },
     {
       "id": 8,
       "name": "Poison Dagger",
       "emojis": [
-        "<:cpdagger:572285295177891843>",
-        "<:updagger:572285295769157632>",
-        "<:rpdagger:572285295781871616>",
-        "<:epdagger:572285295773351966>",
-        "<:mpdagger:572285295761031171>",
-        "<:lpdagger:572285296188850176>",
-        "<:fpdagger:572285296184393738>"
+        "<:cpdagger:1541880684853993623>",
+        "<:updagger:1541880723533987973>",
+        "<:rpdagger:1541880765514522665>",
+        "<:epdagger:1541880787861770262>",
+        "<:mpdagger:1541880834108301482>",
+        "<:lpdagger:1541880874210041997>",
+        "<:fpdagger:1541880906220830810>"
       ],
       "aliases": [
         "pdagger",
@@ -597,19 +660,28 @@
         "stat": "att",
         "duration": 3
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcpdag:1541881021941940274>",
+        "<:pupdag:1541881051620573216>",
+        "<:prpdag:1541881069626724382>",
+        "<:pepdag:1541881113121792124>",
+        "<:pmpdag:1541896105384476712>",
+        "<:plpdag:1541881184592728128>",
+        "<:pfpdag:1541881203064578198>"
+      ]
     },
     {
       "id": 9,
       "name": "Wand of Absorption",
       "emojis": [
-        "<:cawand:572620164164747265>",
-        "<:uawand:572620164495966258>",
-        "<:rawand:572620164495966259>",
-        "<:eawand:572620164361617408>",
-        "<:mawand:572620164538040330>",
-        "<:lawand:572620164655480847>",
-        "<:fawand:572620164588240896>"
+        "<:cawand:1541848363819991120>",
+        "<:uawand:1541848417767006228>",
+        "<:rawand:1541848463598161962>",
+        "<:eawand:1541848582980902914>",
+        "<:mawand:1541848645329100853>",
+        "<:lawand:1541848708130414662>",
+        "<:fawand:1541848764724150486>"
       ],
       "aliases": [
         "wand",
@@ -640,19 +712,28 @@
         "kind": "damage_one_steal_wp",
         "stat": "mag"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcawand:1541849348328005632>",
+        "<:puawand:1541849466670415893>",
+        "<:prawand:1541849433271181443>",
+        "<:peawand:1541849538342420500>",
+        "<:pmawand:1541849566008049674>",
+        "<:plawand:1541849626137731112>",
+        "<:pfawand:1541849670886887484>"
+      ]
     },
     {
       "id": 10,
       "name": "Flame Staff",
       "emojis": [
-        "<:cfstaff:572663874353102859>",
-        "<:ufstaff:572663875531440146>",
-        "<:rfstaff:572663875833430016>",
-        "<:efstaff:572663875711795200>",
-        "<:mfstaff:572663875888218114>",
-        "<:lfstaff:572663875904733186>",
-        "<:ffstaff:572663876110254090>"
+        "<:cfstaff:1541869980864483358>",
+        "<:ufstaff:1541870020156457092>",
+        "<:rfstaff:1541872854839075018>",
+        "<:efstaff:1541870085734670529>",
+        "<:mfstaff:1541870139312709712>",
+        "<:lfstaff:1541870177170366615>",
+        "<:ffstaff:1541870212305911888>"
       ],
       "aliases": [
         "fstaff",
@@ -681,19 +762,28 @@
         "stat": "mag",
         "duration": 3
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcfstaff:1541870328156786728>",
+        "<:pufstaff:1541870387984605355>",
+        "<:prfstaff:1541870409857630289>",
+        "<:pefstaff:1541870442652901556>",
+        "<:pmfstaff:1541870479193673829>",
+        "<:plfstaff:1541870511301206148>",
+        "<:pffstaff:1541870558247911434>"
+      ]
     },
     {
       "id": 11,
       "name": "Energy Staff",
       "emojis": [
-        "<:cestaff:572983469764902912>",
-        "<:uestaff:572984069370019850>",
-        "<:restaff:572984067432382485>",
-        "<:eestaff:572983470360363018>",
-        "<:mestaff:572984069915279380>",
-        "<:lestaff:572984070007423006>",
-        "<:festaff:572984069512757249>"
+        "<:cestaff:1541867494082355341>",
+        "<:uestaff:1541867508234190912>",
+        "<:restaff:1541867566400671785>",
+        "<:eestaff:1541867626613968967>",
+        "<:mestaff:1541867677696397465>",
+        "<:lestaff:1541867725989740658>",
+        "<:festaff:1541867787733958693>"
       ],
       "aliases": [
         "estaff",
@@ -720,19 +810,28 @@
       },
       "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
       "owoId": 111,
-      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes."
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "pristineEmojis": [
+        "<:pcestaff:1541867900627845170>",
+        "<:puestaff:1541867982249263274>",
+        "<:prestaff:1541868035026190338>",
+        "<:peestaff:1541868074553311313>",
+        "<:pmestaff:1541868127908794422>",
+        "<:plestaff:1541868155251466302>",
+        "<:pfestaff:1541868194799685652>"
+      ]
     },
     {
       "id": 12,
       "name": "Spirit Staff",
       "emojis": [
-        "<:csstaff:572983470540980244>",
-        "<:usstaff:572984070124863508>",
-        "<:rsstaff:572984069814616074>",
-        "<:esstaff:572983470838644744>",
-        "<:msstaff:572984069697175583>",
-        "<:lsstaff:572984069726404639>",
-        "<:fsstaff:572984070234046465>"
+        "<:csstaff:1541886698575626271>",
+        "<:usstaff:1541886722391015497>",
+        "<:rsstaff:1541886798706245703>",
+        "<:esstaff:1541886837826654418>",
+        "<:msstaff:1541886869355102299>",
+        "<:lsstaff:1541886892927225917>",
+        "<:fsstaff:1541886933524025376>"
       ],
       "aliases": [
         "sstaff",
@@ -758,19 +857,28 @@
         "stat": "mag",
         "duration": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcsstaff:1541887000485957803>",
+        "<:pusstaff:1541887031267827892>",
+        "<:prsstaff:1541887061991100456>",
+        "<:pesstaff:1541887087001739274>",
+        "<:pmsstaff:1541887123429392463>",
+        "<:plsstaff:1541887159060144158>",
+        "<:pfsstaff:1541887193298116660>"
+      ]
     },
     {
       "id": 13,
       "name": "Arcane Scepter",
       "emojis": [
-        "<:cascept:618001308343074826>",
-        "<:uascept:618001309005512734>",
-        "<:rascept:618001308691202059>",
-        "<:eascept:618001307994685441>",
-        "<:mascept:618001309399777281>",
-        "<:lascept:618001309773201409>",
-        "<:fascept:618001309156769793>"
+        "<:cascept:1541850998400876694>",
+        "<:uascept:1541851078201712881>",
+        "<:rascept:1541851186620141579>",
+        "<:eascept:1541851242739925094>",
+        "<:mascept:1541851285404389416>",
+        "<:lascept:1541851338793689168>",
+        "<:fascept:1541851395240497164>"
       ],
       "aliases": [
         "scepter",
@@ -795,19 +903,29 @@
         "kind": "replenish_ally",
         "stat": "mag"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcascept:1541851458155061420>",
+        "<:puascept:1541851518108565605>",
+        null,
+        "<:peascept:1541851578716389448>",
+        "<:pmascept:1541851732542488586>",
+        "<:plascept:1541851784484487199>",
+        "<:pfascept:1541851825819488307>"
+      ],
+      "pristineEmojiNote": "Token pristine belum ada untuk rank: rare (list.md)."
     },
     {
       "id": 14,
       "name": "Resurrection Staff",
       "emojis": [
-        "<:crstaff:618001309265690654>",
-        "<:urstaff:618001309513023518>",
-        "<:rrstaff:618001309307633685>",
-        "<:erstaff:618001309085466665>",
-        "<:mrstaff:618001309362290691>",
-        "<:lrstaff:618001309756555275>",
-        "<:frstaff:618001309307633665>"
+        "<:crstaff:1541882270271676437>",
+        "<:urstaff:1541882290953654412>",
+        "<:rrstaff:1541882367927517246>",
+        "<:erstaff:1541882411082850494>",
+        "<:mrstaff:1541882446679769130>",
+        "<:lrstaff:1541882484462059591>",
+        "<:frstaff:1541882507308306532>"
       ],
       "aliases": [
         "rstaff",
@@ -831,19 +949,28 @@
         "kind": "revive",
         "stat": "mag"
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcrstaff:1541884592884154500>",
+        "<:purstaff:1541882575499563088>",
+        "<:prrstaff:1541882603458531490>",
+        "<:perstaff:1541882644504256572>",
+        "<:pmrstaff:1541882669380403343>",
+        "<:plrstaff:1541882735373717565>",
+        "<:pfrstaff:1541882747797114890>"
+      ]
     },
     {
       "id": 15,
       "name": "Glacial Axe",
       "emojis": [
-        "<:cgaxe:618389128311996427>",
-        "<:ugaxe:618389128077377547>",
-        "<:rgaxe:618389128517648392>",
-        "<:egaxe:618389128064794646>",
-        "<:mgaxe:618389128949661716>",
-        "<:lgaxe:618389129817882625>",
-        "<:fgaxe:618389128396013598>"
+        "<:cgaxe:1541871405748981881>",
+        "<:ugaxe:1541871448883470398>",
+        "<:rgaxe:1541871469745938536>",
+        "<:egaxe:1541871501131649205>",
+        "<:mgaxe:1541871552448962610>",
+        "<:lgaxe:1541871594828206090>",
+        "<:fgaxe:1541871625589497910>"
       ],
       "aliases": [
         "gaxe",
@@ -877,19 +1004,28 @@
       },
       "manaCostNote": "manaRange 260-160: biaya TURUN saat quality naik (q0 = 260, q100 = 160).",
       "sourceText": "Deals **40-60%** of your STR to an enemy and apply 2 stacks of **Freeze**. Freeze: next turn, prevent the target from attacking. Remove a stack after triggering.",
-      "abilityNote": "Damage 40-60% STR lalu 2 stack Freeze terpisah; tiap stack memblokir satu giliran serang. Biaya 260-160 WP."
+      "abilityNote": "Damage 40-60% STR lalu 2 stack Freeze terpisah; tiap stack memblokir satu giliran serang. Biaya 260-160 WP.",
+      "pristineEmojis": [
+        "<:pcgaxe:1541871682388631583>",
+        "<:pugaxe:1541871720649068654>",
+        "<:prgaxe:1541871737799581727>",
+        "<:pegaxe:1541871777221976234>",
+        "<:pmgaxe:1541871824181133402>",
+        "<:plgaxe:1541871841495351351>",
+        "<:pfgaxe:1541871898525175930>"
+      ]
     },
     {
       "id": 16,
       "name": "Vanguard's Banner",
       "emojis": [
-        "<:cvban:618001307411677195>",
-        "<:uvban:618001308355395584>",
-        "<:rvban:618001308192079873>",
-        "<:evban:618001307814461453>",
-        "<:mvban:618001308682551306>",
-        "<:lvban:618001308284354561>",
-        "<:fvban:618001308544270337>"
+        "<:cvban:1541889031476875454>",
+        "<:uvban:1541889065903849604>",
+        "<:rvban:1541889100779618344>",
+        "<:evban:1541889123890237562>",
+        "<:mvban:1541889167875899412>",
+        "<:lvban:1541889229594951790>",
+        "<:fvban:1541889417654837379>"
       ],
       "aliases": [
         "vban",
@@ -914,19 +1050,28 @@
         "kind": "attack_up_chain",
         "duration": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcvban:1541889463544971397>",
+        "<:puvban:1541889496415477850>",
+        "<:prvban:1541889526333448254>",
+        "<:pevban:1541889569916723242>",
+        "<:pmvban:1541889708710301777>",
+        "<:plvban:1541889788812992585>",
+        "<:pfvban:1541889810237489202>"
+      ]
     },
     {
       "id": 17,
       "name": "Culling Scythe",
       "emojis": [
-        "<:csythe:618001307181252623>",
-        "<:usythe:618001307869118474>",
-        "<:rsythe:618001307856404505>",
-        "<:esythe:618001307562672128>",
-        "<:msythe:618001308426960896>",
-        "<:lsythe:618001308607184896>",
-        "<:fsythe:618001308196012042>"
+        "<:csythe:1541866786721636392>",
+        "<:usythe:1541866829323178094>",
+        "<:rsythe:1541866863066218518>",
+        "<:esythe:1541866896872448050>",
+        "<:msythe:1541866932528218173>",
+        "<:lsythe:1541866964518182932>",
+        "<:fsythe:1541867014442848267>"
       ],
       "aliases": [
         "cscythe",
@@ -956,19 +1101,28 @@
         "stat": "att",
         "duration": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcsythe:1541867080591089715>",
+        "<:pusythe:1541867155795214466>",
+        "<:prsythe:1541867114384719902>",
+        "<:pesythe:1541867188670177280>",
+        "<:pmsythe:1541867216872669244>",
+        "<:plsythe:1541867262057652316>",
+        "<:pfsythe:1541867290117804152>"
+      ]
     },
     {
       "id": 18,
       "name": "Rune of Celebration",
       "emojis": [
-        "<:ccrune:1080441103129509899>",
-        "<:ucrune:1080441115922153513>",
-        "<:rcrune:1080441114030510130>",
-        "<:ecrune:1080441106992463872>",
-        "<:mcrune:1080441112533139477>",
-        "<:lcrune:1080441110876397568>",
-        "<:fcrune:1080441108775059456>"
+        "<:ccrune:1541865880630198322>",
+        "<:ucrune:1541865942710222900>",
+        "<:rcrune:1541865987459256350>",
+        "<:ecrune:1541866029339254876>",
+        "<:mcrune:1541866110641635378>",
+        "<:lcrune:1541868822552903770>",
+        "<:fcrune:1541866214262046790>"
       ],
       "aliases": [
         "crune",
@@ -990,19 +1144,28 @@
         "duration": 3
       },
       "disabled": true,
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pccrune:1541866286433435658>",
+        "<:pucrune:1541866374115098694>",
+        "<:prcrune:1541866422039351487>",
+        "<:pecrune:1541866513202675805>",
+        "<:pmcrune:1541866549030162592>",
+        "<:plcrune:1541866593821134858>",
+        "<:pfcrune:1541866644047921303>"
+      ]
     },
     {
       "id": 19,
       "name": "Staff of Purity",
       "emojis": [
-        "<:cpstaff:1082882866461028372>",
-        "<:upstaff:1082882883171123330>",
-        "<:rpstaff:1082882880386105394>",
-        "<:epstaff:1082882871439655054>",
-        "<:mpstaff:1082882877462687744>",
-        "<:lpstaff:1082882875495546900>",
-        "<:fpstaff:1082882873738145862>"
+        "<:cpstaff:1541881664387416067>",
+        "<:upstaff:1541881703369285763>",
+        "<:rpstaff:1541881751662624808>",
+        "<:epstaff:1541881771832901674>",
+        "<:mpstaff:1541881820801663026>",
+        "<:lpstaff:1541881848257581146>",
+        "<:fpstaff:1541881879907803186>"
       ],
       "aliases": [
         "pstaff",
@@ -1029,19 +1192,28 @@
         "duration": 2
       },
       "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
-      "note": "Hapus debuff dari rekan acak, heal 50-100% MAG, pasang Sacred Ward 2 turn."
+      "note": "Hapus debuff dari rekan acak, heal 50-100% MAG, pasang Sacred Ward 2 turn.",
+      "pristineEmojis": [
+        "<:pcpstaff:1541881960102891590>",
+        "<:pupstaff:1541881987847954443>",
+        "<:prpstaff:1541882016805691412>",
+        "<:pepstaff:1541882051802697959>",
+        "<:pmpstaff:1541882110426742824>",
+        "<:plpstaff:1541882131251204166>",
+        "<:pfpstaff:1541882161282682931>"
+      ]
     },
     {
       "id": 20,
       "name": "Leeching Scythe",
       "emojis": [
-        "<:clsyth:1107927029787131985>",
-        "<:ulsyth:1107927041761882192>",
-        "<:rlsyth:1107927039769591828>",
-        "<:elsyth:1107927031150301204>",
-        "<:mlsyth:1107927038574202930>",
-        "<:llsyth:1107927034308612097>",
-        "<:flsyth:1107927033222279268>"
+        "<:clsyth:1541876443925975190>",
+        "<:ulsyth:1541876497588031590>",
+        "<:rlsyth:1541876545730252872>",
+        "<:elsyth:1541876587065249832>",
+        "<:mlsyth:1541876626403500113>",
+        "<:llsyth:1541876672666538034>",
+        "<:flsyth:1541876710914400410>"
       ],
       "aliases": [
         "lscythe",
@@ -1077,19 +1249,28 @@
         "duration": 3,
         "bonusIfBuffed": 1
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pclsyth:1541876747161702540>",
+        "<:pulsyth:1541876790795173998>",
+        "<:prlsyth:1541876834323669052>",
+        "<:pelsyth:1541876855081017505>",
+        "<:pmlsyth:1541876890279612648>",
+        "<:pllsyth:1541876928166764664>",
+        "<:pflsyth:1541876967601606757>"
+      ]
     },
     {
       "id": 21,
       "name": "Foul Fish",
       "emojis": [
-        "<:cffish:1154635938270564403>",
-        "<:uffish:1154635970637987841>",
-        "<:rffish:1154635969518129172>",
-        "<:effish:1154635940535472198>",
-        "<:mffish:1154635947984552076>",
-        "<:lffish:1154635946571079770>",
-        "<:fffish:1154635942397747211>"
+        "<:cffish:1541870681095020636>",
+        "<:uffish:1541870691664793630>",
+        "<:rffish:1541870750032724019>",
+        "<:effish:1541870870274773042>",
+        "<:mffish:1541870919952244786>",
+        "<:lffish:1541870939216674929>",
+        "<:fffish:1541870987916877832>"
       ],
       "aliases": [
         "ffish",
@@ -1119,19 +1300,28 @@
         "stat": "att",
         "duration": 2
       },
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcffish:1541871029356331018>",
+        "<:puffish:1541871077070737526>",
+        "<:prffish:1541871112076533870>",
+        "<:peffish:1541871153432240199>",
+        "<:pmffish:1541871183773827203>",
+        "<:plffish:1541871220071600261>",
+        "<:pfffish:1541871259770429482>"
+      ]
     },
     {
       "id": 22,
       "name": "Rune of Luck",
       "emojis": [
-        "<:clrune:1223813020824899624>",
-        "<:ulrune:1223813100457693184>",
-        "<:rlrune:1223813099044212836>",
-        "<:elrune:1223813022288445460>",
-        "<:mlrune:1223813027309162526>",
-        "<:llrune:1223813024847102012>",
-        "<:flrune:1223813023613849703>"
+        "<:clrune:1541878331790721024>",
+        "<:ulrune:1541878447570165850>",
+        "<:rlrune:1541878505376186409>",
+        "<:elrune:1541878543800340652>",
+        "<:mlrune:1541878572841574610>",
+        "<:llrune:1541878614084288773>",
+        "<:flrune:1541878635466596432>"
       ],
       "aliases": [
         "lrune",
@@ -1171,7 +1361,16 @@
         "hits": 5
       },
       "disabled": true,
-      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)"
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pclrune:1541878688499634266>",
+        "<:pulrune:1541878728190332988>",
+        "<:prlrune:1541878772590968842>",
+        "<:pelrune:1541878806669959290>",
+        "<:pmlrune:1541878841327362090>",
+        "<:pllrune:1541878858373013618>",
+        "<:pflrune:1541878888517345300>"
+      ]
     },
     {
       "id": 132,
@@ -1185,7 +1384,6 @@
         "<:lwstaff:1571815720105410730>",
         "<:fwstaff:1571815741965996083>"
       ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: wstaff.",
       "aliases": [
         "witheringstaff",
         "wstaff"
@@ -1249,8 +1447,7 @@
       "assumptionNotes": [
         "Sumber tidak menyebut slot pasif; dipakai 1 mengikuti mayoritas senjata dan aturan rentang pasif global (1-2).",
         "Sumber tidak menyebut senjata ini menyerang; karena itu tidak ada damage langsung dan unit tetap melakukan serangan fisik biasa setelah kutukan terpasang."
-      ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: whour."
+      ]
     },
     {
       "id": 123,
@@ -1265,7 +1462,6 @@
         "<:lbgaze:1550294866020405310>",
         "<:fbgaze:1550294886463438896>"
       ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: bgaze.",
       "aliases": [
         "bleedinggaze",
         "bgaze"
@@ -1310,7 +1506,6 @@
         "<:lcclaw:1550496995444133908>",
         "<:fcclaw:1550497014855237723>"
       ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: cclaw.",
       "aliases": [
         "cclaw",
         "claw",
@@ -1353,7 +1548,6 @@
         "<:lcorstaff:1550629639532314705>",
         "<:fcorstaff:1550629660080087071>"
       ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: corstaff.",
       "aliases": [
         "corruptionstaff",
         "cstaff"
@@ -1394,7 +1588,6 @@
         "<:lcscept:1570878802177949879>",
         "<:fcscept:1570878826488143934>"
       ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: cscept.",
       "aliases": [
         "cscept",
         "cscepter",
@@ -1421,9 +1614,15 @@
       "id": 129,
       "name": "Wounding Crossbow",
       "owoId": 129,
-      "emojis": [],
-      "defaultEmoji": "<:harrow:1478943742798073907>",
-      "emojiNote": "Belum ada token per rank; semua tier memakai emoji Heavy Arrow dari deskripsi sumber.",
+      "emojis": [
+        "<:cwcross:1552772849398186025>",
+        "<:uwcross:1552772874190979112>",
+        "<:rwcross:1552772898039791708>",
+        "<:ewcross:1552772923163410512>",
+        "<:mwcross:1552772942860128387>",
+        "<:lwcross:1552773096346226809>",
+        "<:fwcross:1552773121067450369>"
+      ],
       "aliases": [
         "woundingcrossbow",
         "crossbow",
@@ -1468,9 +1667,14 @@
         "soultithe"
       ],
       "emojis": [
+        "<:cstithe:1550633745588027433>",
+        "<:ustithe:1550633772054216805>",
+        "<:rstithe:1550633791280906251>",
+        "<:estithe:1550633816928821299>",
+        "<:mstithe:1550633844682657903>",
+        "<:lstithe:1550633869831573624>",
         "<:fstithe:1550633888559145021>"
       ],
-      "emojiNote": "Sumber hanya memberikan token Fabled; token ini dipakai untuk semua tier sampai varian rank lain tersedia.",
       "qualityList": [
         [
           10,
@@ -1504,9 +1708,14 @@
         "briar"
       ],
       "emojis": [
+        "<:cbhstaff:1552754741812142190>",
+        "<:ubhstaff:1552754808731992175>",
+        "<:rbhstaff:1552754929335279747>",
+        "<:ebhstaff:1552754950004805732>",
+        "<:mbhstaff:1552754972767289544>",
+        "<:lbhstaff:1552755004626968699>",
         "<:fbhstaff:1552755035350499348>"
       ],
-      "emojiNote": "Sumber hanya memberikan token Fabled; token ini dipakai untuk semua tier sampai varian rank lain tersedia.",
       "qualityList": [
         [
           25,
@@ -1545,9 +1754,14 @@
         "arbitersedge"
       ],
       "emojis": [
+        "<:caedge:1552762989491265577>",
+        "<:uaedge:1552763018218184754>",
+        "<:raedge:1552763041748361336>",
+        "<:eaedge:1552763073746440283>",
+        "<:maedge:1552763201450541197>",
+        "<:laedge:1552763103559815198>",
         "<:faedge:1552763230584180857>"
       ],
-      "emojiNote": "Sumber hanya memberikan token Fabled; token ini dipakai untuk semua tier sampai varian rank lain tersedia.",
       "qualityList": [
         [
           10,
@@ -1853,5 +2067,32 @@
     "maxAnimals": 6,
     "maxSlots": 3,
     "maxTurns": 24
-  }
+  },
+  "wear": {
+    "pristine": {
+      "id": 4,
+      "name": "Pristine",
+      "chance": 0.01,
+      "buff": 5
+    },
+    "fine": {
+      "id": 3,
+      "name": "Fine",
+      "chance": 0.05,
+      "buff": 3
+    },
+    "decent": {
+      "id": 2,
+      "name": "Decent",
+      "chance": 0.1,
+      "buff": 1
+    },
+    "worn": {
+      "id": 1,
+      "name": "Worn",
+      "chance": 0,
+      "buff": 0
+    }
+  },
+  "emojiCatalog": "src/data/battleEmojiCatalog.json"
 }

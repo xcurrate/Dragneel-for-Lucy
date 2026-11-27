@@ -1661,10 +1661,10 @@ describe('emoji battle', () => {
   });
 
   it('memilih emoji sesuai rank dan jatuh ke ikon netral tanpa quality', () => {
-    assert.ok(be.weaponToken(1, 10).includes('cgreatsword'));
-    assert.ok(be.weaponToken(1, 100).includes('fgreatsword'));
+    assert.ok(be.weaponToken(1, 10).includes('csword'));
+    assert.ok(be.weaponToken(1, 100).includes('fsword'));
     assert.ok(be.passiveToken(7, 70).includes('elifesteal'));
-    assert.ok(be.weaponToken(1, null).includes('fgreatsword'), 'tanpa quality = fabled');
+    assert.ok(be.weaponToken(1, null).includes('fsword'), 'tanpa quality = fabled');
     assert.ok(be.passiveToken(7, null).includes('flifesteal'));
     assert.strictEqual(be.weaponEmoji(999, 80), '⚔️');
     assert.strictEqual(be.passiveEmoji(7, null), '✨');
@@ -1722,7 +1722,7 @@ describe('emoji battle', () => {
     }
     const team = { id: 1, name: 'T', slots: [{ slot: 1, custom: COEFFS_STRONG, level: 60, weaponId: 1, weaponQuality: 80, passives: [7] }] };
     const json = panel.teamEmbed(team, {}).toJSON();
-    assert.ok(json.fields[0].value.includes('greatsword'));
+    assert.ok(json.fields[0].value.includes('esword'));
     assert.ok(json.fields[0].value.includes('lifesteal'));
   });
 });
@@ -2058,7 +2058,11 @@ describe('alias senjata dan pasif', () => {
   it('data pending tidak lagi menyimpan nama lama yang sudah bermekanik', () => {
     const pending = battleData.pending;
     assert.deepStrictEqual(pending.weapons, []);
-    assert.deepStrictEqual(pending.passives, []);
+    assert.deepStrictEqual(
+      pending.passives.map(item => item.name).sort(),
+      ['Conserve', 'Purify'],
+      'hanya pasif baru yang belum punya mekanik',
+    );
   });
 });
 

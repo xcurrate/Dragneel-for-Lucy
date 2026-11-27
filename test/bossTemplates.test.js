@@ -92,9 +92,16 @@ test('template ditampilkan dengan emoji dex atau fallback 🐾', () => {
 
 test('quality senjata dari template dipakai di tampilan rank', () => {
   cleanup();
+  const dex = require(path.join(ROOT, 'src/services/animalDex'));
+  const be = require(path.join(ROOT, 'src/services/battleEmoji'));
+  const ids = [...be.RANK_TOKENS, ...be.allTokens()]
+    .map(token => /:(\d+)>$/.exec(token)?.[1])
+    .filter(Boolean);
+  dex.setClient({ emojis: { cache: new Map(ids.map(id => [id, true])) }, application: { emojis: { cache: new Map() } } });
   const display = templates.formatTemplate('60 ellie crune 100,100,85 dc');
   assert.match(display, /<a:legendary:/, 'rank mengikuti rata-rata quality 100,100,85');
   assert.doesNotMatch(display, /<a:fabled:/, 'bukan lagi Fabled');
+  dex.setClient(null);
 });
 
 test('simulasi template mengurutkan damage dan menampilkan min-max', async () => {

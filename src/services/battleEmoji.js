@@ -16,13 +16,13 @@ const RANK_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Mythical', 'Legendary
 
 // Token asli OwO; setelah mirror, `resolve` mengembalikan token aplikasi bot.
 const RANK_TOKENS = [
-  '<:common:416520037713838081>',
-  '<:uncommon:416520056269176842>',
-  '<:rare:416520066629107712>',
-  '<:epic:416520722987614208>',
-  '<:mythic:416520808501084162>',
-  '<a:legendary:417955061801680909>',
-  '<a:fabled:438857004493307907>',
+  '<:common:1521986808169369700>',
+  '<:uncommon:1521986825307029614>',
+  '<:rare:1521986845213458482>',
+  '<:epic:1521986864444084224>',
+  '<:mythic:1521986888246755448>',
+  '<a:legendary:1521986904222990356>',
+  '<a:fabled:1521986967674290411>',
 ];
 const RANK_FALLBACK = ['⚪', '🟢', '🔵', '🟣', '🟠', '🟡', '🔴'];
 
@@ -125,6 +125,7 @@ function allTokens() {
   const tokens = [];
   for (const weapon of data.weapons()) {
     tokens.push(...(weapon.emojis || []));
+    tokens.push(...(weapon.pristineEmojis || []).filter(Boolean));
     if (weapon.defaultEmoji) tokens.push(weapon.defaultEmoji);
   }
   for (const passive of passiveData.passives) tokens.push(...(passive.emojis || []));

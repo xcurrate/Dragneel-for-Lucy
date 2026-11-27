@@ -22,13 +22,13 @@
       "id": 1,
       "name": "Strength",
       "emojis": [
-        "<:catt:535290412143738880>",
-        "<:uatt:535290420822016010>",
-        "<:ratt:535290420255522855>",
-        "<:eatt:535290419722977280>",
-        "<:matt:535290420150665216>",
-        "<:latt:535290420029030400>",
-        "<:fatt:535290419903463436>"
+        "<:catt:1553811880836075732>",
+        "<:uatt:1541920966781837345>",
+        "<:ratt:1553811904345149480>",
+        "<:eatt:1541921023241228360>",
+        "<:matt:1553811929183551488>",
+        "<:latt:1553811955230310410>",
+        "<:fatt:1553811982715715655>"
       ],
       "category": "stat",
       "summary": "Menambah STR sebesar persen dari STR dasar.",
@@ -50,13 +50,13 @@
       "id": 2,
       "name": "Magic",
       "emojis": [
-        "<:cmag:535290422340222987>",
-        "<:umag:535290422969499668>",
-        "<:rmag:535290422973562920>",
-        "<:emag:535290422940139520>",
-        "<:mmag:535290422923231247>",
-        "<:lmag:535290422893871114>",
-        "<:fmag:535290422852059138>"
+        "<:cmag:1553812941470568448>",
+        "<:umag:1541913515965685762>",
+        "<:rmag:1541913620655513683>",
+        "<:emag:1553812962576310382>",
+        "<:mmag:1553812983136915496>",
+        "<:lmag:1541913854546812958>",
+        "<:fmag:1541913886679240726>"
       ],
       "category": "stat",
       "summary": "Menambah MAG sebesar persen dari MAG dasar.",
@@ -76,13 +76,13 @@
       "id": 3,
       "name": "Health Point",
       "emojis": [
-        "<:chp:535290421467807755>",
-        "<:uhp:535290422721904640>",
-        "<:rhp:535290422709321748>",
-        "<:ehp:535290421740568577>",
-        "<:mhp:535290421769928716>",
-        "<:lhp:535290422147153930>",
-        "<:fhp:535290422306799616>"
+        "<:chp:1553813709443440853>",
+        "<:uhp:1541909592504799273>",
+        "<:rhp:1541911382079967322>",
+        "<:ehp:1553813740682612836>",
+        "<:mhp:1541911684623376446>",
+        "<:lhp:1541911800092696736>",
+        "<:fhp:1541911866979385456>"
       ],
       "category": "stat",
       "summary": "Menambah HP maksimum sebesar persen dari HP dasar.",
@@ -104,13 +104,13 @@
       "id": 4,
       "name": "Weapon Point",
       "emojis": [
-        "<:cwp:535290421207629825>",
-        "<:uwp:535290422151610369>",
-        "<:rwp:535290422335897600>",
-        "<:ewp:535290421593636874>",
-        "<:mwp:535290421807415297>",
-        "<:lwp:535290421887369216>",
-        "<:fwp:535290421237252107>"
+        "<:cwp:1553814341109817436>",
+        "<:uwp:1553814366325841950>",
+        "<:rwp:1541923140102389932>",
+        "<:ewp:1553814394092130386>",
+        "<:mwp:1541923203855945970>",
+        "<:lwp:1541923240543264789>",
+        "<:fwp:1541923291789402242>"
       ],
       "category": "stat",
       "summary": "Menambah WP maksimum sebesar persen dari WP dasar.",
@@ -132,13 +132,13 @@
       "id": 5,
       "name": "Physical Resistance",
       "emojis": [
-        "<:cpr:535290422730162177>",
-        "<:upr:535290423023763461>",
-        "<:rpr:535290422902390789>",
-        "<:epr:535290422738681884>",
-        "<:mpr:535290422910779411>",
-        "<:lpr:535290422554001410>",
-        "<:fpr:535290422793338880>"
+        "<:cpr:1553814872872190112>",
+        "<:upr:1541917583220146196>",
+        "<:rpr:1541917888070422590>",
+        "<:epr:1541918068572164179>",
+        "<:mpr:1541918136003989643>",
+        "<:lpr:1541918166702358548>",
+        "<:fpr:1541918258050113536>"
       ],
       "category": "stat",
       "summary": "Menambah PR sebesar persen dari PR dasar.",
@@ -160,13 +160,13 @@
       "id": 6,
       "name": "Magical Resistance",
       "emojis": [
-        "<:cmr:535290422503800832>",
-        "<:umr:535290422919036938>",
-        "<:rmr:535290422810116097>",
-        "<:emr:535290422226845697>",
-        "<:mmr:535290422243622913>",
-        "<:lmr:535290422688219146>",
-        "<:fmr:535290422252273675>"
+        "<:cmr:1541914388808736921>",
+        "<:umr:1541914629729689811>",
+        "<:rmr:1541914704887283742>",
+        "<:emr:1553815276607381634>",
+        "<:mmr:1553815500050665542>",
+        "<:lmr:1541916197262725305>",
+        "<:fmr:1541916224605397042>"
       ],
       "category": "stat",
       "summary": "Menambah MR sebesar persen dari MR dasar.",
@@ -188,13 +188,13 @@
       "id": 7,
       "name": "Lifesteal",
       "emojis": [
-        "<:clifesteal:548729308038955018>",
-        "<:ulifesteal:548729400477089793>",
-        "<:rlifesteal:548729400493867018>",
-        "<:elifesteal:548729398644178944>",
-        "<:mlifesteal:548729400078893057>",
-        "<:llifesteal:548729400447729664>",
-        "<:flifesteal:548729400473026560>"
+        "<:clifesteal:1553815879517470801>",
+        "<:ulifesteal:1541913212511981598>",
+        "<:rlifesteal:1541913250420097084>",
+        "<:elifesteal:1541913281533313148>",
+        "<:mlifesteal:1541913303213674528>",
+        "<:llifesteal:1541913357374988368>",
+        "<:flifesteal:1541913382133829783>"
       ],
       "category": "sustain",
       "summary": "Setiap damage yang diberikan menyerap HP sebesar persen dari damage itu.",
@@ -216,13 +216,13 @@
       "id": 8,
       "name": "Thorns",
       "emojis": [
-        "<:cthorns:548729308030566426>",
-        "<:uthorns:548729400661639168>",
-        "<:rthorns:548729400628346900>",
-        "<:ethorns:548729400632410122>",
-        "<:mthorns:548729400607113216>",
-        "<:lthorns:548729400649187338>",
-        "<:fthorns:548729400468963329>"
+        "<:cthorns:1541922481152073858>",
+        "<:uthorns:1541922515524526261>",
+        "<:rthorns:1553816427805540452>",
+        "<:ethorns:1541922586013737010>",
+        "<:mthorns:1541922620314882122>",
+        "<:lthorns:1553816449854738503>",
+        "<:fthorns:1541922682684313742>"
       ],
       "category": "reflect",
       "summary": "Membalas persen damage yang diterima sebagai TRUE damage (tembus resistensi).",
@@ -244,13 +244,13 @@
       "id": 9,
       "name": "Mana Tap",
       "emojis": [
-        "<:cmanatap:562175424742948865>",
-        "<:umanatap:562175425028292618>",
-        "<:rmanatap:562175424902332446>",
-        "<:emanatap:562175424814120970>",
-        "<:mmanatap:562175424918978580>",
-        "<:lmanatap:562175425175093279>",
-        "<:fmanatap:562175424403079199>"
+        "<:cmanatap:1553817378184241342>",
+        "<:umanatap:1541916394915111002>",
+        "<:rmanatap:1541916415450157246>",
+        "<:emanatap:1541916497562304614>",
+        "<:mmanatap:1541916541015294072>",
+        "<:lmanatap:1541916571419807888>",
+        "<:fmanatap:1541916605947052112>"
       ],
       "category": "sustain",
       "summary": "Setiap damage yang diberikan mengisi WP sebesar persen dari damage itu.",
@@ -273,13 +273,13 @@
       "id": 10,
       "name": "Absolve",
       "emojis": [
-        "<:cabsolve:562175422343938059>",
-        "<:uabsolve:562175424604536843>",
-        "<:rabsolve:562175425556774912>",
-        "<:eabsolve:562175424969310227>",
-        "<:mabsolve:562175424625639435>",
-        "<:labsolve:562175424747143209>",
-        "<:fabsolve:562175424965115914>"
+        "<:cabsolve:1541906880278827160>",
+        "<:uabsolve:1541906962298704015>",
+        "<:rabsolve:1541907009115394068>",
+        "<:eabsolve:1541907056100122674>",
+        "<:mabsolve:1541907111083118763>",
+        "<:labsolve:1541907157858123867>",
+        "<:fabsolve:1541907202930118766>"
       ],
       "category": "heal",
       "summary": "Saat menerima heal, menyerang satu musuh acak sebesar persen dari jumlah heal, sebagai MAG.",
@@ -301,13 +301,13 @@
       "id": 11,
       "name": "Safeguard",
       "emojis": [
-        "<:csafeguard:562175426026405913>",
-        "<:usafeguard:562175424852000788>",
-        "<:rsafeguard:562175425112178688>",
-        "<:esafeguard:562175424701136917>",
-        "<:msafeguard:562175425112047626>",
-        "<:lsafeguard:562175425061715978>",
-        "<:fsafeguard:562175424793411586>"
+        "<:csafeguard:1541920120228552867>",
+        "<:usafeguard:1541920139954626711>",
+        "<:rsafeguard:1541920170707128340>",
+        "<:esafeguard:1553818145062649926>",
+        "<:msafeguard:1553818173646839898>",
+        "<:lsafeguard:1553818202180423842>",
+        "<:fsafeguard:1541920271831793674>"
       ],
       "category": "defense",
       "summary": "Membatalkan persen damage masuk dengan membakar WP sebanyak itu (WP habis = batal sebagian).",
@@ -330,13 +330,13 @@
       "id": 12,
       "name": "Critical",
       "emojis": [
-        "<:ccritical:572285184251002912>",
-        "<:ucritical:572285186322989057>",
-        "<:rcritical:572285186293628939>",
-        "<:ecritical:572285186209742848>",
-        "<:mcritical:572285186398617600>",
-        "<:lcritical:572285186407137290>",
-        "<:fcritical:572285186226782211>"
+        "<:ccritical:1553818830298546246>",
+        "<:ucritical:1553818851349889166>",
+        "<:rcritical:1541907596758352062>",
+        "<:ecritical:1541907645232054443>",
+        "<:mcritical:1541907695127363624>",
+        "<:lcritical:1541907766984310784>",
+        "<:fcritical:1541907788836511764>"
       ],
       "category": "damage",
       "summary": "Setiap serangan punya persen peluang menambah persen damage. Juga berlaku untuk heal.",
@@ -363,13 +363,13 @@
       "id": 13,
       "name": "Discharge",
       "emojis": [
-        "<:cdischarge:572285186864185344>",
-        "<:udischarge:572285186897739777>",
-        "<:rdischarge:572285186599944204>",
-        "<:edischarge:572285187044671489>",
-        "<:mdischarge:572285187048734722>",
-        "<:ldischarge:572285187023699988>",
-        "<:fdischarge:572285187002466364>"
+        "<:cdischarge:1541908098862555258>",
+        "<:udischarge:1541908146207981709>",
+        "<:rdischarge:1553819514620084304>",
+        "<:edischarge:1541908209273675786>",
+        "<:mdischarge:1553819541736390666>",
+        "<:ldischarge:1553819568672350289>",
+        "<:fdischarge:1547011100061601872>"
       ],
       "category": "mana",
       "summary": "Saat WP terisi, menyerang satu musuh acak sebesar persen dari jumlah WP yang terisi, sebagai MAG.",
@@ -391,13 +391,13 @@
       "id": 14,
       "name": "Kamikaze",
       "emojis": [
-        "<:ckkaze:619835003664072711>",
-        "<:ukkaze:619834825486106624>",
-        "<:rkkaze:619834825330655242>",
-        "<:ekkaze:619834825293168650>",
-        "<:mkkaze:619834825309814786>",
-        "<:lkkaze:619834825699754004>",
-        "<:fkkaze:619834825217671168>"
+        "<:ckkaze:1541911961141518438>",
+        "<:ukkaze:1541911988618272948>",
+        "<:rkkaze:1541912039079940189>",
+        "<:ekkaze:1541912088417669171>",
+        "<:mkkaze:1541912147670339584>",
+        "<:lkkaze:1541912194294489209>",
+        "<:fkkaze:1541912225357496363>"
       ],
       "category": "onDeath",
       "summary": "Saat mati, menyerang pembunuhnya sebesar persen HP maksimum sebagai MAG.",
@@ -421,13 +421,13 @@
       "id": 15,
       "name": "Regeneration",
       "emojis": [
-        "<:chgen:621558017967652875>",
-        "<:uhgen:621558018420637696>",
-        "<:rhgen:621558017984299019>",
-        "<:ehgen:621558017791623178>",
-        "<:mhgen:621558018366111744>",
-        "<:lhgen:621558018265579530>",
-        "<:fhgen:621558018286419979>"
+        "<:chgen:1541918386705924157>",
+        "<:uhgen:1541918415898542130>",
+        "<:rhgen:1541918450367070308>",
+        "<:ehgen:1541918561193164800>",
+        "<:mhgen:1541918585268609034>",
+        "<:lhgen:1541918618797736057>",
+        "<:fhgen:1541918642780897404>"
       ],
       "category": "sustain",
       "summary": "Memulihkan persen HP maksimum setiap akhir turn.",
@@ -451,13 +451,13 @@
       "id": 16,
       "name": "Energize",
       "emojis": [
-        "<:cwgen:621558018357854208>",
-        "<:uwgen:621558018177368075>",
-        "<:rwgen:621558018529689600>",
-        "<:ewgen:621558018365980712>",
-        "<:mwgen:621558018500329482>",
-        "<:lwgen:621558018017853441>",
-        "<:fwgen:621558018424700948>"
+        "<:cwgen:1553820506803798197>",
+        "<:uwgen:1541908582650609715>",
+        "<:rwgen:1541908606352367741>",
+        "<:ewgen:1541908645518901379>",
+        "<:mwgen:1541908682059554936>",
+        "<:lwgen:1541908718713577512>",
+        "<:fwgen:1541908755669581934>"
       ],
       "category": "mana",
       "summary": "Mengisi WP sejumlah nilai tetap setiap akhir turn.",
@@ -481,13 +481,13 @@
       "id": 17,
       "name": "Sprout",
       "emojis": [
-        "<:csprout:621558018492071936>",
-        "<:usprout:621558018643066910>",
-        "<:rsprout:621558018496004097>",
-        "<:esprout:621558018378825729>",
-        "<:msprout:621558018626289664>",
-        "<:lsprout:621558018546335754>",
-        "<:fsprout:621558018424832022>"
+        "<:csprout:1541920573725085717>",
+        "<:usprout:1541920608495870145>",
+        "<:rsprout:1541920644910809218>",
+        "<:esprout:1541920694600859728>",
+        "<:msprout:1541920746933194792>",
+        "<:lsprout:1541920779472601188>",
+        "<:fsprout:1541920827031687238>"
       ],
       "category": "heal",
       "summary": "Semua heal yang diterima bertambah persen.",
@@ -509,13 +509,13 @@
       "id": 18,
       "name": "Enrage",
       "emojis": [
-        "<:cenrage:621558016927596577>",
-        "<:uenrage:621558017887830017>",
-        "<:renrage:621558018210922527>",
-        "<:eenrage:621558017933967360>",
-        "<:menrage:621558018034761758>",
-        "<:lenrage:621558017996881930>",
-        "<:fenrage:621558017569062933>"
+        "<:cenrage:1541908965498298429>",
+        "<:uenrage:1541909013149778072>",
+        "<:renrage:1541909086994694196>",
+        "<:eenrage:1541909130347024395>",
+        "<:menrage:1541909175532265513>",
+        "<:lenrage:1553820958580678806>",
+        "<:fenrage:1541909297284255784>"
       ],
       "category": "damage",
       "summary": "Setiap 10% HP yang hilang memberi tambahan persen damage.",
@@ -537,13 +537,13 @@
       "id": 19,
       "name": "Sacrifice",
       "emojis": [
-        "<:csac:1107928491527249980>",
-        "<:usac:1107928527300460545>",
-        "<:rsac:1107928523110367253>",
-        "<:esac:1107928494329040968>",
-        "<:msac:1107928502893826098>",
-        "<:lsac:1107928500230426654>",
-        "<:fsac:1107928498103930901>"
+        "<:csac:1541919877361827971>",
+        "<:usac:1541919898576617472>",
+        "<:rsac:1541919925604450437>",
+        "<:esac:1541919973252006039>",
+        "<:msac:1541919997134245949>",
+        "<:lsac:1541920021146632282>",
+        "<:fsac:1541920040310411386>"
       ],
       "category": "onDeath",
       "summary": "Saat mati, menyembuhkan rekan tim persen HP maks dan mengisi persen WP maks mereka.",
@@ -570,13 +570,13 @@
       "id": 20,
       "name": "Snail",
       "emojis": [
-        "<:csnail:1107928492668104734>",
-        "<:usnail:1107928528760094743>",
-        "<:rsnail:1107928524112805950>",
-        "<:esnail:1107928496187133992>",
-        "<:msnail:1107928521130643466>",
-        "<:lsnail:1107928501148975125>",
-        "<:fsnail:1107928499202818118>"
+        "<:csnail:1541920327653658705>",
+        "<:usnail:1541920370205130873>",
+        "<:rsnail:1541920383349817384>",
+        "<:esnail:1553821326819721357>",
+        "<:msnail:1541920458469941278>",
+        "<:lsnail:1541920488782303363>",
+        "<:fsnail:1541920511217635381>"
       ],
       "category": "damage",
       "summary": "Setiap menyerang, siput memukul musuh acak sebesar persen damage yang diberikan (abaikan resistensi).",
@@ -596,13 +596,13 @@
       "id": 21,
       "name": "Knowledge",
       "emojis": [
-        "<:ckno:1155427304663691294>",
-        "<:ukno:1155427316000886794>",
-        "<:rkno:1155427313857605652>",
-        "<:ekno:1155427306437873848>",
-        "<:mkno:1155427312234418236>",
-        "<:lkno:1155427310355353610>",
-        "<:fkno:1155427308480503808>"
+        "<:ckno:1553821662116323449>",
+        "<:ukno:1541912850459525146>",
+        "<:rkno:1541912905551974491>",
+        "<:ekno:1541912924510093312>",
+        "<:mkno:1541912970127212604>",
+        "<:lkno:1541913012657594420>",
+        "<:fkno:1541913090143035413>"
       ],
       "category": "utility",
       "summary": "Tidak berefek di battle. Memberi persen XP ekstra setelah battle.",
@@ -649,7 +649,6 @@
         ]
       ],
       "note": "Hanya berlaku bila sasaran bertanda boss (ctx.isBoss). Battle PvP/mirror tidak terpengaruh karena lawan bukan boss.",
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: gslayer.",
       "hooks": [
         "attack"
       ]
@@ -658,9 +657,14 @@
       "id": 23,
       "name": "Lone Wolf",
       "emojis": [
-        "<:lwolf:1550295461062123651>"
+        "<:clwolf:1550295307781152818>",
+        "<:ulwolf:1550295328626970706>",
+        "<:rlwolf:1550295349850284062>",
+        "<:elwolf:1550295382494552185>",
+        "<:mlwolf:1550295406691483738>",
+        "<:llwolf:1550295440258240522>",
+        "<:flwolf:1550295461062123651>"
       ],
-      "emojiNote": "Token dari URL emoji yang diberikan (id 1550295461062123651); varian rank lain belum tersedia.",
       "aliases": [
         "lwolf",
         "wolf"
@@ -687,9 +691,14 @@
       "id": 24,
       "name": "Frost Armor",
       "emojis": [
-        "<:frarm:1478938639286272012>"
+        "<:cfarmor:1550617417091121222>",
+        "<:ufarmor:1550617437656055919>",
+        "<:rfarmor:1550617458853941321>",
+        "<:efarmor:1550617477837492291>",
+        "<:mfarmor:1550617505431683172>",
+        "<:lfarmor:1550617521298604152>",
+        "<:ffarmor:1550617546292469841>"
       ],
-      "emojiNote": "Sumber hanya menyebut satu token (frarm); varian rank lain belum tersedia, jadi token ini dipakai untuk semua tier.",
       "category": "reflect",
       "summary": "Saat menerima damage, tempelkan 10-20 stack Frostbite ke penyerang.",
       "sourceText": "When you receive damage, apply **10-20** stacks of **Frostbite** to the attacker.",
@@ -712,9 +721,14 @@
       "id": 25,
       "name": "Living Hive",
       "emojis": [
-        "<:swarm:1462495891893256365>"
+        "<:clhive:1550625198280015975>",
+        "<:ulhive:1550625221168464013>",
+        "<:rlhive:1550625245587710122>",
+        "<:elhive:1550625275383914546>",
+        "<:mlhive:1550625296053444668>",
+        "<:llhive:1550625320762212382>",
+        "<:flhive:1550625338659180614>"
       ],
-      "emojiNote": "Sumber hanya menyebut satu token (swarm); varian rank lain belum tersedia, jadi token ini dipakai untuk semua tier.",
       "category": "damage",
       "summary": "Saat memberi damage, habiskan 8-2 WP untuk menempelkan Pest ke sasaran.",
       "sourceText": "When dealing damage, spend **8-2** WP to apply **Pest** to the target.",
@@ -738,9 +752,14 @@
       "id": 26,
       "name": "Double Strike",
       "emojis": [
+        "<:cds:1550497806777712721>",
+        "<:uds:1550497827673735189>",
+        "<:rds:1550497849475735573>",
+        "<:eds:1550497869805391952>",
+        "<:mds:1550497886960095393>",
+        "<:lds:1550497909320065167>",
         "<:fds:1550497925132714004>"
       ],
-      "emojiNote": "Hanya token Fabled (fds) yang tersedia; token ini dipakai untuk semua tier sampai varian rank lain diberikan.",
       "aliases": [
         "dstrike",
         "strike",
@@ -782,7 +801,6 @@
         "<:ladapt:1552783165964423218>",
         "<:fadapt:1552783186038227086>"
       ],
-      "emojiNote": "7 token rank (c/u/r/e/m/l/f) dari emoji guild: adapt.",
       "category": "defense",
       "summary": "Resistensi terhadap tipe damage terakhir: Physical memberi Stoneskin, Magical memberi Spellskin, 5-10% per stack, maksimal 5 stack. Menerima tipe lain menghapus semua stack.",
       "sourceText": "Gains resistance against the last damage type received. Physical hits grant **Stoneskin**, while Magical hits grant **Spellskin**. Reduces incoming damage of that type by **5-10%** per stack. Remove all stacks upon taking damage of other types. Stack Limit: cannot exceed 5 stacks.",
@@ -806,9 +824,14 @@
       "id": 28,
       "name": "Resonance",
       "emojis": [
-        "<:resonance:1462495812297691368>"
+        "<:cres:1552789186174779492>",
+        "<:ures:1552789217468350584>",
+        "<:rres:1552789248099491900>",
+        "<:eres:1552789276075491389>",
+        "<:mres:1552789301136457778>",
+        "<:lres:1552789326721716304>",
+        "<:fres:1552789347894304928>"
       ],
-      "emojiNote": "Sumber hanya menyebut satu token (resonance); varian rank lain belum tersedia, jadi token ini dipakai untuk semua tier.",
       "category": "damage",
       "summary": "Tiap buff yang menempel menambah damage keluar; tiap debuff yang menempel mengurangi damage masuk.",
       "sourceText": "For every buff you have, deal +**5-10%** more damage. For every debuff you have, take -**5-10%** less damage.",
