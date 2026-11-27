@@ -21,6 +21,10 @@ const MAX_VISIBLE_RESULTS = 5;
 const TEMPLATE_RUNS = 500;
 const MAX_TEMPLATE_UNITS = 3;
 const GLOBAL_KEY = '__global__';
+const PARSE_CACHE_LIMIT = 128;
+const EMOJI_CACHE_LIMIT = 32;
+const parseCache = new Map();
+const emojiSyncCache = new Map();
 
 
 // Adapter penyimpanan dipisah agar test tidak menulis guild-settings bersama.
@@ -59,12 +63,20 @@ function saveTemplates(list) {
 function parseTemplate(text) {
   // Tampilan memakai pemisah ` + `; terima juga saat user menyalin balik.
   const normalized = String(text || '').replace(/\s+\+\s+/g, ', ').trim();
+  if (parseCache.has(normalized)) return parseCache.get(normalized);
+
   const parsed = simParser.parseInlineSide(normalized, { prefix: 'd' });
-  if (parsed.error) return parsed;
-  if (parsed.specs.length < 1 || parsed.specs.length > MAX_TEMPLATE_UNITS) {
-    return { error: `Template harus berisi 1-${MAX_TEMPLATE_UNITS} hewan.` };
+  const result = parsed.error
+    ? parsed
+    : (parsed.specs.length < 1 || parsed.specs.length > MAX_TEMPLATE_UNITS
+      ? { error: `Template harus berisi 1-${MAX_TEMPLATE_UNITS} hewan.` }
+      : parsed);
+
+  if (parseCache.size >= PARSE_CACHE_LIMIT) {
+    parseCache.delete(parseCache.keys().next().value);
   }
-  return parsed;
+  parseCache.set(normalized, result);
+  return result;
 }
 
 function dexAnimalFor(spec) {
@@ -107,17 +119,33 @@ function formatTemplate(text) {
   return parsed.specs.map(formatSpec).join(' + ');
 }
 
-async function ensureTemplateEmojis(texts) {
-  const animals = [];
-  for (const text of texts || []) {
-    const parsed = parseTemplate(text);
-    if (parsed.error) continue;
-    for (const spec of parsed.specs) {
-      const animal = dexAnimalFor(spec);
-      if (animal) animals.push(animal);
+function ensureTemplateEmojis(texts) {
+  const list = Array.isArray(texts) ? texts : [];
+  const key = list.join('\u0000');
+  const cached = emojiSyncCache.get(key);
+  if (cached) return cached;
+
+  const sync = (async () => {
+    const animals = [];
+    for (const text of list) {
+      const parsed = parseTemplate(text);
+      if (parsed.error) continue;
+      for (const spec of parsed.specs) {
+        const animal = dexAnimalFor(spec);
+        if (animal) animals.push(animal);
+      }
     }
+    await animalDex.ensureAnimalEmojis(animals);
+  })();
+
+  if (emojiSyncCache.size >= EMOJI_CACHE_LIMIT) {
+    emojiSyncCache.delete(emojiSyncCache.keys().next().value);
   }
-  await animalDex.ensureAnimalEmojis(animals);
+  emojiSyncCache.set(key, sync);
+  sync.catch(() => {
+    if (emojiSyncCache.get(key) === sync) emojiSyncCache.delete(key);
+  });
+  return sync;
 }
 
 function listTemplates(guildId) {

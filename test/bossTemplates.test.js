@@ -158,6 +158,37 @@ test('benchmark tidak menampilkan logo rank F/Fabled', async () => {
   }
 });
 
+test('cache parsing dan sinkronisasi emoji dipakai ulang', async () => {
+  cleanup();
+  const simParser = require(path.join(ROOT, 'src/utils/simParser'));
+  const dex = require(path.join(ROOT, 'src/services/animalDex'));
+  const text = '61 rabbit poison dagger giant slayer';
+  const originalParse = simParser.parseInlineSide;
+  const originalEnsure = dex.ensureAnimalEmojis;
+  let parseCalls = 0;
+  let emojiCalls = 0;
+
+  simParser.parseInlineSide = (...args) => {
+    parseCalls += 1;
+    return originalParse(...args);
+  };
+  dex.ensureAnimalEmojis = async () => { emojiCalls += 1; };
+
+  try {
+    const first = templates.parseTemplate(text);
+    const second = templates.parseTemplate(text);
+    assert.equal(first, second, 'hasil parsing yang sama dipakai ulang');
+    assert.equal(parseCalls, 1, 'template hanya diparse sekali');
+
+    await templates.ensureTemplateEmojis([text]);
+    await templates.ensureTemplateEmojis([text]);
+    assert.equal(emojiCalls, 1, 'sinkronisasi emoji hanya dijalankan sekali');
+  } finally {
+    simParser.parseInlineSide = originalParse;
+    dex.ensureAnimalEmojis = originalEnsure;
+  }
+});
+
 test('command template bisa menambah dan menampilkan daftar', async () => {
   cleanup();
   const replies = [];
