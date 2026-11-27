@@ -681,7 +681,7 @@ describe('embed UI', () => {
     assert.ok(json.footer.text.includes('seed 7'), 'seed di footer');
   });
 
-  it('menampilkan total damage kita dan lawan', async () => {
+  it('menampilkan damage kita dan lawan sebagai min-max', async () => {
     const result = await sim.simulate(
       [{ slot: 1, coeffs: COEFFS_STRONG, level: 60 }],
       [{ slot: 1, coeffs: COEFFS_WEAK, level: 60 }],
@@ -689,11 +689,13 @@ describe('embed UI', () => {
     );
     assert.ok(result.damage.player > 0, 'damage kita tercatat');
     assert.strictEqual(result.damage.total, result.damage.player + result.damage.enemy);
+    assert.ok(result.damage.playerMin <= result.damage.playerMax);
+    assert.ok(result.damage.enemyMin <= result.damage.enemyMax);
     const field = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' })
-      .toJSON().fields.find(f => f.name.includes('Total damage'));
+      .toJSON().fields.find(f => f.name.includes('Damage'));
     assert.ok(field, 'field damage ada');
-    assert.match(field.value, /Kita: \*\*[\d.]+\*\* total/);
-    assert.match(field.value, /Lawan: \*\*[\d.]+\*\* total/);
+    assert.match(field.value, /Kita: \*\*[\d.]+–[\d.]+\*\*\/pertarungan · total \*\*[\d.]+\*\*/);
+    assert.match(field.value, /Lawan: \*\*[\d.]+–[\d.]+\*\*\/pertarungan · total \*\*[\d.]+\*\*/);
   });
 
   it('distribusi turn memuat jumlah per jumlah turn', async () => {
@@ -730,7 +732,7 @@ describe('embed UI', () => {
     );
     const clean = panel.simEmbed(sweep, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
     assert.strictEqual(clean.fields.length, 2, 'menang + damage; kalah/seri nol tidak ditampilkan');
-    assert.ok(clean.fields.some(f => f.name.includes('Total damage')), 'damage total tampil');
+    assert.ok(clean.fields.some(f => f.name.includes('Damage')), 'damage tampil');
 
     const mixed = panel.simEmbed(
       { ...sweep, tally: { player: 10, enemy: 6, tie: 4 }, winRate: 50, lossRate: 30, tieRate: 20 },
@@ -3334,7 +3336,7 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
   it('`-m` tanpa angka tetap berarti 10 pertarungan', async () => {
     const embed = await run(['-m']);
     assert.ok(embed.footer.text.includes('10 simulasi'), embed.footer.text);
-    assert.ok(!embed.fields.some(f => !f.name.includes('Total damage') && f.value.includes('/')), 'agregat, bukan sisa HP/WP');
+    assert.ok(!embed.fields.some(f => !f.name.includes('Damage') && f.value.includes('/')), 'agregat, bukan sisa HP/WP');
   });
 
   it('`-m 51` menjalankan 51 pertarungan', async () => {

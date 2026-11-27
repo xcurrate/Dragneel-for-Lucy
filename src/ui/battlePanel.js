@@ -316,12 +316,22 @@ function duelTeamField(label, units) {
 // tidak perlu menjalankan `-m` terpisah hanya untuk tahu rasio akhirnya.
 function damageText(damage, runs = 1) {
   if (!damage) return null;
-  const perRun = runs > 0 ? Math.round(damage.player / runs) : 0;
+  const fmt = value => Number(value || 0).toLocaleString('id-ID');
+  const hasRange = runs > 1
+    && Number.isFinite(damage.playerMin) && Number.isFinite(damage.playerMax);
+  const line = (label, min, max, total) => (
+    hasRange
+      ? `${label}: **${fmt(min)}–${fmt(max)}**/pertarungan · total **${fmt(total)}**`
+      : `${label}: **${fmt(total)}**`
+  );
   return [
-    `Kita: **${Number(damage.player || 0).toLocaleString('id-ID')}** total`
-      + (runs > 1 ? ` · **${perRun.toLocaleString('id-ID')}**/pertarungan` : ''),
-    `Lawan: **${Number(damage.enemy || 0).toLocaleString('id-ID')}** total`,
+    line('Kita', damage.playerMin, damage.playerMax, damage.player),
+    line('Lawan', damage.enemyMin, damage.enemyMax, damage.enemy),
   ].join('\n');
+}
+
+function damageFieldName(runs = 1) {
+  return runs > 1 ? `⚔️ Damage (${runs} simulasi)` : '⚔️ Damage';
 }
 
 function duelEmbed(battle, {
@@ -350,8 +360,10 @@ function duelEmbed(battle, {
     ])
     .setFooter({ text: footer });
 
-  const damage = damageText(battle.damage);
-  if (damage) embed.addFields({ name: '⚔️ Total damage', value: damage, inline: false });
+  const damageSource = stats?.damage || battle.damage;
+  const damageRuns = stats?.damage ? (stats.runs || 1) : 1;
+  const damage = damageText(damageSource, damageRuns);
+  if (damage) embed.addFields({ name: damageFieldName(damageRuns), value: damage, inline: false });
   // Tautan log hanya ada bila `-log` dipakai DAN URL publik dashboard diisi.
   if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
   return embed;
@@ -389,7 +401,7 @@ function simEmbed(result, {
     });
   }
   const damage = damageText(result.damage, runs);
-  if (damage) fields.push({ name: '⚔️ Total damage', value: damage, inline: false });
+  if (damage) fields.push({ name: damageFieldName(runs), value: damage, inline: false });
 
   const embed = new EmbedBuilder()
     .setColor(color)

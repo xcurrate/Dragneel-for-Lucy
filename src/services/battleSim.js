@@ -136,7 +136,15 @@ async function simulate(playerSpecs, enemySpecs, {
   const total = Math.max(1, Math.floor(Number(runs) || 1));
   const tally = { player: 0, enemy: 0, tie: 0 };
   const histogram = new Uint32Array(MAX_TURNS + 2);
-  const damage = { player: 0, enemy: 0, total: 0 };
+  const damage = {
+    player: 0,
+    enemy: 0,
+    total: 0,
+    playerMin: Infinity,
+    playerMax: -Infinity,
+    enemyMin: Infinity,
+    enemyMax: -Infinity,
+  };
   let turnSum = 0;
   let timeouts = 0;
   const base = createRng(seed);
@@ -149,9 +157,15 @@ async function simulate(playerSpecs, enemySpecs, {
     });
     tally[result.winner] += 1;
     histogram[Math.min(result.turns, MAX_TURNS + 1)] += 1;
-    damage.player += result.damage?.player || 0;
-    damage.enemy += result.damage?.enemy || 0;
+    const playerDamage = result.damage?.player || 0;
+    const enemyDamage = result.damage?.enemy || 0;
+    damage.player += playerDamage;
+    damage.enemy += enemyDamage;
     damage.total += result.damage?.total || 0;
+    damage.playerMin = Math.min(damage.playerMin, playerDamage);
+    damage.playerMax = Math.max(damage.playerMax, playerDamage);
+    damage.enemyMin = Math.min(damage.enemyMin, enemyDamage);
+    damage.enemyMax = Math.max(damage.enemyMax, enemyDamage);
     turnSum += result.turns;
     if (result.timeout) timeouts += 1;
     if (yieldEvery > 0 && (i + 1) % yieldEvery === 0) {
@@ -183,6 +197,11 @@ async function simulate(playerSpecs, enemySpecs, {
   for (let t = 0; t < histogram.length; t++) {
     if (histogram[t]) turnHistogram.push({ turns: t, count: histogram[t] });
   }
+
+  if (!Number.isFinite(damage.playerMin)) damage.playerMin = 0;
+  if (!Number.isFinite(damage.playerMax)) damage.playerMax = 0;
+  if (!Number.isFinite(damage.enemyMin)) damage.enemyMin = 0;
+  if (!Number.isFinite(damage.enemyMax)) damage.enemyMax = 0;
 
   return {
     runs: total,

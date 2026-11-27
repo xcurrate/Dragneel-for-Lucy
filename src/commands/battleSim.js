@@ -89,7 +89,7 @@ function usageSections(prefix = 'd') {
         `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
         `Tombol 🔁 mengulang matchup yang sama sebanyak ${DEFAULT_RUNS} pertarungan (ephemeral).`,
         `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
-        'Total damage kita dan damage lawan ikut ditampilkan.',
+        'Damage kita dan lawan ditampilkan min–max per pertarungan, plus totalnya.',
       ].join('\n'),
     },
     {
