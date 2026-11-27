@@ -197,6 +197,14 @@ function helpEmbed(prefix, { isAdmin = false } = {}) {
       inline: false,
     },
     {
+      name: '💖 Dukungan',
+      value: [
+        `\`${prefix} donasi\` — cara mendukung Dragneel`,
+        '`/donasi` — versi slash command',
+      ].join('\n'),
+      inline: false,
+    },
+    {
       name: '⚙️ Admin',
       value: [
         `\`${prefix} boss admin-help\` — panduan moderator`,

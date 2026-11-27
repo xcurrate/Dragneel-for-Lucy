@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { getGuildSettings, updateGuildSettings, DEFAULT_PREFIX, normalizePrefix } = require('../utils/storage');
 const logBuffer = require('../utils/logBuffer');
 const bossRewardStore = require('../utils/bossRewardStorage');
+const donationStore = require('../utils/donationStorage');
 const noteStorage = require('../utils/noteStorage');
 const family100Scores = require('../utils/family100Storage');
 const family100 = require('../services/family100');
@@ -182,6 +183,15 @@ function startDashboard(client, tracker) {
           .filter(r => !r.managed && r.id !== guild.id)
           .map(r => ({ id: r.id, name: r.name }));
         return json(res, 200, { settings: publicSettings(getGuildSettings(guild.id)), bossRewards: bossRewardStore.getServer(guild.id), channels, roles });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/donation') {
+        return json(res, 200, { settings: donationStore.getDonation() });
+      }
+      if (req.method === 'PUT' && url.pathname === '/api/donation') {
+        const input = await readBody(req);
+        const saved = donationStore.saveDonation(input.settings || {});
+        console.log('[Dashboard] Pengaturan donasi global diperbarui');
+        return json(res, 200, { ok: true, settings: saved });
       }
       if (req.method === 'PUT' && url.pathname === '/api/boss-rewards') {
         const input = await readBody(req);

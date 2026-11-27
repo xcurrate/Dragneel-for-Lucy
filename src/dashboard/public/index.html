@@ -18,6 +18,7 @@
       <a class="nav" href="#lucy-counter">🔢 <span>Lucy Counter</span></a>
       <a class="nav" href="#family100">📺 <span>Family 100</span></a>
       <a class="nav" href="#boss-rewards">🎁 <span>Boss Reward Reminder</span></a>
+      <a class="nav" href="#donation">💖 <span>Donasi Global</span></a>
       <a class="nav" href="#notes">📝 <span>Notes</span></a>
       <a class="nav" href="#logs">▤ <span>System Logs</span></a>
       <div class="sidebar-bottom"><span class="live-dot"></span> Local runtime monitor <span class="muted">●</span></div>
@@ -106,6 +107,23 @@
             <div class="field"><label for="thread-prefix">AWALAN NAMA THREAD</label><input id="thread-prefix" maxlength="40" placeholder="Rep"><small>Nama thread menjadi awalan + nama pengirim.</small></div>
             <div class="field"><label for="archive-duration">AUTO-ARCHIVE</label><select id="archive-duration"><option value="60">1 jam</option><option value="1440">24 jam</option><option value="4320">3 hari</option><option value="10080">7 hari</option></select><small>Durasi arsip otomatis thread.</small></div>
           </div>
+        </section>
+        <section class="panel" id="donation">
+          <div class="panel-heading"><div><div class="eyebrow">CATEGORY 06 / GLOBAL SUPPORT</div><h2>💖 Donasi Global</h2><p>Konfigurasi ini berlaku untuk semua server. Tracking nominal dilakukan manual; tidak ada daftar donatur atau role otomatis.</p></div><label class="switch"><input id="donation-enabled" type="checkbox"><span></span></label></div>
+          <div class="form-grid">
+            <div class="field"><label for="donation-title">JUDUL</label><input id="donation-title" maxlength="100" placeholder="💖 Dukung Dragneel"><small>Maksimal 100 karakter.</small></div>
+            <div class="field"><label for="donation-description">DESKRIPSI</label><textarea id="donation-description" maxlength="2000" rows="5" placeholder="Ceritakan singkat untuk apa donasi dipakai…"></textarea><small>Maksimal 2000 karakter.</small></div>
+            <div class="field"><label for="donation-saweria">LINK SAWERIA</label><input id="donation-saweria" type="url" placeholder="https://saweria.co/..."><small>Kosongkan jika tidak dipakai.</small></div>
+            <div class="field"><label for="donation-trakteer">LINK TRAKTEER</label><input id="donation-trakteer" type="url" placeholder="https://trakteer.id/..."><small>Kosongkan jika tidak dipakai.</small></div>
+            <div class="field"><label for="donation-kofi">LINK KO-FI</label><input id="donation-kofi" type="url" placeholder="https://ko-fi.com/..."><small>Kosongkan jika tidak dipakai.</small></div>
+            <div class="field"><label for="donation-paypal">LINK PAYPAL</label><input id="donation-paypal" type="url" placeholder="https://paypal.me/..."><small>Kosongkan jika tidak dipakai.</small></div>
+            <div class="field"><label for="donation-qris">LINK QRIS</label><input id="donation-qris" type="url" placeholder="https://..."><small>Tombol QRIS. Kosongkan jika tidak dipakai.</small></div>
+            <div class="field"><label for="donation-qris-image">URL GAMBAR QRIS</label><input id="donation-qris-image" type="url" placeholder="https://.../qris.png"><small>Opsional; ditampilkan sebagai gambar di embed.</small></div>
+            <div class="field"><label for="donation-goal">TARGET DONASI (IDR)</label><input id="donation-goal" type="number" min="0" step="1" value="0"><small>0 = tanpa progress bar.</small></div>
+            <div class="field"><label for="donation-collected">TOTAL TERCATAT (IDR)</label><input id="donation-collected" type="number" min="0" step="1" value="0"><small>Perbarui manual setelah donasi masuk.</small></div>
+          </div>
+          <div class="savebar"><span>Berlaku global untuk semua server.</span><button id="donation-save" class="primary">Simpan pengaturan donasi <span>→</span></button></div>
+          <span id="donation-status" role="status" aria-live="polite"></span>
         </section>
         <section class="panel" id="notes">
           <div class="panel-heading"><div><div class="eyebrow">CATEGORY 05 / CATATAN</div><h2>📝 Notes</h2><p>Catatan bebas per server, tersimpan lokal di dashboard.</p></div></div>

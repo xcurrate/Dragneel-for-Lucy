@@ -160,6 +160,7 @@ const PAGES = {
           `\`${prefix} prefix [nilai]\` — lihat/ubah prefix server (admin)`,
           '/prefix [nilai] — padanan slash command (admin)',
           `\`${prefix} help\` — panduan ini (alias: \`${prefix}\`)`,
+          `\`${prefix} donasi\` — cara mendukung Dragneel`,
           `\`${prefix} dex <nama>\` — Animal Dex`,
         ].join('\n'),
       },

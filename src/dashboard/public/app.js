@@ -51,6 +51,63 @@ function renderSettings(settings) {
   $('rep-state').textContent = rep.enabled ? 'Aktif' : 'Nonaktif';
   $('rep-detail').textContent = rep.channelId ? 'Channel: ' + ($('rep-channel-id').selectedOptions[0]?.textContent || rep.channelId) : 'Channel belum dipilih';
 }
+function setDonationStatus(message, bad = false) {
+  const box = $('donation-status');
+  box.textContent = message || '';
+  box.style.color = bad ? '#ff7777' : '';
+}
+function renderDonation(settings) {
+  $('donation-enabled').checked = Boolean(settings.enabled);
+  $('donation-title').value = settings.title || '';
+  $('donation-description').value = settings.description || '';
+  $('donation-saweria').value = settings.links?.saweria || '';
+  $('donation-trakteer').value = settings.links?.trakteer || '';
+  $('donation-kofi').value = settings.links?.kofi || '';
+  $('donation-paypal').value = settings.links?.paypal || '';
+  $('donation-qris').value = settings.links?.qris || '';
+  $('donation-qris-image').value = settings.qrisImageUrl || '';
+  $('donation-goal').value = Number(settings.goal || 0);
+  $('donation-collected').value = Number(settings.collected || 0);
+}
+function collectDonation() {
+  return {
+    enabled: $('donation-enabled').checked,
+    title: $('donation-title').value.trim(),
+    description: $('donation-description').value.trim(),
+    links: {
+      saweria: $('donation-saweria').value.trim(),
+      trakteer: $('donation-trakteer').value.trim(),
+      kofi: $('donation-kofi').value.trim(),
+      paypal: $('donation-paypal').value.trim(),
+      qris: $('donation-qris').value.trim()
+    },
+    qrisImageUrl: $('donation-qris-image').value.trim(),
+    goal: Number($('donation-goal').value || 0),
+    collected: Number($('donation-collected').value || 0)
+  };
+}
+async function saveDonation() {
+  $('donation-save').disabled = true;
+  try {
+    const data = await api('/api/donation', { method: 'PUT', body: JSON.stringify({ settings: collectDonation() }) });
+    renderDonation(data.settings);
+    setDonationStatus('Pengaturan donasi global tersimpan.');
+  } catch (error) {
+    setDonationStatus(error.message, true);
+  } finally {
+    $('donation-save').disabled = false;
+  }
+}
+async function loadDonation() {
+  setDonationStatus('Memuat pengaturan donasi…');
+  try {
+    const data = await api('/api/donation');
+    renderDonation(data.settings);
+    setDonationStatus('');
+  } catch (error) {
+    setDonationStatus(error.message, true);
+  }
+}
 function renderBossRewards(settings) {
   $('reward-enabled').checked = Boolean(settings.enabled);
   $('reward-channel').value = settings.channelId || '';
@@ -351,6 +408,7 @@ async function openDashboard(token) {
     select.replaceChildren();
     for (const guild of data.guilds) select.add(new Option(guild.name, guild.id));
     await loadGuild(select.value);
+    await loadDonation();
     select.addEventListener('change', () => loadGuild(select.value).catch(e => setStatus(e.message, true)));
     pollLogs(); setInterval(pollLogs, 2500);
   } catch (error) {
@@ -381,6 +439,7 @@ async function boot() {
 }
 $('save').addEventListener('click', saveSettings);
 $('reward-save').addEventListener('click', saveBossRewards);
+$('donation-save').addEventListener('click', saveDonation);
 $('note-save').addEventListener('click', saveNote);
 $('note-cancel').addEventListener('click', () => { resetNoteForm(); setNoteStatus(''); });
 $('clear-logs').addEventListener('click', () => { logRows = []; renderLogs(); });

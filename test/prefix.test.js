@@ -187,7 +187,7 @@ describe('prefix command handler', () => {
     const fields = deps.calls[0].embeds[0].data.fields;
     assert.deepStrictEqual(
       fields.map(f => f.name),
-      ['🐉 Boss Tracker', '🐾 Tim & Battle', '🎮 Game & Dex', '💬 Lucy & Reminder', '🛠️ Utilitas'],
+      ['🐉 Boss Tracker', '🐾 Tim & Battle', '🎮 Game & Dex', '💬 Lucy & Reminder', '🛠️ Utilitas', '💖 Dukungan'],
     );
     assert.ok(fields.every(f => f.value.split('\n').length <= 4), 'tiap kategori tetap ringkas');
     assert.ok(fields.some(f => f.value.includes('`d team help`')), 'detail tim ditautkan');
