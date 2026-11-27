@@ -15,7 +15,7 @@ const dexStore = require('../utils/animalDexStorage');
 const { randomSeed } = require('./battleRng');
 
 const DEFAULT_TEMPLATE = '60 lizard pdagger gslay, 60 void2 pdagger gslay, 60 ellie crune dc';
-const MAX_TEMPLATES = 4;
+const MAX_TEMPLATES = 10;
 const TEMPLATE_RUNS = 10;
 const MAX_TEMPLATE_UNITS = 3;
 const GLOBAL_KEY = '__global__';
