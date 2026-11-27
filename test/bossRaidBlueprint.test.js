@@ -107,6 +107,40 @@ test('perintah sim raid membaca gambar dari lampiran', async t => {
   assert.match(sent.data.description, /-eboss/);
 });
 
+test('perintah sim raid membaca gambar dari components pesan Lucy', async t => {
+  const originalFetch = global.fetch;
+  const image = fixture('ringkas.png');
+  global.fetch = async () => ({ ok: true, arrayBuffer: async () => image });
+  t.after(() => { global.fetch = originalFetch; });
+
+  const boss = {
+    id: 'boss-1',
+    components: [{
+      type: 17,
+      components: [
+        { type: 10, content: '## Guild Boss Telah Muncul!' },
+        { type: 12, items: [{ media: { url: 'https://cdn.test/raid.png' } }] },
+        { type: 10, content: '## Hadiah' },
+        { type: 12, items: [{ media: { url: 'https://cdn.test/reward.png' } }] },
+      ],
+    }],
+    attachments: new Map(),
+  };
+  const message = {
+    author: { id: 'user-1' },
+    attachments: new Map(),
+    reference: { messageId: 'boss-1' },
+    channel: { messages: { fetch: async () => boss } },
+  };
+  let sent = null;
+  await handleRaidBlueprint(message, [], 'd', {
+    sendEmbed: (_message, embed) => { sent = embed; },
+    isDeveloper: () => true,
+  });
+  assert.ok(sent);
+  assert.match(sent.data.description, /28 \?\? poison dagger/);
+});
+
 test('perintah sim raid meminta gambar', async t => {
   let sent = null;
   await handleRaidBlueprint({

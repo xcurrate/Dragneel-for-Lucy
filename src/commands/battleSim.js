@@ -25,7 +25,7 @@ const {
 const { commandHelpEmbed } = require('../ui/commandHelp');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
-const { parseBossRaidImage, buildBossBlueprint } = require('../services/bossRaidBlueprint');
+const { parseBossRaidImage, buildBossBlueprint, findRaidImageUrl } = require('../services/bossRaidBlueprint');
 
 // Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
 // dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
@@ -1046,20 +1046,14 @@ function handleGlobalLimitCommand(message, args, prefix, deps = {}) {
   return send(message, usageEmbed('⚙️ Batas Simulasi Global', describe()));
 }
 
-function isImageAttachment(attachment) {
-  if (!attachment) return false;
-  if (String(attachment.contentType || '').startsWith('image/')) return true;
-  return /\.(png|jpe?g|webp)$/i.test(attachment.name || '');
-}
-
 async function raidImageFromMessage(message) {
-  const own = [...(message.attachments?.values?.() || [])].find(isImageAttachment);
+  const own = findRaidImageUrl(message);
   if (own) return own;
   const reference = message.reference;
   if (!reference?.messageId || !message.channel?.messages?.fetch) return null;
   try {
     const target = await message.channel.messages.fetch(reference.messageId);
-    return [...(target.attachments?.values?.() || [])].find(isImageAttachment) || null;
+    return findRaidImageUrl(target);
   } catch {
     return null;
   }
@@ -1096,7 +1090,7 @@ async function handleRaidBlueprint(message, args, prefix, deps = {}) {
 
   let result;
   try {
-    const response = await fetch(image.url);
+    const response = await fetch(image);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     result = await parseBossRaidImage(Buffer.from(await response.arrayBuffer()));
   } catch (error) {

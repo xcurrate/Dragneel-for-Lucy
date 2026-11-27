@@ -16,6 +16,7 @@ const family100 = require('./services/family100');
 const mathRace = require('./services/mathRace');
 const lucyReminder = require('./services/lucyReminder');
 const bossRewards = require('./services/bossRewardNotifications');
+const bossRaidAuto = require('./services/bossRaidAuto');
 const animalDex = require('./services/animalDex');
 const battleEmoji = require('./services/battleEmoji');
 const reminders = require('./services/reminders');
@@ -113,6 +114,7 @@ client.on(Events.MessageCreate, async message => {
   reminders.handleMessage(message).catch(e => console.error('[Reminders]', e));
   tracker.handleMessage(message).catch(console.error);
   bossRewards.enqueue(message);
+  bossRaidAuto.handleMessage(message).catch(e => console.error('[BossRaidAuto]', e));
   captureAnimalDex(message);
   lucyTeamImport.prepareLucyTeamMessage(message).catch(e => console.error('[LucyTeamImport] prepare:', e));
   huntbotCalc.autoReact(message).catch(e => console.error('[HuntBotCalc] react:', e));
@@ -144,6 +146,7 @@ client.on(Events.MessageUpdate, async (_old, message) => {
     if (message.partial) message = await message.fetch();
     await tracker.handleMessage(message);
     bossRewards.enqueue(message);
+    bossRaidAuto.handleMessage(message).catch(e => console.error('[BossRaidAuto]', e));
     captureAnimalDex(message);
     huntbotCalc.autoReact(message).catch(e => console.error('[HuntBotCalc] update react:', e));
   } catch (e) { console.error('[MessageUpdate]', e.message); }

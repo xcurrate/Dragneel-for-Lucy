@@ -447,6 +447,63 @@ async function readCard(image, layout, index) {
   };
 }
 
+function rawMessage(message) {
+  return typeof message?.toJSON === 'function' ? message.toJSON() : message;
+}
+
+function collectImageUrls(value, out, seen) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const child of value) collectImageUrls(child, out, seen);
+    return;
+  }
+  if (Number(value.type) === 12) {
+    for (const item of value.items || []) {
+      const url = item?.media?.url;
+      if (typeof url === 'string') out.push(url);
+    }
+    if (typeof value.media?.url === 'string') out.push(value.media.url);
+  }
+  if (typeof value.image?.url === 'string') out.push(value.image.url);
+  if (typeof value.thumbnail?.url === 'string') out.push(value.thumbnail.url);
+  for (const [key, child] of Object.entries(value)) {
+    if (['media', 'url', 'proxy_url', 'image', 'thumbnail'].includes(key)) continue;
+    collectImageUrls(child, out, seen);
+  }
+}
+
+function attachmentsOf(message, raw) {
+  if (message?.attachments?.values) return [...message.attachments.values()];
+  return Array.isArray(raw?.attachments) ? raw.attachments : [];
+}
+
+// Pesan boss Lucy memakai Components V2, bukan attachment biasa. Ambil gambar
+// raid dari media gallery/embed; kalau media memakai attachment://, ganti
+// dengan URL attachment aslinya.
+function findRaidImageUrl(message) {
+  const raw = rawMessage(message);
+  const urls = [];
+  collectImageUrls(raw?.components, urls, new Set());
+  collectImageUrls(raw?.embeds, urls, new Set());
+  const attachments = attachmentsOf(message, raw);
+  for (const attachment of attachments) {
+    if (isImageAttachment(attachment) && typeof attachment.url === 'string') urls.push(attachment.url);
+  }
+  const resolved = urls.map(url => {
+    if (!url.startsWith('attachment://')) return url;
+    const name = url.slice('attachment://'.length);
+    return attachments.find(attachment => attachment.name === name)?.url || null;
+  }).filter(Boolean);
+  return resolved.find(url => /(?:raid|boss)/i.test(url)) || resolved[0] || null;
+}
+
+function isImageAttachment(attachment) {
+  if (!attachment) return false;
+  if (String(attachment.contentType || '').startsWith('image/')) return true;
+  return /\.(png|jpe?g|webp)$/i.test(attachment.name || '');
+}
+
 async function parseBossRaidImage(input) {
   const buffer = Buffer.isBuffer(input) ? input : fs.readFileSync(input);
   let image;
@@ -513,6 +570,7 @@ async function closeBossOcrWorker() {
 module.exports = {
   parseBossRaidImage,
   buildBossBlueprint,
+  findRaidImageUrl,
   matchIcon,
   closeBossOcrWorker,
   layouts,
