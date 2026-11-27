@@ -63,7 +63,11 @@ function tokenize(input) {
   // level unit baru, bukan quality ketiga.
   for (let i = 0; i < tokens.length - 1; i++) {
     const split = /^(\d+(?:\s*,\s*\d+)*),\s*(\d+)$/.exec(tokens[i]);
-    if (!split || !findAnimal(tokens[i + 1])) continue;
+    // Hanya hewan exact yang boleh memicu pemisahan; pencarian longgar bisa
+    // salah menganggap alias pasif (mis. `dc`) sebagai hewan.
+    const next = tokens[i + 1];
+    const nextAnimal = next ? (data.findAnimal(next) || dexStore.resolveAnimal(next)) : null;
+    if (!split || !nextAnimal) continue;
     tokens.splice(i, 1, split[1], ',', split[2]);
     i += 2;
   }

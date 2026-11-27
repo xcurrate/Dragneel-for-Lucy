@@ -51,10 +51,17 @@ function slotIcon(entry) {
   const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
   const parts = [emoji.animalEmoji(animal)];
   if (entry.weaponId) {
-    parts.push(emoji.rankEmoji(entry.weaponQuality ?? data.DEFAULT_QUALITY));
-    parts.push(emoji.weaponEmoji(entry.weaponId, entry.weaponQuality));
+    const rank = qualityRank(entry.weaponQuality);
+    parts.push(emoji.rankEmoji(rank));
+    parts.push(emoji.weaponEmoji(entry.weaponId, rank));
   }
-  for (const id of entry.passives || []) parts.push(emoji.passiveEmoji(id, entry.weaponQuality));
+  for (const raw of entry.passives || []) {
+    const id = raw && typeof raw === 'object' ? raw.id : raw;
+    const passiveQuality = raw && typeof raw === 'object' && raw.quality != null
+      ? raw.quality
+      : qualityRank(entry.weaponQuality);
+    parts.push(emoji.passiveEmoji(id, passiveQuality));
+  }
   return parts.join('');
 }
 
@@ -101,7 +108,11 @@ function weaponLine(entry) {
   const icons = [
     emoji.rankEmoji(rank),
     emoji.weaponEmoji(entry.weaponId, rank),
-    ...(entry.passives || []).map(id => emoji.passiveEmoji(id, rank)),
+    ...(entry.passives || []).map(raw => {
+      const id = raw && typeof raw === 'object' ? raw.id : raw;
+      const passiveQuality = raw && typeof raw === 'object' && raw.quality != null ? raw.quality : rank;
+      return emoji.passiveEmoji(id, passiveQuality);
+    }),
   ].join('');
   return `${icons} ${qualityText(quality)}`;
 }

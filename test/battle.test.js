@@ -1858,6 +1858,30 @@ describe('dtm s memasang senjata ke slot', () => {
     assert.ok(bad.includes('0-2 pasif'), bad);
   });
 
+  it('dtm s crune 100,100,85 dc 3 menyimpan quality senjata', () => {
+    run('add', '3', STATS, 'level=80');
+    const text = run('s', 'crune', '100,100,85', 'dc', '3');
+    assert.ok(!text.includes('❌'), text);
+    assert.strictEqual(slotOf(3).weaponId, 18, 'crune = Rune of Celebration');
+    assert.deepStrictEqual(slotOf(3).weaponQuality, [100, 100, 85]);
+    assert.deepStrictEqual(slotOf(3).passives, [13], 'dc = Discharge');
+  });
+
+  it('dtm s crune 100,100,85 dc 50 2 menyimpan quality pasif', () => {
+    const text = run('s', 'crune', '100,100,85', 'dc', '50', '2');
+    assert.ok(!text.includes('❌'), text);
+    assert.deepStrictEqual(slotOf(2).weaponQuality, [100, 100, 85]);
+    assert.deepStrictEqual(slotOf(2).passives, [{ id: 13, quality: 50 }]);
+  });
+
+  it('parser inline menerima quality senjata diikuti pasif dc', () => {
+    const parsed = require(path.join(ROOT, 'src/utils/simParser'))
+      .parseInlineSide('snail crune 100,100,85 dc', { prefix: 'd' });
+    assert.equal(parsed.error, undefined, parsed.error);
+    assert.deepStrictEqual(parsed.specs[0].weapon.quality, [100, 100, 85]);
+    assert.deepStrictEqual(parsed.specs[0].weapon.passives, [{ id: 13 }]);
+  });
+
   it('dtm s sword crit 2 memasang senjata + pasif ke slot 2', () => {
     run('s', 'sword', 'crit', '2');
     assert.strictEqual(slotOf(2).weaponId, 1);

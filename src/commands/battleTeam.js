@@ -47,7 +47,7 @@ function usageSections(prefix = 'd') {
       name: '🧩 Slot & Senjata',
       value: [
         `\`${prefix} team add <slot> <hewan|stat> [opsi]\` — isi slot 1-3`,
-        `\`${prefix}tm s <senjata> [pasif] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s sword crit 2\``,
+        `\`${prefix}tm s <senjata> [quality] [pasif [quality]] [slot]\` — pasang/ganti senjata, mis. \`${prefix}tm s crune 100,100,85 dc 3\``,
         `\`${prefix} team clear <slot>\` — kosongkan slot`,
         `\`${prefix} team swap <slot1> <slot2>\` — tukar posisi pet di tim aktif`,
       ].join('\n'),
@@ -97,18 +97,31 @@ function parseOptions(args) {
   return { options, rest };
 }
 
-// `dtm s <senjata> [pasif...] [slot]`
-// Argumen terakhir yang berupa angka 1..3 adalah nomor slot; sisanya adalah
-// nama senjata (kata pertama) dan pasif (kata berikutnya). Karena itu
-// `dtm s gsword 2` memasang ke slot 2, sedangkan `dtm s gsword 2` tanpa slot
-// dianggap slot 1 bila tidak ada angka di akhir.
+const NUMBER = /^\d+$/;
+const NUMBER_LIST = /^\d+(?:\s*,\s*\d+)+$/;
+
+function parseQualityToken(token) {
+  const values = String(token).split(',').map(value => Number(value.trim()));
+  if (!values.length || values.some(value => !Number.isFinite(value) || value < 0 || value > 100)) {
+    return { error: `Quality \`${token}\` harus angka 0-100.` };
+  }
+  return { quality: values.length === 1 ? values[0] : values };
+}
+
+function passiveIdOf(passive) {
+  return passive && typeof passive === 'object' ? passive.id : passive;
+}
+
+// `dtm s <senjata> [quality] [pasif [quality]] [slot]`
+// Contoh: `dtm s crune 100,100,85 dc 3` memasang Rune of Celebration
+// quality 100,100,85 + Discharge ke slot 3.
 function parseWeaponArgs(args, prefix = 'd') {
   const tokens = args.map(a => String(a).trim()).filter(Boolean);
   if (!tokens.length) return { error: 'Sebutkan senjatanya.' };
 
   let slot = 1;
   const last = tokens[tokens.length - 1];
-  if (/^\d+$/.test(last)) {
+  if (NUMBER.test(last)) {
     const n = Number(last);
     if (n < 1 || n > store.MAX_SLOTS) {
       return { error: `Slot harus 1-${store.MAX_SLOTS}.` };
@@ -122,24 +135,48 @@ function parseWeaponArgs(args, prefix = 'd') {
   const weapon = parseWeapon(weaponQuery);
   if (weapon.error) return { error: weapon.error };
 
+  let weaponQuality = null;
+  if (tokens.length && (NUMBER.test(tokens[0]) || NUMBER_LIST.test(tokens[0]))) {
+    const parsed = parseQualityToken(tokens.shift());
+    if (parsed.error) return { error: parsed.error };
+    weaponQuality = parsed.quality;
+  }
+
   const passives = [];
-  for (const token of tokens) {
+  while (tokens.length) {
+    const token = tokens.shift();
+    let id;
     // `passive=12` tetap diterima supaya id numerik bisa dipakai langsung.
     const byId = /^passive=(\d+)$/i.exec(token);
-    if (byId) { passives.push(Number(byId[1])); continue; }
-    const found = passiveData.get(token);
-    if (found) { passives.push(found.id); continue; }
-    const pendingPassive = passiveData.findPending(token);
-    if (pendingPassive) {
-      return { error: `Pasif **${pendingPassive.name}** belum punya mekanik simulasi.` };
+    if (byId) {
+      id = Number(byId[1]);
+    } else {
+      const found = passiveData.get(token);
+      if (found) {
+        id = found.id;
+      } else {
+        const pendingPassive = passiveData.findPending(token);
+        if (pendingPassive) {
+          return { error: `Pasif **${pendingPassive.name}** belum punya mekanik simulasi.` };
+        }
+        return { error: `Pasif \`${token}\` tidak dikenal. Contoh: ${passiveNames()}.` };
+      }
     }
-    return { error: `Pasif \`${token}\` tidak dikenal. Contoh: ${passiveNames()}.` };
+
+    let quality = null;
+    if (tokens.length && (NUMBER.test(tokens[0]) || NUMBER_LIST.test(tokens[0]))) {
+      const parsed = parseQualityToken(tokens.shift());
+      if (parsed.error) return { error: parsed.error };
+      quality = parsed.quality;
+    }
+    passives.push(quality == null ? id : { id, quality });
   }
+
   const weaponDef = data.weapons().find(w => w.id === weapon.weaponId);
-  const countError = validatePassiveCount(weaponDef, passives, prefix);
+  const countError = validatePassiveCount(weaponDef, passives.map(passiveIdOf), prefix);
   if (countError) return { error: countError };
 
-  return { slot, weaponId: weapon.weaponId, passives };
+  return { slot, weaponId: weapon.weaponId, weaponQuality, passives };
 }
 
 // Senjata punya `passiveCount` pasif bawaan dan kini boleh ditambah sampai
@@ -456,7 +493,7 @@ function handleAdd(message, rest, prefix, send, userId) {
     (weapon.weaponId ? ` + ${data.weapons().find(w => w.id === weapon.weaponId).name}` : '') + '.');
 }
 
-// `dtm s <senjata> [pasif...] [slot]`
+// `dtm s <senjata> [quality] [pasif [quality]] [slot]`
 function handleWeaponCommand(message, rest, prefix, send, userId) {
   const team = store.getActiveTeam(userId);
   if (!team) {
@@ -469,9 +506,10 @@ function handleWeaponCommand(message, rest, prefix, send, userId) {
   }
 
   const weapon = data.weapons().find(w => w.id === parsed.weaponId);
+  const passiveIds = parsed.passives.map(passiveIdOf);
   // Pasif yang diminta harus didukung; kalau tidak, senjata tetap dipasang
   // dengan pasif roll seperti biasa supaya user tidak kehilangan progres.
-  const unsupported = parsed.passives.filter(id => !passiveData.hasMechanic(id));
+  const unsupported = passiveIds.filter(id => !passiveData.hasMechanic(id));
   if (unsupported.length) {
     const names = unsupported.map(id => passiveData.get(id)?.name || `#${id}`).join(', ');
     return say(send, message, `❌ Pasif ${names} belum punya mekanik simulasi. Pakai salah satu: ${passiveNames()}.`);
@@ -482,17 +520,26 @@ function handleWeaponCommand(message, rest, prefix, send, userId) {
   const previous = team.slots.find(x => x.slot === parsed.slot);
   const result = store.setWeapon(userId, team.name, parsed.slot, {
     weaponId: parsed.weaponId,
-    weaponQuality: previous?.weaponQuality ?? null,
+    weaponQuality: parsed.weaponQuality ?? previous?.weaponQuality ?? null,
     passives: parsed.passives.length ? parsed.passives : null,
   });
   if (result.error) return say(send, message, `❌ ${result.error}`);
 
   const slot = result.team.slots.find(x => x.slot === parsed.slot);
   const quality = slot.weaponQuality ?? data.DEFAULT_QUALITY;
-  const icon = emoji.weaponEmoji(parsed.weaponId, quality);
-  const rank = emoji.rankEmoji(quality);
+  const rankQuality = Array.isArray(quality)
+    ? Math.round(quality.reduce((sum, value) => sum + Number(value || 0), 0) / quality.length)
+    : quality;
+  const icon = emoji.weaponEmoji(parsed.weaponId, rankQuality);
+  const rank = emoji.rankEmoji(rankQuality);
   const passiveText = parsed.passives.length
-    ? parsed.passives.map(id => `${emoji.passiveEmoji(id, quality)} ${passiveData.get(id).name}`).join(', ')
+    ? parsed.passives.map(passive => {
+      const id = passiveIdOf(passive);
+      const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
+        ? passive.quality
+        : rankQuality;
+      return `${emoji.passiveEmoji(id, passiveQuality)} ${passiveData.get(id).name}`;
+    }).join(', ')
     : 'tanpa pasif (senjata ini memang tidak punya pasif)';
 
   return say(send, message, `✅ Slot ${parsed.slot} tim **${team.name}**: ${rank}${icon} **${weapon.name}**\n` +
