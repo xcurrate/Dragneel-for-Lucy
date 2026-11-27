@@ -15,8 +15,8 @@ const categories = require('./reminderCategories');
 const SCHEMA_VERSION = '3';
 
 // Huruf/angka tanpa karakter rancu (0/O, 1/I/L) supaya ID mudah dibaca ulang.
-// Panjang 5 karakter sesuai spesifikasi inventory; prefiks T-/C-/R- menjaga
-// tiga jenis ID tetap tidak tertukar.
+// Panjang 5 karakter sesuai spesifikasi inventory; prefiks T/C menjaga dua jenis
+// kode tetap tidak tertukar. Format lama T-/C-/R- tetap dibaca.
 const ID_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const ID_LENGTH = 5;
 
@@ -28,27 +28,44 @@ function paths() {
   return { dir, dbFile: path.join(dir, 'reminders.db') };
 }
 
-// ID pendek berprefiks supaya tiga jenis ID tidak tertukar saat dibaca manusia:
-// T- = template, C- = claim (award), R- = reminder milik user.
+// Dua jenis kode baru: T = template, C = claim/redeem. Kode C dipakai ulang
+// sebagai ID reminder setelah redeem, jadi tidak ada kode R baru. ID lama
+// berformat R- masih diterima agar data yang sudah beredar tetap bisa dibuka.
 function shortId(length = ID_LENGTH) {
   const bytes = crypto.randomBytes(length);
   let out = '';
   for (let i = 0; i < length; i++) out += ID_ALPHABET[bytes[i] % ID_ALPHABET.length];
   return out;
 }
-function newTemplateId() { return 'T-' + shortId(); }
-function newClaimId() { return 'C-' + shortId(); }
-function newReminderId() { return 'R-' + shortId(); }
+function newTemplateId() { return 'T' + shortId(); }
+function newClaimId() { return 'C' + shortId(); }
+function newReminderId() { return 'C' + shortId(); }
 
 const ID_PATTERNS = {
-  template: /^T-[A-Z0-9]{4,16}$/,
-  claim: /^C-[A-Z0-9]{4,16}$/,
-  reminder: /^R-[A-Z0-9]{4,16}$/
+  template: /^T-?[A-Z0-9]{4,16}$/,
+  claim: /^C-?[A-Z0-9]{4,16}$/,
+  reminder: /^(?:R|C)-?[A-Z0-9]{4,16}$/
 };
 function isValidTemplateId(value) { return ID_PATTERNS.template.test(String(value || '').trim().toUpperCase()); }
 function isValidClaimId(value) { return ID_PATTERNS.claim.test(String(value || '').trim().toUpperCase()); }
 function isValidReminderId(value) { return ID_PATTERNS.reminder.test(String(value || '').trim().toUpperCase()); }
 function normalizeId(value) { return String(value || '').trim().toUpperCase(); }
+// Kode baru tidak memakai tanda hubung. Saat membaca, terima juga bentuk lama
+// `C-ABC12`/`R-ABC12` supaya kode yang sudah dikirim tetap berfungsi.
+function idCandidates(value) {
+  const raw = normalizeId(value);
+  const bare = raw.replace(/-/g, '');
+  const dashed = bare.length > 1 ? bare[0] + '-' + bare.slice(1) : bare;
+  return [...new Set([raw, bare, dashed].filter(Boolean))];
+}
+function findRow(table, column, value) {
+  const database = getDb();
+  for (const id of idCandidates(value)) {
+    const row = database.prepare('SELECT * FROM ' + table + ' WHERE ' + column + ' = ?').get(id);
+    if (row) return row;
+  }
+  return null;
+}
 // Discord snowflake: 17-20 digit. Divalidasi sebelum dipakai sebagai kunci DB.
 function isValidUserId(value) { return /^\d{17,20}$/.test(String(value || '').trim()); }
 
@@ -308,7 +325,7 @@ function createTemplate({ name, message, embed = null, collectible = null, metad
 }
 
 function getTemplate(templateId) {
-  return rowToTemplate(getDb().prepare('SELECT * FROM reminder_templates WHERE template_id = ?').get(normalizeId(templateId)));
+  return rowToTemplate(findRow('reminder_templates', 'template_id', templateId));
 }
 
 function listTemplates({ includeUnavailable = false } = {}) {
@@ -319,7 +336,9 @@ function listTemplates({ includeUnavailable = false } = {}) {
 }
 
 function setTemplateAvailable(templateId, available, actorId = null) {
-  const id = normalizeId(templateId);
+  const template = getTemplate(templateId);
+  if (!template) return false;
+  const id = template.templateId;
   const result = getDb().prepare('UPDATE reminder_templates SET available = ? WHERE template_id = ?').run(available ? 1 : 0, id);
   if (result.changes === 0) return false;
   addAudit({ action: 'template_availability', templateId: id, actorId, detail: { available: Boolean(available) } });
@@ -380,7 +399,7 @@ function createAward({ templateId, recipientId, issuerId = null, source = 'manua
 }
 
 function getAward(claimId) {
-  return rowToAward(getDb().prepare('SELECT * FROM reminder_awards WHERE claim_id = ?').get(normalizeId(claimId)));
+  return rowToAward(findRow('reminder_awards', 'claim_id', claimId));
 }
 
 function listAwards({ recipientId = null, status = null, limit = 50 } = {}) {
@@ -395,7 +414,9 @@ function listAwards({ recipientId = null, status = null, limit = 50 } = {}) {
 }
 
 function revokeAward({ claimId, actorId = null, now = Date.now() }) {
-  const id = normalizeId(claimId);
+  const existing = getAward(claimId);
+  if (!existing) return null;
+  const id = existing.claimId;
   const result = getDb().prepare(
     "UPDATE reminder_awards SET status = 'revoked', revoked_at = ? WHERE claim_id = ? AND status = 'pending'"
   ).run(now, id);
@@ -408,7 +429,9 @@ function revokeAward({ claimId, actorId = null, now = Date.now() }) {
 // (status masih 'pending' + milik penerima + belum kedaluwarsa), lalu `changes`
 // dipakai untuk memastikan tidak ada klaim ganda.
 function markAwardRedeemed({ claimId, recipientId, reminderId, now = Date.now() }) {
-  const id = normalizeId(claimId);
+  const existing = getAward(claimId);
+  if (!existing) return false;
+  const id = existing.claimId;
   const result = getDb().prepare(`
     UPDATE reminder_awards
        SET status = 'redeemed', redeemed_at = ?, reminder_id = ?
@@ -441,24 +464,32 @@ function rowToReminder(row) {
   };
 }
 
-function createReminder({ ownerId, templateId, message, embed = null, collectible = null, active = false, now = Date.now(), category = 'PRAY_CURSE', format = 'NORMAL', name = null, shareable = false }) {
+function createReminder({ reminderId = null, ownerId, templateId, message, embed = null, collectible = null, active = false, now = Date.now(), category = 'PRAY_CURSE', format = 'NORMAL', name = null, shareable = false }) {
   const database = getDb();
-  const reminderId = insertWithUniqueId(
-    newReminderId,
-    id => Boolean(database.prepare('SELECT 1 FROM reminders WHERE reminder_id = ?').get(id)),
-    id => database.prepare(`
-      INSERT INTO reminders (reminder_id, owner_id, template_id, category, format, name, message, embed_json, collectible, active, shareable, created_at, updated_at, activated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, ownerId, templateId, category, format, name, message, embed ? JSON.stringify(embed) : null, collectible,
-      active ? 1 : 0, shareable ? 1 : 0, now, now, active ? now : null
-    )
+  const insert = id => database.prepare(`
+    INSERT INTO reminders (reminder_id, owner_id, template_id, category, format, name, message, embed_json, collectible, active, shareable, created_at, updated_at, activated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    id, ownerId, templateId, category, format, name, message, embed ? JSON.stringify(embed) : null, collectible,
+    active ? 1 : 0, shareable ? 1 : 0, now, now, active ? now : null
   );
-  addAudit({ action: 'reminder_create', reminderId, templateId, actorId: ownerId, toUserId: ownerId, detail: { category, format }, at: now });
-  return getReminder(reminderId);
+  let id;
+  if (reminderId) {
+    id = normalizeId(reminderId);
+    if (database.prepare('SELECT 1 FROM reminders WHERE reminder_id = ?').get(id)) throw new Error('REMINDER_ID_TAKEN');
+    insert(id);
+  } else {
+    id = insertWithUniqueId(
+      newReminderId,
+      candidate => Boolean(database.prepare('SELECT 1 FROM reminders WHERE reminder_id = ?').get(candidate)),
+      insert
+    );
+  }
+  addAudit({ action: 'reminder_create', reminderId: id, templateId, actorId: ownerId, toUserId: ownerId, detail: { category, format }, at: now });
+  return getReminder(id);
 }
 
 function getReminder(reminderId) {
-  return rowToReminder(getDb().prepare('SELECT * FROM reminders WHERE reminder_id = ?').get(normalizeId(reminderId)));
+  return rowToReminder(findRow('reminders', 'reminder_id', reminderId));
 }
 
 function listRemindersByOwner(ownerId, { activeOnly = false } = {}) {
@@ -475,7 +506,9 @@ function listAllActive() {
 // Pembaruan field secara terarah. Field yang tidak disebut tidak disentuh, jadi
 // pemilik tidak bisa menghapus kolom lain lewat perintah tunggal.
 function updateReminder(reminderId, fields, { now = Date.now() } = {}) {
-  const id = normalizeId(reminderId);
+  const existing = getReminder(reminderId);
+  if (!existing) return null;
+  const id = existing.reminderId;
   const sets = [];
   const params = [];
   const map = {
@@ -508,7 +541,9 @@ function updateReminder(reminderId, fields, { now = Date.now() } = {}) {
 }
 
 function transferReminder({ reminderId, fromUserId, toUserId, actorId = null, now = Date.now() }) {
-  const id = normalizeId(reminderId);
+  const existing = getReminder(reminderId);
+  if (!existing) return null;
+  const id = existing.reminderId;
   const result = getDb().prepare(
     'UPDATE reminders SET owner_id = ?, updated_at = ? WHERE reminder_id = ? AND owner_id = ?'
   ).run(toUserId, now, id, fromUserId);
@@ -524,9 +559,9 @@ function transferReminder({ reminderId, fromUserId, toUserId, actorId = null, no
 // konfirmasi) atau null bila tidak ada / bukan miliknya. Award yang sudah
 // diklaim tetap disimpan sebagai riwayat; hanya baris reminder-nya yang hilang.
 function deleteReminder({ reminderId, ownerId, actorId = null, now = Date.now() }) {
-  const id = normalizeId(reminderId);
-  const existing = getReminder(id);
+  const existing = getReminder(reminderId);
   if (!existing) return null;
+  const id = existing.reminderId;
   if (ownerId && existing.ownerId !== ownerId) return null;
   const result = getDb().prepare('DELETE FROM reminders WHERE reminder_id = ? AND owner_id = ?').run(id, existing.ownerId);
   if (result.changes === 0) return null;

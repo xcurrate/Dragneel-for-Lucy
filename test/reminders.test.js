@@ -94,7 +94,7 @@ function dmText(message) {
 }
 
 function idOf(message, prefix) {
-  const match = textOf(message).match(new RegExp('`(' + prefix + '-[A-Z0-9]+)`'));
+  const match = textOf(message).match(new RegExp('`(' + prefix + '-?[A-Z0-9]+)`'));
   return match ? match[1] : null;
 }
 
@@ -115,7 +115,7 @@ async function awardAndRedeem(recipientId = '111222333444555666') {
   const claimId = idOf(give, 'C');
   const redeem = makeMessage('d r redeem ' + claimId, { userId: recipientId });
   await svc().handleMessage(redeem);
-  return { templateId, claimId, reminderId: idOf(redeem, 'R'), give, redeem };
+  return { templateId, claimId, reminderId: idOf(redeem, 'C'), give, redeem };
 }
 
 describe('custom reminder — prefix resolution', () => {
@@ -674,21 +674,48 @@ describe('custom reminder — storage schema and IDs', () => {
     store.getDb();
     assert.ok(store.SCHEMA_VERSION);
     assert.equal(store.isValidTemplateId('T-ABC123'), true);
+    assert.equal(store.isValidTemplateId('TABC12'), true);
     assert.equal(store.isValidTemplateId('R-ABC123'), false);
     assert.equal(store.isValidClaimId('C-ABC123'), true);
+    assert.equal(store.isValidClaimId('CABC12'), true);
     assert.equal(store.isValidReminderId('R-ABC123'), true);
+    assert.equal(store.isValidReminderId('RABC12'), true);
+    assert.equal(store.isValidReminderId('CABC12'), true);
     assert.equal(store.isValidReminderId('X-ABC123'), false);
     assert.equal(store.isValidUserId('123'), false);
     assert.equal(store.isValidUserId('111222333444555666'), true);
   });
 
-  it('keeps template, claim and reminder IDs distinct', async () => {
+  it('keeps template and claim/reminder IDs distinct', async () => {
     const { templateId, claimId, reminderId } = await awardAndRedeem();
-    assert.match(templateId, /^T-/);
-    assert.match(claimId, /^C-/);
-    assert.match(reminderId, /^R-/);
+    assert.match(templateId, /^T[A-Z0-9]{5}$/);
+    assert.match(claimId, /^C[A-Z0-9]{5}$/);
+    assert.match(reminderId, /^C[A-Z0-9]{5}$/);
+    assert.doesNotMatch(templateId, /-/, 'kode baru tanpa tanda hubung');
+    assert.doesNotMatch(claimId, /-/, 'kode baru tanpa tanda hubung');
     assert.notEqual(templateId, claimId);
-    assert.notEqual(claimId, reminderId);
+    assert.equal(claimId, reminderId, 'kode claim dipakai ulang sebagai ID reminder');
+  });
+
+  it('tetap membaca ID reminder lama berformat R-', () => {
+    const store = storage();
+    store.createReminder({
+      reminderId: 'R-ABCDE', ownerId: '111222333444555666', templateId: 'T-LEGACY',
+      message: 'lama', active: false,
+    });
+    assert.equal(store.getReminder('R-ABCDE').reminderId, 'R-ABCDE');
+    assert.equal(store.getReminder('RABCDE').reminderId, 'R-ABCDE', 'tanpa tanda hubung tetap bisa');
+  });
+
+  it('perintah enable tetap bisa memakai ID lama R-', async () => {
+    const store = storage();
+    store.createReminder({
+      reminderId: 'R-ABCDE', ownerId: '111222333444555666', templateId: 'T-LEGACY',
+      message: 'lama', active: false,
+    });
+    const message = makeMessage('d r enable RABCDE', { userId: '111222333444555666' });
+    await svc().handleMessage(message);
+    assert.equal(store.getReminder('R-ABCDE').active, true);
   });
 
   it('persists templates across a restart', async () => {
@@ -759,7 +786,7 @@ describe('custom reminder — categories, formats and six combinations', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
     assert.equal(storage().getReminder(reminderId).category, 'HUNT_BATTLE');
     assert.equal(storage().getReminder(reminderId).format, 'EMBED');
 
@@ -900,7 +927,7 @@ describe('custom reminder — resolution precedence and fallback', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
     await svc().handleMessage(redeem);
-    await svc().handleMessage(makeMessage('d r enable ' + idOf(redeem, 'R'), { userId: '111222333444555666' }));
+    await svc().handleMessage(makeMessage('d r enable ' + idOf(redeem, 'C'), { userId: '111222333444555666' }));
 
     assert.equal(resolve().resolveForAction({ guildId: 'guild1', userId: '111222333444555666', action: 'pray' }).source, 'owned');
     // Kategori lain tidak terpengaruh.
@@ -915,7 +942,7 @@ describe('custom reminder — resolution precedence and fallback', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
     await svc().handleMessage(redeem);
-    const secondId = idOf(redeem, 'R');
+    const secondId = idOf(redeem, 'C');
 
     await svc().handleMessage(makeMessage('d r enable ' + first.reminderId, { userId: '111222333444555666' }));
     await svc().handleMessage(makeMessage('d r enable ' + secondId, { userId: '111222333444555666' }));
@@ -1012,7 +1039,7 @@ describe('custom reminder — shareable and transfer rules', () => {
     const text = JSON.stringify(inventory.sent.at(-1).embeds[0].data);
     assert.match(text, new RegExp(reminderId));
     assert.ok(!text.includes(templateId), 'template ID tidak muncul di inventory');
-    assert.ok(!text.includes(claimId), 'claim ID tidak muncul di inventory');
+    assert.equal(reminderId, claimId, 'claim ID sekarang menjadi ID reminder');
   });
 });
 
@@ -1093,7 +1120,7 @@ describe('custom reminder — engine integration (no second scheduler)', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: '111222333444555666' });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
     await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: '111222333444555666' }));
     require('../src/utils/lucyActionStorage').setPref('111222333444555666', 'lucy', { enabled: true, pingMode: 'none' });
 
@@ -1296,7 +1323,7 @@ describe('custom reminder — revisi: counter off, discohook, panel, create ring
     await svc().handleMessage(message);
     const text = textOf(message);
     assert.match(text, /Template Dibuat/);
-    const code = (text.match(/`(T-[A-Z0-9]+)`/) || [])[1];
+    const code = (text.match(/`(T-?[A-Z0-9]+)`/) || [])[1];
     assert.ok(code, 'bot membalas kode template');
     const template = storage().getTemplate(code);
     assert.equal(template.category, 'HUNT_BATTLE', 'battle dipetakan ke HUNT_BATTLE');
@@ -1309,7 +1336,7 @@ describe('custom reminder — revisi: counter off, discohook, panel, create ring
     for (const [input, expected] of [['pray', 'PRAY_CURSE'], ['lucy', 'LUCY'], ['hunt', 'HUNT_BATTLE']]) {
       const message = makeMessage('d r create ' + input + ' normal', { userId: 'dev1', dev: true });
       await svc().handleMessage(message);
-      const code = (textOf(message).match(/`(T-[A-Z0-9]+)`/) || [])[1];
+      const code = (textOf(message).match(/`(T-?[A-Z0-9]+)`/) || [])[1];
       assert.ok(code, input + ' dibuat');
       assert.equal(storage().getTemplate(code).category, expected, input + ' -> ' + expected);
     }
@@ -1365,7 +1392,7 @@ describe('custom reminder — tag, duplikat, dan jam harian WIB', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: owner });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
 
     await svc().handleMessage(makeMessage('d r update ' + reminderId + ' {mention} jangan lupa battle!', { userId: owner }));
     await svc().handleMessage(makeMessage('d r embed ' + reminderId + ' {"title":"Battle Reminder","description":"{mention} jangan lupa battle!"}', { userId: owner }));
@@ -1409,7 +1436,7 @@ describe('custom reminder — tag, duplikat, dan jam harian WIB', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: owner });
     await svc().handleMessage(redeem);
-    await svc().handleMessage(makeMessage('d r enable ' + idOf(redeem, 'R'), { userId: owner }));
+    await svc().handleMessage(makeMessage('d r enable ' + idOf(redeem, 'C'), { userId: owner }));
 
     const engine = require('../src/services/lucyReminder');
     const prefStore = require('../src/utils/lucyActionStorage');
@@ -1453,7 +1480,7 @@ describe('custom reminder — tag tunggal dan token {mention} di embed', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: owner });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
     await svc().handleMessage(makeMessage('d r update ' + reminderId + ' {mention} jangan lupa battle!', { userId: owner }));
     await svc().handleMessage(makeMessage('d r embed ' + reminderId + ' {"title":"Battle Reminder","description":"{mention} jangan lupa battle!"}', { userId: owner }));
     await svc().handleMessage(makeMessage('d r enable ' + reminderId, { userId: owner }));
@@ -1671,7 +1698,7 @@ describe('custom reminder — aturan berbagi per format', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: OWNER });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
     assert.equal(storage().getReminder(reminderId).format, 'EMBED');
 
     // Menyalakan shareable ditolak.
@@ -1694,7 +1721,7 @@ describe('custom reminder — aturan berbagi per format', () => {
     await svc().handleMessage(give);
     const redeem = makeMessage('d r redeem ' + idOf(give, 'C'), { userId: OWNER });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
 
     storage().updateReminder(reminderId, { shareable: true });
     const send = makeMessage('d r send <@' + TARGET + '> ' + reminderId, { userId: OWNER });
@@ -1894,7 +1921,7 @@ describe('custom reminder — give satu langkah (satu kode)', () => {
     assert.equal(idOf(give, 'T'), null, 'kode template tidak ditampilkan ke developer');
     assert.equal(give.dms.length, 1, 'DM terkirim ke penerima');
     assert.match(dmText(give), new RegExp(claimId));
-    assert.match(dmText(give), /langsung aktif/i);
+    assert.doesNotMatch(dmText(give), /langsung aktif/i);
 
     const award = storage().getAward(claimId);
     assert.equal(award.recipientId, '111222333444555666');
@@ -1903,24 +1930,24 @@ describe('custom reminder — give satu langkah (satu kode)', () => {
     assert.equal(template.category, 'HUNT_BATTLE');
     assert.equal(template.format, 'NORMAL');
     assert.equal(template.message, 'Halo {USER}, ayo battle!');
-    assert.equal(template.metadata.autoActivate, true);
+    assert.equal(template.metadata.autoActivate, undefined);
   });
 
-  it('penerima cukup redeem dan reminder langsung aktif', async () => {
+  it('redeem memakai kode yang sama dan reminder tidak otomatis aktif', async () => {
     const give = makeMessage('d r give <@111222333444555666> pray normal Halo {USER}, waktunya pray!', { userId: 'dev1', dev: true });
     await svc().handleMessage(give);
     const claimId = idOf(give, 'C');
 
     const redeem = makeMessage('d r redeem ' + claimId, { userId: '111222333444555666' });
     await svc().handleMessage(redeem);
-    const reminderId = idOf(redeem, 'R');
+    const reminderId = idOf(redeem, 'C');
     assert.ok(reminderId);
     const reminder = storage().getReminder(reminderId);
-    assert.equal(reminder.active, true);
-    assert.ok(reminder.activatedAt);
-    assert.match(textOf(redeem), /Diklaim & Aktif/);
-    assert.match(textOf(redeem), /Langsung aktif/);
-    assert.doesNotMatch(textOf(redeem), /r enable/);
+    assert.equal(reminder.active, false);
+    assert.equal(reminder.activatedAt, null);
+    assert.equal(reminderId, claimId, 'kode tidak berubah setelah redeem');
+    assert.match(textOf(redeem), /Reminder Diklaim/);
+    assert.match(textOf(redeem), /r enable/);
   });
 
   it('menerima embed JSON pada give satu langkah', async () => {
@@ -1932,8 +1959,8 @@ describe('custom reminder — give satu langkah (satu kode)', () => {
 
     const redeem = makeMessage('d r redeem ' + claimId, { userId: '111222333444555666' });
     await svc().handleMessage(redeem);
-    const reminder = storage().getReminder(idOf(redeem, 'R'));
-    assert.equal(reminder.active, true);
+    const reminder = storage().getReminder(idOf(redeem, 'C'));
+    assert.equal(reminder.active, false);
     assert.equal(reminder.embed.title, 'Battle Reminder');
   });
 
