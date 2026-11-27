@@ -40,6 +40,20 @@ test('template bawaan dipakai saat guild belum mengatur daftar', () => {
   assert.deepEqual(templates.templatesOf(GUILD), [templates.DEFAULT_TEMPLATE]);
 });
 
+test('template bersifat global lintas server', () => {
+  cleanup();
+  templates.addTemplate('guild-a', OTHER);
+  assert.deepEqual(templates.templatesOf('guild-b'), [templates.DEFAULT_TEMPLATE, OTHER]);
+  assert.deepEqual(templates.templatesOf('guild-c'), [templates.DEFAULT_TEMPLATE, OTHER]);
+});
+
+test('template per-server lama dimigrasi ke global', () => {
+  cleanup();
+  memory[GUILD] = { battleTemplates: [OTHER] };
+  assert.deepEqual(templates.templatesOf(GUILD), [OTHER]);
+  assert.deepEqual(templates.templatesOf('guild-lain'), [OTHER], 'sudah menjadi global');
+});
+
 test('template bisa ditambah, diganti, dihapus, dan direset', () => {
   cleanup();
   let result = templates.addTemplate(GUILD, OTHER);

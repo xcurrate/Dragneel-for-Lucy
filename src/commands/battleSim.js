@@ -123,7 +123,7 @@ function usageSections(prefix = 'd') {
     {
       name: '📋 Template',
       value: [
-        `\`${prefix} sim template\` — lihat template damage boss.`,
+        `\`${prefix} sim template\` — lihat template damage boss (global).`,
         `\`${prefix} sim template add <komposisi>\` — tambah template (maks ${bossTemplates.MAX_TEMPLATES}).`,
         `\`${prefix} sim template set <nomor> <komposisi>\` — ganti template.`,
         `\`${prefix} sim template remove <nomor>\` — hapus template.`,

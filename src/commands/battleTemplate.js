@@ -4,7 +4,7 @@ const { usageEmbed, errorEmbed, okEmbed } = require('../ui/battlePanel');
 
 function usage(prefix) {
   return [
-    `\`${prefix} sim template\` — lihat daftar template`,
+    `\`${prefix} sim template\` — lihat daftar template global`,
     `\`${prefix} sim template add <komposisi>\` — tambah template (maks ${templates.MAX_TEMPLATES})`,
     `\`${prefix} sim template set <nomor> <komposisi>\` — ganti template`,
     `\`${prefix} sim template remove <nomor>\` — hapus template`,
@@ -21,7 +21,7 @@ async function listEmbed(guildId) {
   const lines = list.length
     ? list.map(item => `${item.index}. ${item.display}`)
     : ['Belum ada template. Tambahkan dengan `sim template add`.'];
-  return usageEmbed('📋 Template Damage Boss', lines);
+  return usageEmbed('📋 Template Damage Boss (Global)', lines);
 }
 
 async function handleTemplateCommand(message, args, prefix, deps = {}) {
@@ -30,7 +30,7 @@ async function handleTemplateCommand(message, args, prefix, deps = {}) {
 
   const sub = (args[0] || 'list').toLowerCase();
   if (['help', 'bantuan'].includes(sub)) {
-    return send(message, usageEmbed('📋 Template Damage Boss', usage(prefix)));
+    return send(message, usageEmbed('📋 Template Damage Boss (Global)', usage(prefix)));
   }
   if (['list', 'daftar'].includes(sub)) {
     return send(message, await listEmbed(message.guildId));
@@ -73,7 +73,7 @@ async function handleTemplateCommand(message, args, prefix, deps = {}) {
     return send(message, okEmbed('✅ Template dikembalikan ke bawaan.'));
   }
 
-  return send(message, usageEmbed('📋 Template Damage Boss', usage(prefix)));
+  return send(message, usageEmbed('📋 Template Damage Boss (Global)', usage(prefix)));
 }
 
 module.exports = { handleTemplateCommand, usage };

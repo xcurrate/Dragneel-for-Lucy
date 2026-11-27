@@ -1,8 +1,9 @@
 // Template tim untuk mengukur damage terbaik melawan boss raid.
 //
-// Template disimpan per guild di `guild-settings.json`; template pertama
-// bawaan dipakai kalau guild belum pernah mengatur daftar. Setiap template
-// disimulasikan dengan seed yang sama agar peringkatnya adil.
+// Template bersifat global (dipakai semua server), bukan per guild. Data
+// disimpan di kunci khusus pada `guild-settings.json`; template pertama
+// bawaan dipakai kalau belum pernah diatur. Setiap template disimulasikan
+// dengan seed yang sama agar peringkatnya adil.
 const { getGuildSettings, updateGuildSettings } = require('../utils/storage');
 const simParser = require('../utils/simParser');
 const data = require('../data/owoBattle');
@@ -17,6 +18,7 @@ const DEFAULT_TEMPLATE = '60 lizard pdagger gslay, 60 void2 pdagger gslay, 60 el
 const MAX_TEMPLATES = 4;
 const TEMPLATE_RUNS = 10;
 const MAX_TEMPLATE_UNITS = 3;
+const GLOBAL_KEY = '__global__';
 
 
 // Adapter penyimpanan dipisah agar test tidak menulis guild-settings bersama.
@@ -28,17 +30,28 @@ function setTemplateStore(store) {
 }
 
 function templatesOf(guildId) {
-  const saved = templateStore.get(guildId).battleTemplates;
-  if (!Array.isArray(saved)) return [DEFAULT_TEMPLATE];
-  return saved.slice(0, MAX_TEMPLATES);
+  const saved = templateStore.get(GLOBAL_KEY).battleTemplates;
+  if (Array.isArray(saved)) return saved.slice(0, MAX_TEMPLATES);
+
+  // Migrasi sekali dari data per-server lama supaya template yang sudah
+  // diinput tidak hilang saat penyimpanan diubah menjadi global.
+  if (guildId && guildId !== GLOBAL_KEY) {
+    const legacy = templateStore.get(guildId).battleTemplates;
+    if (Array.isArray(legacy)) {
+      const list = legacy.slice(0, MAX_TEMPLATES);
+      templateStore.update(GLOBAL_KEY, settings => ({ ...settings, battleTemplates: list }));
+      return list;
+    }
+  }
+  return [DEFAULT_TEMPLATE];
 }
 
-function saveTemplates(guildId, list) {
-  templateStore.update(guildId, settings => ({
+function saveTemplates(list) {
+  templateStore.update(GLOBAL_KEY, settings => ({
     ...settings,
     battleTemplates: list.slice(0, MAX_TEMPLATES),
   }));
-  return templatesOf(guildId);
+  return templatesOf(GLOBAL_KEY);
 }
 
 function parseTemplate(text) {
@@ -119,7 +132,7 @@ function addTemplate(guildId, text) {
   if (current.length >= MAX_TEMPLATES) {
     return { error: `Maksimal ${MAX_TEMPLATES} template. Hapus salah satu dulu.` };
   }
-  return { templates: saveTemplates(guildId, [...current, text.trim()]) };
+  return { templates: saveTemplates([...current, text.trim()]) };
 }
 
 function setTemplate(guildId, index, text) {
@@ -131,7 +144,7 @@ function setTemplate(guildId, index, text) {
   }
   const next = current.slice();
   next[index - 1] = text.trim();
-  return { templates: saveTemplates(guildId, next) };
+  return { templates: saveTemplates(next) };
 }
 
 function removeTemplate(guildId, index) {
@@ -139,11 +152,11 @@ function removeTemplate(guildId, index) {
   if (!Number.isInteger(index) || index < 1 || index > current.length) {
     return { error: `Nomor template harus 1-${current.length}.` };
   }
-  return { templates: saveTemplates(guildId, current.filter((_, i) => i !== index - 1)) };
+  return { templates: saveTemplates(current.filter((_, i) => i !== index - 1)) };
 }
 
 function resetTemplates(guildId) {
-  return { templates: saveTemplates(guildId, [DEFAULT_TEMPLATE]) };
+  return { templates: saveTemplates([DEFAULT_TEMPLATE]) };
 }
 
 function formatDamageRange(damage) {
@@ -201,6 +214,7 @@ async function sectionForBlueprint(guildId, blueprint, options = {}) {
 module.exports = {
   DEFAULT_TEMPLATE,
   MAX_TEMPLATES,
+  GLOBAL_KEY,
   setTemplateStore,
   TEMPLATE_RUNS,
   templatesOf,
