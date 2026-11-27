@@ -3,10 +3,10 @@ const { getGuildSettings, DEFAULT_PREFIX } = require('../utils/storage');
 const {
   parseBossRaidImage,
   buildBossBlueprint,
-  blueprintText,
   findRaidImageUrl,
 } = require('./bossRaidBlueprint');
-const { createButtonRow } = require('./bossRaidCopy');
+const { createBlueprintPayload } = require('./bossRaidCopy');
+const bossTemplates = require('./bossTemplates');
 
 const processed = new Set();
 const inFlight = new Set();
@@ -79,14 +79,12 @@ async function handleMessage(message, deps = {}) {
     const prefix = (getGuildSettings(message.guildId).prefix || DEFAULT_PREFIX);
     const built = buildBossBlueprint(parsed.cards, { prefix });
     if (built.error) throw new Error(built.error);
-    const text = blueprintText(built, { title: 'Blueprint Boss Otomatis' });
-    const payload = {
-      content: text,
-      components: [createButtonRow(built.command)],
-      allowedMentions: { parse: [] },
-    };
+    const section = deps.templateSection
+      ? await deps.templateSection(built, { message, prefix })
+      : await bossTemplates.sectionForBlueprint(message.guildId, built.blueprint, { prefix });
+    const payload = createBlueprintPayload(built.command, section);
     if (deps.sendPayload) await deps.sendPayload(message, payload);
-    else if (deps.send) await deps.send(message, text);
+    else if (deps.send) await deps.send(message, section || '');
     else if (typeof message.reply === 'function') {
       await message.reply({ ...payload, allowedMentions: { parse: [], repliedUser: false } });
     } else {

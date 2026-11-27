@@ -336,7 +336,7 @@ function damageFieldName(runs = 1) {
 
 function duelEmbed(battle, {
   playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null, stats = null,
-  logUrl = null,
+  logUrl = null, showDamage = false,
 } = {}) {
   const { units, winner, turns, timeout } = battle;
   const color = winner === 'player' ? COLOR.ok : winner === 'enemy' ? COLOR.error : COLOR.tie;
@@ -360,17 +360,19 @@ function duelEmbed(battle, {
     ])
     .setFooter({ text: footer });
 
-  const damageSource = stats?.damage || battle.damage;
-  const damageRuns = stats?.damage ? (stats.runs || 1) : 1;
-  const damage = damageText(damageSource, damageRuns);
-  if (damage) embed.addFields({ name: damageFieldName(damageRuns), value: damage, inline: false });
+  if (showDamage) {
+    const damageSource = stats?.damage || battle.damage;
+    const damageRuns = stats?.damage ? (stats.runs || 1) : 1;
+    const damage = damageText(damageSource, damageRuns);
+    if (damage) embed.addFields({ name: damageFieldName(damageRuns), value: damage, inline: false });
+  }
   // Tautan log hanya ada bila `-log` dipakai DAN URL publik dashboard diisi.
   if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
   return embed;
 }
 
 function simEmbed(result, {
-  playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null, logUrl = null,
+  playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null, logUrl = null, showDamage = false,
 } = {}) {
   const { tally, runs } = result;
   const color = simColor(result.winRate, result.lossRate, result.tieRate);
@@ -400,8 +402,10 @@ function simEmbed(result, {
       inline: false,
     });
   }
-  const damage = damageText(result.damage, runs);
-  if (damage) fields.push({ name: damageFieldName(runs), value: damage, inline: false });
+  if (showDamage) {
+    const damage = damageText(result.damage, runs);
+    if (damage) fields.push({ name: damageFieldName(runs), value: damage, inline: false });
+  }
 
   const embed = new EmbedBuilder()
     .setColor(color)

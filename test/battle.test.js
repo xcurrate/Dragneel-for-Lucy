@@ -691,7 +691,7 @@ describe('embed UI', () => {
     assert.strictEqual(result.damage.total, result.damage.player + result.damage.enemy);
     assert.ok(result.damage.playerMin <= result.damage.playerMax);
     assert.ok(result.damage.enemyMin <= result.damage.enemyMax);
-    const field = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B' })
+    const field = panel.simEmbed(result, { playerLabel: 'A', enemyLabel: 'B', showDamage: true })
       .toJSON().fields.find(f => f.name.includes('Damage'));
     assert.ok(field, 'field damage ada');
     assert.match(field.value, /Kita: \*\*[\d.]+–[\d.]+\*\*\/pertarungan · total \*\*[\d.]+\*\*/);
@@ -731,16 +731,19 @@ describe('embed UI', () => {
       { runs: 20, seed: 5 }
     );
     const clean = panel.simEmbed(sweep, { playerLabel: 'A', enemyLabel: 'B' }).toJSON();
-    assert.strictEqual(clean.fields.length, 2, 'menang + damage; kalah/seri nol tidak ditampilkan');
-    assert.ok(clean.fields.some(f => f.name.includes('Damage')), 'damage tampil');
+    assert.strictEqual(clean.fields.length, 1, 'hanya hasil menang; damage tidak tampil di dsim biasa');
+    assert.ok(!clean.fields.some(f => f.name.includes('Damage')), 'damage disembunyikan');
 
     const mixed = panel.simEmbed(
       { ...sweep, tally: { player: 10, enemy: 6, tie: 4 }, winRate: 50, lossRate: 30, tieRate: 20 },
       { playerLabel: 'A', enemyLabel: 'B' }
     ).toJSON();
-    assert.strictEqual(mixed.fields.length, 4, 'menang, kalah, seri, dan damage tampil');
+    assert.strictEqual(mixed.fields.length, 3, 'menang, kalah, dan seri tampil');
     assert.ok(mixed.fields[1].name.includes('kalah'));
     assert.ok(mixed.fields[2].name.includes('seri'));
+
+    const boss = panel.simEmbed(sweep, { playerLabel: 'A', enemyLabel: 'B', showDamage: true }).toJSON();
+    assert.ok(boss.fields.some(f => f.name.includes('Damage')), 'damage tampil saat lawan boss');
   });
 
   it('renderMatchup memakai nama tim sebagai pemisah', () => {
@@ -941,6 +944,7 @@ describe('balasan command memakai embed', () => {
     assert.strictEqual(replies.length, 1);
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
     assert.ok(replies[0].fields.some(f => f.name.includes('menang')));
+    assert.ok(!replies[0].fields.some(f => f.name.includes('Damage')), 'dsim biasa tanpa damage');
   });
 
   it('d sim menerima stat final kartu raid dan -eboss', async () => {
@@ -956,6 +960,7 @@ describe('balasan command memakai embed', () => {
     assert.strictEqual(replies.length, 1);
     assert.ok(!JSON.stringify(replies[0]).includes('tidak dikenal'), JSON.stringify(replies[0]));
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
+    assert.ok(replies[0].fields.some(f => f.name.includes('Damage')), 'damage tampil untuk -eboss');
   });
 
   it('d sim panjang mengirim progres lalu menimpa dengan hasil akhir', async () => {
@@ -1015,7 +1020,7 @@ describe('balasan command memakai embed', () => {
     const fields = embed.fields || [];
     assert.deepStrictEqual(
       fields.map(f => f.name),
-      ['⚔️ Dasar', '🆚 Dua Sisi', '🌍 Global', '📊 Hasil', '🚩 Opsi', '🎯 Filter Hasil', '🖼️ Kartu Raid', '📈 Level'],
+      ['⚔️ Dasar', '🆚 Dua Sisi', '🌍 Global', '📊 Hasil', '🚩 Opsi', '🎯 Filter Hasil', '🖼️ Kartu Raid', '📋 Template', '📈 Level'],
     );
     assert.ok(fields.some(f => f.value.includes('`d sim <id>`')), 'baris utuh menyebut ID tim');
     assert.ok(fields.some(f => f.value.includes('`d sim raid`')), 'baris panduan kartu raid');

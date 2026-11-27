@@ -6,7 +6,9 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ContainerBuilder,
   MessageFlags,
+  TextDisplayBuilder,
 } = require('discord.js');
 
 const PREFIX = 'boss_raid_copy';
@@ -31,9 +33,27 @@ function createButtonRow(command) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`${PREFIX}:${token}`)
-      .setLabel('📋 Salin command')
+      .setLabel('Salin Command')
       .setStyle(ButtonStyle.Secondary)
   );
+}
+
+// Susun satu pesan: tombol Salin Command di atas, template damage di bawah.
+// Content biasa selalu dirender di atas action row, jadi urutan ini butuh
+// Components V2 (Container berisi ActionRow lalu TextDisplay).
+function createBlueprintPayload(command, section) {
+  const row = createButtonRow(command);
+  if (!section) {
+    return { components: [row], allowedMentions: { parse: [] } };
+  }
+  const container = new ContainerBuilder()
+    .addActionRowComponents(row)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(section));
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  };
 }
 
 function isCopyButton(customId) {
@@ -58,6 +78,7 @@ async function handleButton(interaction) {
 
 module.exports = {
   createButtonRow,
+  createBlueprintPayload,
   isCopyButton,
   handleButton,
   PREFIX,

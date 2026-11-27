@@ -25,8 +25,10 @@ const {
 const { commandHelpEmbed } = require('../ui/commandHelp');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
-const { parseBossRaidImage, buildBossBlueprint, blueprintText, findRaidImageUrl } = require('../services/bossRaidBlueprint');
-const { createButtonRow } = require('../services/bossRaidCopy');
+const { parseBossRaidImage, buildBossBlueprint, findRaidImageUrl } = require('../services/bossRaidBlueprint');
+const { createBlueprintPayload } = require('../services/bossRaidCopy');
+const bossTemplates = require('../services/bossTemplates');
+const { handleTemplateCommand } = require('./battleTemplate');
 
 // Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
 // dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
@@ -89,7 +91,7 @@ function usageSections(prefix = 'd') {
         `Dengan \`-m <jumlah>\` hasilnya statistik dari banyak pertarungan (default ${DEFAULT_RUNS}).`,
         `Tombol 🔁 mengulang matchup yang sama sebanyak ${DEFAULT_RUNS} pertarungan (ephemeral).`,
         `Rekap menang/seri/kalah ${DEFAULT_RUNS} pertarungan selalu tampil di footer.`,
-        'Damage kita dan lawan ditampilkan min–max per pertarungan, plus totalnya.',
+        'Saat lawan ditandai `-eboss`, damage kita/lawan tampil min–max per pertarungan.',
       ].join('\n'),
     },
     {
@@ -114,8 +116,18 @@ function usageSections(prefix = 'd') {
       name: '🖼️ Kartu Raid',
       value: [
         `\`${prefix} sim raid\` — balas gambar kartu boss/general; bot membaca senjata, pasif, dan stat final.`,
-        'Saat boss Lucy muncul, blueprint juga dikirim otomatis sebagai teks siap salin.',
+        'Saat boss Lucy muncul, blueprint juga dikirim otomatis lewat tombol Salin Command.',
         `Hasilnya dipakai sebagai lawan: \`${prefix} sim <timmu> vs <blueprint> -eboss\`.`,
+      ].join('\n'),
+    },
+    {
+      name: '📋 Template',
+      value: [
+        `\`${prefix} sim template\` — lihat template damage boss.`,
+        `\`${prefix} sim template add <komposisi>\` — tambah template (maks ${bossTemplates.MAX_TEMPLATES}).`,
+        `\`${prefix} sim template set <nomor> <komposisi>\` — ganti template.`,
+        `\`${prefix} sim template remove <nomor>\` — hapus template.`,
+        `\`${prefix} sim template reset\` — kembali ke template bawaan.`,
       ].join('\n'),
     },
     {
@@ -955,6 +967,7 @@ async function handleRepeatButton(i, deps = {}) {
   const embed = simEmbed(result, {
     ...entry.labels,
     matchup: renderMatchup(entry.playerSpecs, entry.enemySpecs, entry.labels),
+    showDamage: entry.showDamage,
   });
   return i.editReply({ embeds: [embed] });
 }
@@ -1098,13 +1111,12 @@ async function handleRaidBlueprint(message, args, prefix, deps = {}) {
   if (built.error) return sendEmbed(message, errorEmbed(built.error));
   if (!isDev) store.setCooldown(message.author.id, 'raid_blueprint', Date.now() + SIM_COOLDOWN_MS);
 
-  const payload = {
-    content: blueprintText(built, { title: '🖼️ Blueprint Kartu Raid' }),
-    components: [createButtonRow(built.command)],
-    allowedMentions: { parse: [] },
-  };
+  const section = deps.templateSection
+    ? await deps.templateSection(built, { message, prefix })
+    : await bossTemplates.sectionForBlueprint(message.guildId, built.blueprint, { prefix });
+  const payload = createBlueprintPayload(built.command, section);
   if (deps.sendPayload) return deps.sendPayload(message, payload);
-  if (deps.sendText) return deps.sendText(message, payload.content);
+  if (deps.sendText) return deps.sendText(message, section || 'Template belum tersedia.');
   return message.reply(payload);
 }
 
@@ -1124,6 +1136,9 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   // `d sim global` / `d sim g` — mode simulasi melawan semua tim tersimpan.
   const mode = (args[0] || '').toLowerCase();
+  if (['template', 'templates', 'templat'].includes(mode)) {
+    return handleTemplateCommand(message, args.slice(1), prefix, deps);
+  }
   if (['raid', 'boss', 'kartu', 'blueprint'].includes(mode)) {
     return handleRaidBlueprint(message, args.slice(1), prefix, deps);
   }
@@ -1309,6 +1324,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     // `-log` menyimpan jalannya pertarungan lalu menautkannya di embed.
     // Gagal menyimpan tidak boleh membatalkan hasil battle yang sudah dihitung:
     // embed tetap dikirim, hanya tautannya yang tidak muncul.
+    if (!flags.boss && battle.log) battle.log.damage = null;
     const logUrl = flags.log ? saveBattleLog(battle.log) : null;
     const embed = duelEmbed(battle, {
       ...labels,
@@ -1316,12 +1332,14 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       seed: seed != null ? Number(seed) : null,
       stats,
       logUrl,
+      showDamage: Boolean(flags.boss),
     });
     // Simpan spec-nya, bukan hasilnya: tombol harus menjalankan simulasi baru
     // (bukan memutar ulang hasil lama) supaya RNG tetap bergerak.
     const token = resultToken(seed != null ? Number(seed) : 1);
     rememberDuelResult(userId, token, {
       playerSpecs, enemySpecs, playerQuality, enemyQuality, labels,
+      showDamage: Boolean(flags.boss),
     });
     const payload = { embeds: [embed], components: [repeatButton(userId, token, DEFAULT_RUNS)] };
     if (deps.sendPayload) return deps.sendPayload(message, payload);
@@ -1367,6 +1385,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
     ...labels,
     matchup: renderMatchup(playerSpecs, enemySpecs, labels),
     logUrl,
+    showDamage: Boolean(flags.boss),
   });
 
   // Tombol 🔁 mengulang matchup yang sama sebanyak `DEFAULT_RUNS`. Spec
@@ -1374,6 +1393,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const token = resultToken(seed != null ? Number(seed) : 1);
   rememberDuelResult(userId, token, {
     playerSpecs, enemySpecs, playerQuality, enemyQuality, labels,
+    showDamage: Boolean(flags.boss),
   });
 
   return publishProgress.finish({

@@ -99,16 +99,22 @@ test('perintah sim raid membaca gambar dari lampiran', async t => {
     attachments: new Map([['a', { name: 'raid.png', contentType: 'image/png', url: 'https://example.test/raid.png' }]]),
   };
   await handleRaidBlueprint(message, [], 'd', {
+    templateSection: async () => '__**Template Penghasil Kerusakan Terbaik**__\n1. 🐾Lizard: **1.000–2.000** damage',
     sendPayload: (_message, payload) => { sent = payload; },
     isDeveloper: () => true,
   });
   assert.ok(sent);
-  assert.match(sent.content, /d sim <tim> vs 28 \?\? poison dagger/);
-  assert.match(sent.content, /-eboss/);
-  assert.doesNotMatch(sent.content, /```/, 'pakai inline code, bukan code block');
-  assert.match(sent.content, /`d sim <tim> vs 28 \?\? poison dagger[^`]*`/);
-  assert.doesNotMatch(sent.content, /Kartu 1/);
-  assert.ok(sent.components[0], 'tombol salin command');
+  assert.equal(sent.flags, 32768, 'Components V2');
+  const container = sent.components[0].toJSON();
+  assert.equal(container.type, 17);
+  const row = container.components[0];
+  const text = container.components[1];
+  assert.equal(row.type, 1, 'action row di atas');
+  assert.equal(row.components[0].label, 'Salin Command');
+  assert.equal(text.type, 10, 'template di bawah tombol');
+  assert.match(text.content, /Template Penghasil Kerusakan Terbaik/);
+  assert.doesNotMatch(text.content, /28 \?\? poison dagger/, 'blueprint tidak ditampilkan');
+  assert.doesNotMatch(text.content, /Kartu 1/);
 });
 
 test('perintah sim raid membaca gambar dari components pesan Lucy', async t => {
@@ -138,11 +144,13 @@ test('perintah sim raid membaca gambar dari components pesan Lucy', async t => {
   };
   let sent = null;
   await handleRaidBlueprint(message, [], 'd', {
+    templateSection: async () => '__**Template Penghasil Kerusakan Terbaik**__\n1. 🐾Lizard: **1.000–2.000** damage',
     sendText: (_message, text) => { sent = text; },
     isDeveloper: () => true,
   });
   assert.ok(sent);
-  assert.match(sent, /28 \?\? poison dagger/);
+  assert.match(sent, /Template Penghasil Kerusakan Terbaik/);
+  assert.doesNotMatch(sent, /28 \?\? poison dagger/, 'blueprint tidak ditampilkan');
 });
 
 test('perintah sim raid meminta gambar', async t => {

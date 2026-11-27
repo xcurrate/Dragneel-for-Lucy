@@ -50,16 +50,22 @@ test('otomatis mengirim blueprint sekali saat boss muncul', async () => {
   const result = await handleMessage(bossMessage('boss-3'), {
     lucyBotId: 'lucy',
     fetch: async () => ({ ok: true, arrayBuffer: async () => image }),
+    templateSection: async () => '__**Template Penghasil Kerusakan Terbaik**__\n1. 🐾Lizard Poison Dagger Giant Slayer: **1.000–2.000** damage',
     sendPayload: (_message, payload) => { sends++; sent = payload; },
   });
   assert.ok(result);
   assert.equal(sends, 1);
-  assert.match(sent.content, /28 \?\? poison dagger/);
-  assert.match(sent.content, /-eboss/);
-  assert.doesNotMatch(sent.content, /```/, 'pakai inline code, bukan code block');
-  assert.match(sent.content, /`d sim <tim> vs 28 \?\? poison dagger[^`]*`/);
-  assert.doesNotMatch(sent.content, /Kartu 1/);
-  assert.ok(sent.components[0], 'tombol salin command');
+  assert.equal(sent.flags, 32768, 'Components V2');
+  const container = sent.components[0].toJSON();
+  assert.equal(container.type, 17);
+  const row = container.components[0];
+  const text = container.components[1];
+  assert.equal(row.type, 1, 'action row di atas');
+  assert.equal(row.components[0].label, 'Salin Command');
+  assert.equal(text.type, 10, 'template di bawah tombol');
+  assert.match(text.content, /Template Penghasil Kerusakan Terbaik/);
+  assert.doesNotMatch(text.content, /28 \?\? poison dagger/, 'blueprint tidak ditampilkan');
+  assert.doesNotMatch(text.content, /Kartu 1/);
 
   const duplicate = await handleMessage(bossMessage('boss-3'), {
     lucyBotId: 'lucy',

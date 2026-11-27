@@ -192,6 +192,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
       sendText: _sendText,
       sendPayload: _send,
       isDeveloper: _isDeveloper,
+      isAdmin: _isAdmin,
     });
   }
 
