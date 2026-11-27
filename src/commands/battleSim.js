@@ -59,7 +59,7 @@ const SIM_COOLDOWN_ACTION = 'sim';
 const REPEAT_COOLDOWN_ACTION = 'sim_repeat';
 
 // Jumlah pertarungan saat `-m` tidak disebut, termasuk untuk tombol 🔁.
-const DEFAULT_RUNS = 10;
+const DEFAULT_RUNS = 50;
 
 function usageSections(prefix = 'd') {
   return [
@@ -1218,7 +1218,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // tombol 🔁 untuk mengulanginya sebanyak `DEFAULT_RUNS`. Dengan `-m N`
   // hasilnya statistik dari N pertarungan.
   // Dicek dari keberadaan flag, bukan nilainya: `-m` tanpa angka tetap berarti
-  // simulasi massal 10 pertarungan, bukan satu pertarungan.
+  // simulasi massal 50 pertarungan, bukan satu pertarungan.
   const singleBattle = !['-m', '-n', '-runs'].some(key => key in flags);
   const runs = flags['-m'] ?? flags['-n'] ?? flags['-runs'] ?? DEFAULT_RUNS;
   const runCount = Number(runs);

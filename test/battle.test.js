@@ -3358,13 +3358,13 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('default 10 pertarungan dipakai tombol 🔁', () => {
-    assert.strictEqual(DEFAULT_RUNS, 10);
+  it('default 50 pertarungan dipakai tombol 🔁', () => {
+    assert.strictEqual(DEFAULT_RUNS, 50);
   });
 
-  it('`-m` tanpa angka tetap berarti 10 pertarungan', async () => {
+  it('`-m` tanpa angka tetap berarti 50 pertarungan', async () => {
     const embed = await run(['-m']);
-    assert.ok(embed.footer.text.includes('10 simulasi'), embed.footer.text);
+    assert.ok(embed.footer.text.includes('50 simulasi'), embed.footer.text);
     assert.ok(!embed.fields.some(f => !f.name.includes('Damage') && f.value.includes('/')), 'agregat, bukan sisa HP/WP');
   });
 
@@ -3410,7 +3410,7 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     await handleSimCommand(message, [], 'd', { sendEmbed, sendPayload });
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
     // Hasil satu pertarungan: sisa HP/WP tiap unit, bukan statistik agregat.
-    // Footer memuat hasil pertarungan itu sekaligus rekap 10 pertarungan.
+    // Footer memuat hasil pertarungan itu sekaligus rekap 50 pertarungan.
     assert.match(replies[0].footer.text, /kamu (menang|kalah|seri) dalam \d+ turn/);
     // Footer embed tidak merender markdown; `**` akan tampil mentah di Discord.
     assert.ok(!/[*_`~]/.test(replies[0].footer.text), replies[0].footer.text);
@@ -3420,7 +3420,7 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
       'memuat sisa HP/WP per unit',
     );
     const button = lastPayload.components[0].toJSON().components[0];
-    assert.strictEqual(button.label, '10', 'label jumlah pertarungan');
+    assert.strictEqual(button.label, '50', 'label jumlah pertarungan');
     assert.ok(button.emoji.name === '🔁', 'emoji ulang');
     assert.ok(panel.isRepeatButton(button.custom_id), button.custom_id);
   });
@@ -3506,7 +3506,7 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     replies = [];
     handleLimitCommand(message, [], 'd', { sendEmbed, isDeveloper: () => false });
     assert.ok(replies[0].description.includes('200'));
-    assert.ok(replies[0].description.includes('10'));
+    assert.ok(replies[0].description.includes('50'));
   });
 
   it('d sim limit menolak angka tidak valid', async () => {
@@ -3518,11 +3518,11 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     }
   });
 
-  it('tombol 🔁 menjalankan 10 pertarungan secara ephemeral', async () => {
+  it('tombol 🔁 menjalankan 50 pertarungan secara ephemeral', async () => {
     lastPayload = null;
     replies = [];
     // `-m` supaya `d sim` sendiri tidak memakai jatah cooldown tombol 🔁.
-    await handleSimCommand(message, ['-m', '10'], 'd', { sendEmbed, sendPayload });
+    await handleSimCommand(message, ['-m', '50'], 'd', { sendEmbed, sendPayload });
     const customId = lastPayload.components[0].toJSON().components[0].custom_id;
 
     let replied = null;
@@ -3540,7 +3540,7 @@ describe('default, batas pertarungan, dan tombol ulang', () => {
     assert.ok(edited, 'hasil dikirim setelah defer');
     const json = edited.embeds[0].toJSON();
     assert.ok(json.title.includes('vs.'), json.title);
-    assert.ok(json.footer.text.includes('10 simulasi'), json.footer.text);
+    assert.ok(json.footer.text.includes('50 simulasi'), json.footer.text);
   });
 
   it('tombol 🔁 menolak pengguna lain dan token kedaluwarsa', async () => {
