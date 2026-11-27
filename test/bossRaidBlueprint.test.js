@@ -99,13 +99,14 @@ test('perintah sim raid membaca gambar dari lampiran', async t => {
     attachments: new Map([['a', { name: 'raid.png', contentType: 'image/png', url: 'https://example.test/raid.png' }]]),
   };
   await handleRaidBlueprint(message, [], 'd', {
-    sendText: (_message, text) => { sent = text; },
+    sendPayload: (_message, payload) => { sent = payload; },
     isDeveloper: () => true,
   });
   assert.ok(sent);
-  assert.match(sent, /d sim <tim> vs 28 \?\? poison dagger/);
-  assert.match(sent, /-eboss/);
-  assert.doesNotMatch(sent, /Kartu 1/);
+  assert.match(sent.content, /d sim <tim> vs 28 \?\? poison dagger/);
+  assert.match(sent.content, /-eboss/);
+  assert.doesNotMatch(sent.content, /Kartu 1/);
+  assert.ok(sent.components[0], 'tombol salin command');
 });
 
 test('perintah sim raid membaca gambar dari components pesan Lucy', async t => {

@@ -17,6 +17,7 @@ const mathRace = require('./services/mathRace');
 const lucyReminder = require('./services/lucyReminder');
 const bossRewards = require('./services/bossRewardNotifications');
 const bossRaidAuto = require('./services/bossRaidAuto');
+const bossRaidCopy = require('./services/bossRaidCopy');
 const animalDex = require('./services/animalDex');
 const battleEmoji = require('./services/battleEmoji');
 const reminders = require('./services/reminders');
@@ -155,6 +156,7 @@ client.on(Events.InteractionCreate, async i => {
   try {
     if (i.isChatInputCommand() && i.commandName === 'boss') { await command.execute(i, tracker); return; }
     if (i.isChatInputCommand() && i.commandName === 'prefix') { await serverPrefix.execute(i); return; }
+    if (i.isButton() && bossRaidCopy.isCopyButton(i.customId)) { await bossRaidCopy.handleButton(i); return; }
     if (i.isButton() && lucyCounter.isLucyNav(i.customId)) { await lucyCounter.handleNavigation(i); return; }
     if (i.isButton() && lucyReminder.isLeaderboardNav(i.customId)) { await lucyReminder.handleLeaderboardNav(i); return; }
     if (i.isButton() && family100.isF100Nav(i.customId)) { await family100.handleNavigation(i); return; }

@@ -6,6 +6,7 @@ const {
   blueprintText,
   findRaidImageUrl,
 } = require('./bossRaidBlueprint');
+const { createButtonRow } = require('./bossRaidCopy');
 
 const processed = new Set();
 const inFlight = new Set();
@@ -79,11 +80,17 @@ async function handleMessage(message, deps = {}) {
     const built = buildBossBlueprint(parsed.cards, { prefix });
     if (built.error) throw new Error(built.error);
     const text = blueprintText(built, { title: 'Blueprint Boss Otomatis' });
-    if (deps.send) await deps.send(message, text);
+    const payload = {
+      content: text,
+      components: [createButtonRow(built.command)],
+      allowedMentions: { parse: [] },
+    };
+    if (deps.sendPayload) await deps.sendPayload(message, payload);
+    else if (deps.send) await deps.send(message, text);
     else if (typeof message.reply === 'function') {
-      await message.reply({ content: text, allowedMentions: { parse: [], repliedUser: false } });
+      await message.reply({ ...payload, allowedMentions: { parse: [], repliedUser: false } });
     } else {
-      await message.channel.send({ content: text, allowedMentions: { parse: [] } });
+      await message.channel.send(payload);
     }
     remember(id);
     return { parsed, built };

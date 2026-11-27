@@ -26,6 +26,7 @@ const { commandHelpEmbed } = require('../ui/commandHelp');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
 const { parseBossRaidImage, buildBossBlueprint, blueprintText, findRaidImageUrl } = require('../services/bossRaidBlueprint');
+const { createButtonRow } = require('../services/bossRaidCopy');
 
 // Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
 // dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
@@ -1097,7 +1098,14 @@ async function handleRaidBlueprint(message, args, prefix, deps = {}) {
   if (built.error) return sendEmbed(message, errorEmbed(built.error));
   if (!isDev) store.setCooldown(message.author.id, 'raid_blueprint', Date.now() + SIM_COOLDOWN_MS);
 
-  return sendText(message, blueprintText(built, { title: '🖼️ Blueprint Kartu Raid' }));
+  const payload = {
+    content: blueprintText(built, { title: '🖼️ Blueprint Kartu Raid' }),
+    components: [createButtonRow(built.command)],
+    allowedMentions: { parse: [] },
+  };
+  if (deps.sendPayload) return deps.sendPayload(message, payload);
+  if (deps.sendText) return deps.sendText(message, payload.content);
+  return message.reply(payload);
 }
 
 async function handleSimCommand(message, args, prefix, deps = {}) {

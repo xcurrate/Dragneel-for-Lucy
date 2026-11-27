@@ -50,19 +50,20 @@ test('otomatis mengirim blueprint sekali saat boss muncul', async () => {
   const result = await handleMessage(bossMessage('boss-3'), {
     lucyBotId: 'lucy',
     fetch: async () => ({ ok: true, arrayBuffer: async () => image }),
-    send: (_message, text) => { sends++; sent = text; },
+    sendPayload: (_message, payload) => { sends++; sent = payload; },
   });
   assert.ok(result);
   assert.equal(sends, 1);
-  assert.match(sent, /28 \?\? poison dagger/);
-  assert.match(sent, /-eboss/);
-  assert.match(sent, /```/);
-  assert.doesNotMatch(sent, /Kartu 1/);
+  assert.match(sent.content, /28 \?\? poison dagger/);
+  assert.match(sent.content, /-eboss/);
+  assert.match(sent.content, /```/);
+  assert.doesNotMatch(sent.content, /Kartu 1/);
+  assert.ok(sent.components[0], 'tombol salin command');
 
   const duplicate = await handleMessage(bossMessage('boss-3'), {
     lucyBotId: 'lucy',
     fetch: async () => ({ ok: true, arrayBuffer: async () => image }),
-    send: () => { sends++; },
+    sendPayload: () => { sends++; },
   });
   assert.equal(duplicate, null);
   assert.equal(sends, 1);
