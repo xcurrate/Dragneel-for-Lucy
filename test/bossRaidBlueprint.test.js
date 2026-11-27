@@ -2,10 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { PNG } = require('pngjs');
 const {
   parseBossRaidImage,
   buildBossBlueprint,
   closeBossOcrWorker,
+  matchIcon,
 } = require('../src/services/bossRaidBlueprint');
 const { handleRaidBlueprint } = require('../src/commands/battleSim');
 const simParser = require('../src/utils/simParser');
@@ -91,6 +93,14 @@ test('blueprint bisa diparse oleh dsim', async t => {
   assert.deepEqual(inline.specs.map(spec => spec.animalRank), ['uncommon', 'rare', 'mythical']);
   assert.deepEqual(inline.specs.map(spec => spec.weapon.quality), [10, 96, 100]);
   assert.deepEqual(inline.specs.map(spec => spec.finalStats.hpCurrent), [80160, 98160, 94560]);
+});
+
+test('ikon Living Hive dari kartu raid dikenali sebagai Living Hive', () => {
+  const image = PNG.sync.read(fixture('passive-living-hive.png'));
+  const match = matchIcon(image, 'passive');
+  assert.equal(match.id, 25);
+  assert.equal(match.name, 'Living Hive');
+  assert.ok(match.margin > 0, 'punya jarak skor dari kandidat kedua');
 });
 
 test('Wounding Crossbow tersedia di fingerprint dan blueprint', () => {
