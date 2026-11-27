@@ -997,9 +997,10 @@ describe('balasan command memakai embed', () => {
     const fields = embed.fields || [];
     assert.deepStrictEqual(
       fields.map(f => f.name),
-      ['⚔️ Dasar', '🆚 Dua Sisi', '🌍 Global', '📊 Hasil', '🚩 Opsi', '🎯 Filter Hasil', '📈 Level'],
+      ['⚔️ Dasar', '🆚 Dua Sisi', '🌍 Global', '📊 Hasil', '🚩 Opsi', '🎯 Filter Hasil', '🖼️ Kartu Raid', '📈 Level'],
     );
     assert.ok(fields.some(f => f.value.includes('`d sim <id>`')), 'baris utuh menyebut ID tim');
+    assert.ok(fields.some(f => f.value.includes('`d sim raid`')), 'baris panduan kartu raid');
   });
 });
 

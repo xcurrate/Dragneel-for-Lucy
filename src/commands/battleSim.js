@@ -25,6 +25,7 @@ const {
 const { commandHelpEmbed } = require('../ui/commandHelp');
 const { parseOptions } = require('./battleTeam');
 const simParser = require('../utils/simParser');
+const { parseBossRaidImage, buildBossBlueprint } = require('../services/bossRaidBlueprint');
 
 // Tautan log dibuka di browser, bukan di Discord, jadi butuh URL publik
 // dashboard. Tanpa `BATTLE_LOG_BASE_URL` tautan tidak dibuat: menebak domain
@@ -105,6 +106,13 @@ function usageSections(prefix = 'd') {
         '`-win`, `-lose`, `-tie` — pertarungan diulang sampai hasilnya cocok, lalu hasil itu yang ditampilkan.',
         `Bisa digabung \`-m\`, mis. \`${prefix} sim 2 -lose -m 20\`.`,
         'Bisa juga digabung `-log`; dengan `-m`, log diambil dari pertarungan cocok pertama.',
+      ].join('\n'),
+    },
+    {
+      name: '🖼️ Kartu Raid',
+      value: [
+        `\`${prefix} sim raid\` — balas gambar kartu boss/general; bot membaca senjata, pasif, dan stat final.`,
+        `Hasilnya dipakai sebagai lawan: \`${prefix} sim <timmu> vs <blueprint> -eboss\`.`,
       ].join('\n'),
     },
     {
@@ -1038,6 +1046,79 @@ function handleGlobalLimitCommand(message, args, prefix, deps = {}) {
   return send(message, usageEmbed('⚙️ Batas Simulasi Global', describe()));
 }
 
+function isImageAttachment(attachment) {
+  if (!attachment) return false;
+  if (String(attachment.contentType || '').startsWith('image/')) return true;
+  return /\.(png|jpe?g|webp)$/i.test(attachment.name || '');
+}
+
+async function raidImageFromMessage(message) {
+  const own = [...(message.attachments?.values?.() || [])].find(isImageAttachment);
+  if (own) return own;
+  const reference = message.reference;
+  if (!reference?.messageId || !message.channel?.messages?.fetch) return null;
+  try {
+    const target = await message.channel.messages.fetch(reference.messageId);
+    return [...(target.attachments?.values?.() || [])].find(isImageAttachment) || null;
+  } catch {
+    return null;
+  }
+}
+
+function raidCardLines(card) {
+  const parts = [];
+  if (card.name) parts.push(card.name);
+  if (card.weapon) parts.push(card.weapon.name);
+  if (card.passives.length) parts.push(card.passives.map(passive => passive.name).join(', '));
+  if (card.stats) {
+    const s = card.stats;
+    parts.push(`HP ${s.hpCurrent}/${s.hpMax} · ATT ${s.att} · PR ${s.pr} · WP ${s.wp} · MAG ${s.mag} · MR ${s.mr}`);
+  }
+  return parts.join(' · ') || 'tidak terbaca';
+}
+
+async function handleRaidBlueprint(message, args, prefix, deps = {}) {
+  const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
+  if (['help', 'bantuan'].includes((args[0] || '').toLowerCase())) {
+    return send(message, usageEmbed('🖼️ Blueprint Kartu Raid', usageSections(prefix).find(section => section.name === '🖼️ Kartu Raid').value));
+  }
+  const image = await raidImageFromMessage(message);
+  if (!image) {
+    return send(message, errorEmbed('Kirim/balas gambar kartu raid OwO. Contoh: `d sim raid` sebagai balasan gambar boss.'));
+  }
+  const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  if (!isDev) {
+    const waiting = store.cooldownRemaining(message.author.id, 'raid_blueprint');
+    if (waiting > 0) {
+      return send(message, warnEmbed(`Tunggu ${(waiting / 1000).toFixed(1)} detik sebelum membaca kartu lagi.`));
+    }
+  }
+
+  let result;
+  try {
+    const response = await fetch(image.url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    result = await parseBossRaidImage(Buffer.from(await response.arrayBuffer()));
+  } catch (error) {
+    return send(message, errorEmbed(`Gagal membaca gambar: ${error.message}`));
+  }
+  if (result.error) return send(message, errorEmbed(result.error));
+  const built = buildBossBlueprint(result.cards, { prefix });
+  if (built.error) return send(message, errorEmbed(built.error));
+  if (!isDev) store.setCooldown(message.author.id, 'raid_blueprint', Date.now() + SIM_COOLDOWN_MS);
+
+  const embed = usageEmbed('🖼️ Blueprint Kartu Raid', [
+    `**Blueprint musuh**\n\`\`\`\n${built.blueprint}\n\`\`\``,
+    `**Jalankan**\n\`\`\`\n${built.command}\n\`\`\``,
+    'Ganti `<tim>` dengan timmu. `-eboss` menandai ketiga unit sebagai boss (Giant Slayer).',
+    ...(built.warnings.length ? [`⚠️ ${built.warnings.join('\n⚠️ ')}`] : []),
+  ].join('\n\n'));
+  for (const card of result.cards) {
+    embed.addFields({ name: `Kartu ${card.slot}`, value: raidCardLines(card).slice(0, 1024) });
+  }
+  return send(message, embed);
+}
+
 async function handleSimCommand(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const userId = message.author.id;
@@ -1054,6 +1135,9 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   // `d sim global` / `d sim g` — mode simulasi melawan semua tim tersimpan.
   const mode = (args[0] || '').toLowerCase();
+  if (['raid', 'boss', 'kartu', 'blueprint'].includes(mode)) {
+    return handleRaidBlueprint(message, args.slice(1), prefix, deps);
+  }
   if (['global', 'g'].includes(mode)) {
     const rest = args.slice(1);
     if (['help', 'bantuan'].includes((rest[0] || '').toLowerCase())) {
@@ -1401,7 +1485,7 @@ function resolveEnemy(userId, args, overrideLevel, prefix = 'd') {
 }
 
 module.exports = {
-  handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalLossPageButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
+  handleSimCommand, handleRaidBlueprint, handleGlobalSim, handleGlobalLossButton, handleGlobalLossPageButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
   handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
   parseFlags, applyEnemyOptions, resolveEnemy, resolveTeamSpecs, usage, usageSections, globalUsage, globalUsageSections, resolveRunCount,
