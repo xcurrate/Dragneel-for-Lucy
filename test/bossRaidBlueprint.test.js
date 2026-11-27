@@ -105,6 +105,8 @@ test('perintah sim raid membaca gambar dari lampiran', async t => {
   assert.ok(sent);
   assert.match(sent.content, /d sim <tim> vs 28 \?\? poison dagger/);
   assert.match(sent.content, /-eboss/);
+  assert.doesNotMatch(sent.content, /```/, 'pakai inline code, bukan code block');
+  assert.match(sent.content, /`d sim <tim> vs 28 \?\? poison dagger[^`]*`/);
   assert.doesNotMatch(sent.content, /Kartu 1/);
   assert.ok(sent.components[0], 'tombol salin command');
 });

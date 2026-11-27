@@ -13,8 +13,8 @@ test('tombol salin membawa customId dan command tersimpan', async () => {
     reply: async payload => { replied = payload; },
   });
   assert.equal(replied.flags, 64, 'ephemeral');
-  assert.match(replied.content, /d sim tim vs 1 \?\? poison dagger -eboss/);
-  assert.match(replied.content, /```/);
+  assert.match(replied.content, /^`d sim tim vs 1 \?\? poison dagger -eboss`$/);
+  assert.doesNotMatch(replied.content, /```/);
 });
 
 test('token tidak dikenal ditolak', async () => {

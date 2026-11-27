@@ -560,15 +560,14 @@ function buildBossBlueprint(cards, { prefix = 'd', player = '<tim>' } = {}) {
 }
 
 function blueprintText(built, { title = 'Blueprint siap salin' } = {}) {
+  // Inline code (satu backtick) bisa disentuh untuk langsung menyalin teks;
+  // code block tiga backtick tidak memberi perilaku itu di Discord mobile.
   return [
     `**${title}**`,
-    '```',
-    built.blueprint,
-    '```',
-    '**Command siap salin**',
-    '```',
-    built.command,
-    '```',
+    '**Blueprint**',
+    `\`${built.blueprint}\``,
+    '**Command**',
+    `\`${built.command}\``,
   ].join('\n');
 }
 

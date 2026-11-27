@@ -56,7 +56,8 @@ test('otomatis mengirim blueprint sekali saat boss muncul', async () => {
   assert.equal(sends, 1);
   assert.match(sent.content, /28 \?\? poison dagger/);
   assert.match(sent.content, /-eboss/);
-  assert.match(sent.content, /```/);
+  assert.doesNotMatch(sent.content, /```/, 'pakai inline code, bukan code block');
+  assert.match(sent.content, /`d sim <tim> vs 28 \?\? poison dagger[^`]*`/);
   assert.doesNotMatch(sent.content, /Kartu 1/);
   assert.ok(sent.components[0], 'tombol salin command');
 

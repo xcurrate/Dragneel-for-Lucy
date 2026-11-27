@@ -1,6 +1,6 @@
 // Tombol salin command blueprint. Discord tidak mengizinkan bot menulis ke
-// clipboard, jadi tombol mengirim command sebagai code block ephemeral: satu
-// klik lagi pada ikon copy di code block untuk menyalin.
+// clipboard, jadi tombol mengirim command sebagai inline code ephemeral:
+// sentuh teksnya untuk langsung menyalin.
 const crypto = require('node:crypto');
 const {
   ActionRowBuilder,
@@ -51,7 +51,7 @@ async function handleButton(interaction) {
     });
   }
   return interaction.reply({
-    content: `\`\`\`\n${entry.command}\n\`\`\``,
+    content: `\`${entry.command}\``,
     flags: MessageFlags.Ephemeral,
   });
 }
