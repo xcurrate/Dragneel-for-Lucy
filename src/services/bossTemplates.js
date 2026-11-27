@@ -8,6 +8,7 @@ const simParser = require('../utils/simParser');
 const data = require('../data/owoBattle');
 const sim = require('./battleSim');
 const emoji = require('./battleEmoji');
+const { averageQuality } = require('./battleWeapon');
 const animalDex = require('./animalDex');
 const dexStore = require('../utils/animalDexStorage');
 const { randomSeed } = require('./battleRng');
@@ -66,15 +67,18 @@ function formatSpec(spec) {
   // Emoji pet saja; nama hanya dipakai saat dex tidak punya emoji.
   const parts = [pet === '🐾' ? `🐾${name}` : pet];
   if (spec.weapon) {
-    const quality = Number.isFinite(Number(spec.weapon.quality))
-      ? Number(spec.weapon.quality)
-      : data.DEFAULT_QUALITY;
-    parts.push(emoji.rankEmoji(quality), emoji.weaponEmoji(spec.weapon.id, quality));
+    // Sama seperti mesin: quality senjata boleh berupa daftar (mis.
+    // `crune 100,100,85`), dan rank memakai rata-rata semua quality.
+    const quality = spec.weapon.quality ?? data.DEFAULT_QUALITY;
+    const rankQuality = averageQuality(quality, spec.weapon.passives);
+    parts.push(emoji.rankEmoji(rankQuality), emoji.weaponEmoji(spec.weapon.id, rankQuality));
     for (const passive of spec.weapon.passives || []) {
       const id = passive && typeof passive === 'object' ? passive.id : passive;
+      // Pasif tanpa quality mengikuti quality senjata; kalau quality senjata
+      // berupa daftar, mesin memakai default Fabled untuk pasif.
       const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
         ? passive.quality
-        : quality;
+        : (Array.isArray(quality) ? data.DEFAULT_QUALITY : quality);
       parts.push(emoji.passiveEmoji(id, passiveQuality));
     }
   }

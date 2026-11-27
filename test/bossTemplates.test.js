@@ -76,6 +76,13 @@ test('template ditampilkan dengan emoji dex atau fallback 🐾', () => {
   assert.match(display, / \+ /);
 });
 
+test('quality senjata dari template dipakai di tampilan rank', () => {
+  cleanup();
+  const display = templates.formatTemplate('60 ellie crune 100,100,85 dc');
+  assert.match(display, /<a:legendary:/, 'rank mengikuti rata-rata quality 100,100,85');
+  assert.doesNotMatch(display, /<a:fabled:/, 'bukan lagi Fabled');
+});
+
 test('simulasi template mengurutkan damage dan menampilkan min-max', async () => {
   cleanup();
   templates.addTemplate(GUILD, OTHER);
