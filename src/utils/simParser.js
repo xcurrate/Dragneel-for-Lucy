@@ -15,6 +15,7 @@ const NUMBER = /^\d+$/;
 const NUMBER_LIST = /^\d+(?:\s*,\s*\d+)+$/;
 const STAT_KEYS = ['hp', 'att', 'pr', 'wp', 'mag', 'mr'];
 const LEVEL_EQ = /^level=(\d+)$/i;
+const RANK_EQ = /^rank=(common|uncommon|rare|epic|legendary|mythical|fabled)$/i;
 const STAT_EQ = /^(hp|att|attack|pr|protection|wp|wisdom|mag|magic|mr)=/i;
 
 function fromDexAnimal(animal) {
@@ -183,6 +184,7 @@ function looksInline(input) {
   if (tokens.some(token => STAT_EQ.test(token))) return false;
   if (tokens.some(token => token.startsWith('~') || token === '??')) return true;
   if (tokens.some(token => parseCustomCoeffs(token))) return true;
+  if (tokens.some(token => RANK_EQ.test(token))) return true;
   if (tokens.length > 1 && (NUMBER.test(tokens[0]) || LEVEL_EQ.test(tokens[0]))) return true;
   if (tokens.length > 1 && findAnimal(tokens[0])) {
     const next = tokens[1];
@@ -202,21 +204,34 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
   const units = [];
   let current = null;
   let pending = null;
+  let animalRank = null;
   let i = 0;
 
   while (i < tokens.length) {
-    const token = tokens[i];
+    let token = tokens[i];
 
     if (token === ',') {
       if (!current) return { error: 'Koma tidak boleh di awal atau berurutan.' };
       units.push(current);
       current = null;
       pending = null;
+      animalRank = null;
       i++;
       continue;
     }
 
     if (!current) {
+      // Rank hewan opsional, mis. `rank=uncommon 39 rabbit ...` dari kartu raid.
+      const rankEq = RANK_EQ.exec(token);
+      if (rankEq) {
+        animalRank = rankEq[1].toLowerCase();
+        i++;
+        if (i >= tokens.length || tokens[i] === ',') {
+          return { error: 'Rank hewan harus diikuti level/nama hewan.' };
+        }
+        token = tokens[i];
+      }
+
       let level = defaultLevel;
       if (NUMBER.test(token)) {
         const parsed = parseLevel(token);
@@ -242,14 +257,14 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
 
       const custom = parseCustomCoeffs(tokens[i]);
       if (custom) {
-        current = { level, animal: null, custom, weapon: null, passives: [] };
+        current = { level, animal: null, custom, animalRank, weapon: null, passives: [] };
         i++;
         pending = null;
         continue;
       }
 
       if (tokens[i] === '??') {
-        current = { level, animal: null, unknown: true, weapon: null, passives: [] };
+        current = { level, animal: null, unknown: true, animalRank, weapon: null, passives: [] };
         i++;
         pending = null;
         continue;
@@ -259,7 +274,7 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
       if (!animalMatch) {
         return { error: `Hewan \`${tokens[i]}\` tidak dikenal.` };
       }
-      current = { level, animal: animalMatch.found, weapon: null, passives: [] };
+      current = { level, animal: animalMatch.found, animalRank, weapon: null, passives: [] };
       i += animalMatch.length;
       pending = null;
       continue;
@@ -388,6 +403,7 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
       coeffs,
       customStats: Boolean(unit.custom),
       animal: unit.animal || null,
+      animalRank: unit.animalRank || null,
       finalStats: unit.finalStats || null,
       weapon: unit.weapon
         ? {

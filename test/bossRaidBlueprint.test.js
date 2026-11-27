@@ -80,10 +80,16 @@ test('blueprint bisa diparse oleh dsim', async t => {
   assert.match(built.command, /^d sim timku vs /);
   assert.match(built.command, /-eboss$/);
 
+  assert.match(built.blueprint, /rank=uncommon 28 rabbit poison dagger 10/);
+  assert.match(built.blueprint, /rank=rare 53 cat bow 96/);
+  assert.match(built.blueprint, /rank=mythical 72 \?\? orb of potency 100/);
+
   const inline = simParser.parseInlineSide(built.blueprint, { prefix: 'd' });
   assert.equal(inline.error, undefined);
   assert.equal(inline.specs.length, 3);
   assert.deepEqual(inline.specs.map(spec => spec.weapon.id), [8, 3, 6]);
+  assert.deepEqual(inline.specs.map(spec => spec.animalRank), ['uncommon', 'rare', 'mythical']);
+  assert.deepEqual(inline.specs.map(spec => spec.weapon.quality), [10, 96, 100]);
   assert.deepEqual(inline.specs.map(spec => spec.finalStats.hpCurrent), [80160, 98160, 94560]);
 });
 

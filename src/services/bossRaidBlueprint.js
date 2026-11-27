@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const { PNG } = require('pngjs');
 const { createWorker } = require('tesseract.js');
 const fingerprintData = require('../data/battleIconFingerprints.json');
+const battleData = require('../data/owoBattle');
+const dexStore = require('../utils/animalDexStorage');
 
 const ICON_SIZE = 16;
 const OCR_SCALE = 4;
@@ -88,10 +90,37 @@ function colorDistance(a, b) {
   return (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])) / 255;
 }
 
+// Tujuh varian ikon mengikuti urutan rank OwO: Common → Fabled. Kartu raid
+// hanya menampilkan ikon, jadi rank inilah yang bisa dipakai sebagai quality
+// perkiraan saat blueprint dibuat.
+const RANK_QUALITY = [10, 30, 50, 70, 87, 96, 100];
+const variantCounts = new Map();
+for (const item of fingerprintData.items) {
+  const key = `${item.kind}:${item.name}`;
+  variantCounts.set(key, (variantCounts.get(key) || 0) + 1);
+}
+const variantSeen = new Map();
 const fingerprints = fingerprintData.items.map(item => {
   const raw = Float32Array.from(Buffer.from(item.data, 'base64'));
-  return { ...item, fp: raw, normalized: normalize(raw), histogram: histogram(raw) };
+  const key = `${item.kind}:${item.name}`;
+  const variant = variantSeen.get(key) || 0;
+  variantSeen.set(key, variant + 1);
+  return {
+    ...item,
+    variant,
+    variantCount: variantCounts.get(key),
+    quality: variantQuality(variant, variantCounts.get(key)),
+    fp: raw,
+    normalized: normalize(raw),
+    histogram: histogram(raw),
+  };
 });
+
+function variantQuality(variant, count) {
+  if (!count || count === 1) return 100;
+  if (count === 7) return RANK_QUALITY[variant];
+  return Math.round((variant / (count - 1)) * 100);
+}
 
 function cropPng(image, x, y, w, h) {
   const x0 = Math.max(0, Math.round(x));
@@ -177,9 +206,9 @@ function matchIcon(icon, kind) {
     const score = mse(normalized, item.normalized) + colorDistance(hist, item.histogram) * 0.35;
     if (!best || score < best.score) {
       second = best;
-      best = { id: item.id, name: item.name, score };
+      best = { id: item.id, name: item.name, score, quality: item.quality };
     } else if (!second || score < second.score) {
-      second = { id: item.id, name: item.name, score };
+      second = { id: item.id, name: item.name, score, quality: item.quality };
     }
   }
   return best ? { ...best, margin: second ? second.score - best.score : Infinity } : null;
@@ -536,11 +565,22 @@ function buildBossBlueprint(cards, { prefix = 'd', player = '<tim>' } = {}) {
     }
     const stats = card.stats;
     const parts = [];
+    if (card.rank) parts.push(`rank=${String(card.rank).toLowerCase()}`);
     if (card.level != null) parts.push(String(card.level));
-    parts.push('??');
+    const animal = card.animal ? slug(card.animal) : null;
+    const knownAnimal = animal && (battleData.findAnimal(animal) || dexStore.resolveAnimal(animal));
+    parts.push(knownAnimal ? animal : '??');
     if (card.weapon) {
       parts.push(slug(card.weapon.name));
-      for (const passive of card.passives) parts.push(slug(passive.name));
+      if (card.weapon.quality != null) {
+        parts.push(String(card.weapon.quality));
+      }
+      for (const passive of card.passives) {
+        parts.push(slug(passive.name));
+        if (passive.quality != null) {
+          parts.push(String(passive.quality));
+        }
+      }
     } else {
       warnings.push(`Kartu ${card.slot}: senjata tidak dikenali, pasif tidak dipakai.`);
     }
