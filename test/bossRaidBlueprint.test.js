@@ -93,6 +93,24 @@ test('blueprint bisa diparse oleh dsim', async t => {
   assert.deepEqual(inline.specs.map(spec => spec.finalStats.hpCurrent), [80160, 98160, 94560]);
 });
 
+test('Wounding Crossbow tersedia di fingerprint dan blueprint', () => {
+  const fingerprints = require('../src/data/battleIconFingerprints.json');
+  assert.ok(
+    fingerprints.items.some(item => item.kind === 'weapon' && item.name === 'Wounding Crossbow' && item.id === 129),
+    'ikon Wounding Crossbow harus terdaftar',
+  );
+  const built = buildBossBlueprint([{
+    slot: 3,
+    level: 78,
+    rank: 'Epic',
+    animal: 'whale',
+    stats: { hpCurrent: 100000, hpMax: 100000, att: 178, pr: 67, wp: 656, mag: 256, mr: 69 },
+    weapon: { name: 'Wounding Crossbow', quality: 100 },
+    passives: [{ name: 'Discharge', quality: 70 }, { name: 'Regeneration', quality: 96 }],
+  }], { prefix: 'h' });
+  assert.match(built.blueprint, /rank=epic 78 whale wounding crossbow 100/);
+});
+
 test('perintah sim raid membaca gambar dari lampiran', async t => {
   const originalFetch = global.fetch;
   const image = fixture('ringkas.png');
