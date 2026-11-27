@@ -6,7 +6,6 @@
 const { getGuildSettings, updateGuildSettings } = require('../utils/storage');
 const simParser = require('../utils/simParser');
 const data = require('../data/owoBattle');
-const passiveData = require('../data/owoPassives');
 const sim = require('./battleSim');
 const emoji = require('./battleEmoji');
 const animalDex = require('./animalDex');
@@ -18,8 +17,6 @@ const MAX_TEMPLATES = 4;
 const TEMPLATE_RUNS = 10;
 const MAX_TEMPLATE_UNITS = 3;
 
-const WEAPONS = new Map(data.weapons().map(weapon => [weapon.id, weapon.name]));
-const PASSIVES = new Map(passiveData.all().map(passive => [passive.id, passive.name]));
 
 // Adapter penyimpanan dipisah agar test tidak menulis guild-settings bersama.
 const defaultStore = { get: getGuildSettings, update: updateGuildSettings };
@@ -66,15 +63,22 @@ function formatSpec(spec) {
   const animal = dexAnimalFor(spec);
   const name = spec.animal?.name || spec.label || '??';
   const pet = animal ? emoji.animalEmoji(animal) : '🐾';
-  let text = `${pet === '🐾' ? '🐾' : pet}${name}`;
+  // Emoji pet saja; nama hanya dipakai saat dex tidak punya emoji.
+  const parts = [pet === '🐾' ? `🐾${name}` : pet];
   if (spec.weapon) {
-    text += ` ${WEAPONS.get(spec.weapon.id) || `weapon#${spec.weapon.id}`}`;
+    const quality = Number.isFinite(Number(spec.weapon.quality))
+      ? Number(spec.weapon.quality)
+      : data.DEFAULT_QUALITY;
+    parts.push(emoji.rankEmoji(quality), emoji.weaponEmoji(spec.weapon.id, quality));
     for (const passive of spec.weapon.passives || []) {
       const id = passive && typeof passive === 'object' ? passive.id : passive;
-      text += ` ${PASSIVES.get(id) || `passive#${id}`}`;
+      const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
+        ? passive.quality
+        : quality;
+      parts.push(emoji.passiveEmoji(id, passiveQuality));
     }
   }
-  return text;
+  return parts.join('');
 }
 
 function formatTemplate(text) {

@@ -56,10 +56,8 @@ test('otomatis mengirim blueprint sekali saat boss muncul', async () => {
   assert.ok(result);
   assert.equal(sends, 1);
   assert.equal(sent.flags, 32768, 'Components V2');
-  const container = sent.components[0].toJSON();
-  assert.equal(container.type, 17);
-  const row = container.components[0];
-  const text = container.components[1];
+  const row = sent.components[0].toJSON();
+  const text = sent.components[1].toJSON();
   assert.equal(row.type, 1, 'action row di atas');
   assert.equal(row.components[0].label, 'Salin Command');
   assert.equal(text.type, 10, 'template di bawah tombol');

@@ -29,10 +29,10 @@ test('token tidak dikenal ditolak', async () => {
 test('payload blueprint menaruh tombol di atas template (Components V2)', () => {
   const payload = createBlueprintPayload('d sim tim vs boss -eboss', '__**Template**__\n1. 🐾Lizard: **1–2** damage');
   assert.equal(payload.flags, 32768);
-  const container = payload.components[0].toJSON();
-  assert.equal(container.type, 17);
-  assert.equal(container.components[0].type, 1);
-  assert.equal(container.components[0].components[0].label, 'Salin Command');
-  assert.equal(container.components[1].type, 10);
-  assert.match(container.components[1].content, /Template/);
+  const row = payload.components[0].toJSON();
+  const text = payload.components[1].toJSON();
+  assert.equal(row.type, 1);
+  assert.equal(row.components[0].label, 'Salin Command');
+  assert.equal(text.type, 10);
+  assert.match(text.content, /Template/);
 });

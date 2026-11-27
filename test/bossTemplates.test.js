@@ -72,8 +72,7 @@ test('template ditampilkan dengan emoji dex atau fallback 🐾', () => {
   cleanup();
   const display = templates.formatTemplate(templates.DEFAULT_TEMPLATE);
   assert.match(display, /(?:🐾|<a?:\w+:\d+>)/, 'ada emoji pet atau fallback');
-  assert.match(display, /Poison Dagger/);
-  assert.match(display, /Giant Slayer/);
+  assert.doesNotMatch(display, /Poison Dagger|Giant Slayer/, 'nama senjata/pasif tidak ditampilkan');
   assert.match(display, / \+ /);
 });
 
