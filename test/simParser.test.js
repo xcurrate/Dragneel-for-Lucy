@@ -136,3 +136,44 @@ describe('quality per-stat di mesin battle', () => {
     assert.equal(averageQuality(undefined, [{ id: 12 }]), 100, 'default tier tertinggi');
   });
 });
+
+describe('stat final dari kartu raid', () => {
+  it('membaca hp current/max dan lima stat setelahnya', () => {
+    const result = parser.parseInlineSide('28 rabbit2 pdagger 97 ls 50 enra 100 ~80160/80160,212,46,668,156,46');
+    assert.ok(!result.error, result.error);
+    assert.deepEqual(result.specs[0].finalStats, {
+      hp: 80160,
+      hpCurrent: 80160,
+      att: 212,
+      pr: 46,
+      wp: 668,
+      mag: 156,
+      mr: 46,
+    });
+    assert.equal(result.specs[0].level, 28);
+    assert.equal(result.specs[0].weapon.quality, 97);
+  });
+
+  it('menerima beberapa unit dengan stat final dan koma pemisah', () => {
+    const result = parser.parseInlineSide(
+      '28 rabbit2 ~80160/80160,212,46,668,156,46, 53 cat2 ~98160/98160,153,45,1321,259,62'
+    );
+    assert.ok(!result.error, result.error);
+    assert.equal(result.specs.length, 2);
+    assert.equal(result.specs[1].finalStats.hp, 98160);
+    assert.equal(result.specs[1].finalStats.wp, 1321);
+  });
+
+  it('menerima hewan ?? bila stat final tersedia', () => {
+    const result = parser.parseInlineSide('?? ~100000/100000,340,67,740,160,67');
+    assert.ok(!result.error, result.error);
+    assert.equal(result.specs[0].label, '??');
+    assert.equal(result.specs[0].animal, null);
+    assert.equal(result.specs[0].finalStats.hp, 100000);
+  });
+
+  it('menolak HP current di atas max', () => {
+    const result = parser.parseInlineSide('snail ~100/50,10,10,10,10,10');
+    assert.match(result.error, /current tidak boleh lebih besar/);
+  });
+});

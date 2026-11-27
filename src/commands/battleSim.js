@@ -93,6 +93,9 @@ function usageSections(prefix = 'd') {
       name: '🚩 Opsi',
       value: [
         'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+        'Stat final unit: `~hpCurrent/hpMax,att,pr,wp,mag,mr` setelah alias pasif terakhir.',
+        '`-eboss` — tandai semua unit lawan sebagai boss (untuk pasif Giant Slayer).',
+        '`-ehp a/b,c/d` — timpa HP lawan per unit saat kartu hanya menampilkan HP.',
         '`-log` — simpan jalannya pertarungan dan kirim tautan log lengkap (khusus developer).',
       ].join('\n'),
     },
@@ -174,7 +177,7 @@ function parseLevels(arg) {
 }
 
 // Opsi berbentuk flag: `-m 500`, `-s 42`, `-qp 80`, `-qe 50`, `lvl100/60`.
-const VALUE_FLAGS = ['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe', '-total', '-t'];
+const VALUE_FLAGS = ['-m', '-n', '-runs', '-s', '-seed', '-qp', '-qe', '-total', '-t', '-ehp'];
 // `-win`, `-lose`, `-tie` menyaring hasil: pertarungan diulang sampai hasilnya
 // cocok, lalu hasil itu yang ditampilkan. Peta ini juga dipakai untuk pesan
 // bantuan supaya nama flag dan artinya tidak pernah menyimpang.
@@ -208,6 +211,8 @@ function parseFlags(args) {
     }
     // `-log`: simpan jalannya pertarungan dan kirim tautan berbaginya.
     if (arg === '-log' || arg === '--log') { flags.log = true; continue; }
+    // `-eboss`: tandai semua unit lawan sebagai boss (Giant Slayer, dll).
+    if (arg === '-eboss' || arg === '--eboss') { flags.boss = true; continue; }
     // Token berawalan `lvl` selalu dianggap flag level, supaya bentuk yang
     // salah tidak diam-diam jadi nama lawan.
     if (LEVEL_PREFIX.test(arg)) {
@@ -229,9 +234,38 @@ function parseFlags(args) {
 function unknownFlagsError(unknown, prefix) {
   return errorEmbed(
     `Opsi ${unknown.map(u => `\`${u}\``).join(', ')} tidak dikenal.`
-    + `\nOpsi yang tersedia: \`-m <jumlah>\`, \`-s <seed>\`, \`-qp <0-100>\`, \`-qe <0-100>\`, \`-tie\`.`
+    + `\nOpsi yang tersedia: \`-m <jumlah>\`, \`-s <seed>\`, \`-qp <0-100>\`, \`-qe <0-100>\`, \`-tie\`, \`-eboss\`, \`-ehp\`.`
     + `\nLihat \`${prefix} sim help\`.`
   );
+}
+
+// Opsi khusus lawan raid: `-eboss` menandai unit lawan sebagai boss, dan
+// `-ehp a/b,c/d` menimpa HP lawan saat kartu hanya menampilkan HP (tanpa
+// stat final lengkap). Jumlah override harus sama dengan jumlah unit lawan.
+function applyEnemyOptions(specs, flags) {
+  let result = specs;
+  if (flags.boss) result = result.map(spec => ({ ...spec, isBoss: true }));
+  const raw = flags['-ehp'];
+  if (raw == null) return { specs: result };
+
+  const parts = String(raw).split(',').map(part => part.trim());
+  if (parts.length !== result.length) {
+    return {
+      error: `\`-ehp\` butuh ${result.length} pasangan current/max, kamu menyebut ${parts.length}.`,
+    };
+  }
+  const overrides = [];
+  for (const part of parts) {
+    const match = /^(\d+)\/(\d+)$/.exec(part);
+    if (!match) return { error: `HP \`${part}\` harus format current/max, mis. \`80160/80160\`.` };
+    const current = Number(match[1]);
+    const max = Number(match[2]);
+    if (!Number.isSafeInteger(current) || !Number.isSafeInteger(max) || max < 1 || current > max) {
+      return { error: `HP \`${part}\` tidak valid; current harus 0 sampai max.` };
+    }
+    overrides.push({ current, max });
+  }
+  return { specs: result.map((spec, i) => ({ ...spec, hpOverride: overrides[i] })) };
 }
 
 // Cooldown simulasi global. Lebih panjang dari `dsim` karena sekali jalan
@@ -1124,12 +1158,14 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
 
   const enemy = resolveEnemy(userId, sides.enemyArgs, levels.enemy, prefix);
   if (enemy.error) return send(message, errorEmbed(`❌ ${enemy.error}`));
+  const enemyOptions = applyEnemyOptions(enemy.specs, flags);
+  if (enemyOptions.error) return send(message, errorEmbed(`❌ ${enemyOptions.error}`));
 
   // Flag `lvl` menimpa level tersimpan, tanpa mengubah tim di database.
   // Kualitas efektif ikut ditulis ke spec supaya komposisi yang ditampilkan
   // sama dengan tier yang benar-benar dipakai (dan sama saat tombol 🔁 dipakai).
   const playerSpecs = withLevel(withQuality(resolvedPlayerSpecs, playerQuality), levels.player);
-  const enemySpecs = withLevel(withQuality(enemy.specs, enemyQuality), levels.enemy);
+  const enemySpecs = withLevel(withQuality(enemyOptions.specs, enemyQuality), levels.enemy);
 
   // Simulasi besar bisa berjalan lama. Kirim pesan progres lebih dulu, perbarui
   // berkala, lalu timpa dengan hasil akhir di pesan yang sama supaya channel
@@ -1368,6 +1404,6 @@ module.exports = {
   handleSimCommand, handleGlobalSim, handleGlobalLossButton, handleGlobalLossPageButton, handleGlobalWeaponCommand, handleRepeatButton, handleLimitCommand,
   handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
-  parseFlags, resolveEnemy, resolveTeamSpecs, usage, usageSections, globalUsage, globalUsageSections, resolveRunCount,
+  parseFlags, applyEnemyOptions, resolveEnemy, resolveTeamSpecs, usage, usageSections, globalUsage, globalUsageSections, resolveRunCount,
   GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
 };

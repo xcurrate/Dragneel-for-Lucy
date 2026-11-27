@@ -44,9 +44,19 @@ function findAnimal(query) {
 function tokenize(input) {
   const text = Array.isArray(input) ? input.join(' ') : String(input ?? '');
   const tokens = [];
-  const re = /\d+(?:\s*,\s*\d+)+|\d+|[^\s,]+|,/g;
+  // `~...` adalah satu token stat final; koma di dalamnya bukan pemisah unit.
+  const re = /~[^\s]+|\d+(?:\s*,\s*\d+)+|\d+|[^\s,]+|,/g;
   let match;
-  while ((match = re.exec(text))) tokens.push(match[0]);
+  while ((match = re.exec(text))) {
+    const token = match[0];
+    // Koma pemisah unit yang menempel di akhir `~stat` harus tetap menjadi
+    // token koma, bukan bagian dari nilai stat terakhir.
+    if (token.startsWith('~') && token.endsWith(',')) {
+      tokens.push(token.slice(0, -1), ',');
+    } else {
+      tokens.push(token);
+    }
+  }
 
   // `sac 10,10, 10 snail` ambigu: regex membaca `10,10, 10` sebagai satu
   // daftar quality. Kalau token berikutnya nama hewan, angka terakhir adalah
@@ -83,6 +93,41 @@ function parseCustomCoeffs(token) {
   const custom = {};
   STAT_KEYS.forEach((key, i) => { custom[key] = values[i]; });
   return custom;
+}
+
+// Stat final dari kartu raid: `~hpCurrent/hpMax,att,pr,wp,mag,mr`.
+// Persentase PR/MR adalah angka yang tampil di kartu (0-100), bukan rasio.
+function parseFinalStats(token) {
+  const raw = String(token).replace(/^~/, '').replace(/,+$/, '').trim();
+  const parts = raw.split(',').map(part => part.trim());
+  if (parts.length !== 6) {
+    return { error: 'Stat final harus `~hpCurrent/hpMax,att,pr,wp,mag,mr`.' };
+  }
+  const hp = /^(\d+)\/(\d+)$/.exec(parts[0]);
+  if (!hp) return { error: 'HP final harus `current/max`, mis. `80160/80160`.' };
+  const current = Number(hp[1]);
+  const max = Number(hp[2]);
+  if (!Number.isSafeInteger(current) || !Number.isSafeInteger(max) || max < 1 || current < 0) {
+    return { error: 'HP final harus bilangan bulat, max minimal 1.' };
+  }
+  if (current > max) return { error: 'HP current tidak boleh lebih besar dari max.' };
+  const values = parts.slice(1).map(part => Number(part.replace(/%$/, '')));
+  if (values.some(value => !Number.isFinite(value) || value < 0)) {
+    return { error: 'Stat final harus angka non-negatif.' };
+  }
+  const [att, pr, wp, mag, mr] = values;
+  if (pr > 100 || mr > 100) return { error: 'PR dan MR final harus 0-100.' };
+  return {
+    finalStats: {
+      hp: max,
+      hpCurrent: current,
+      att,
+      pr,
+      wp,
+      mag,
+      mr,
+    },
+  };
 }
 
 // Cocokkan nama terpanjang dulu supaya alias multi-kata seperti
@@ -132,6 +177,7 @@ function looksInline(input) {
   const tokens = tokenize(input);
   if (!tokens.length) return false;
   if (tokens.some(token => STAT_EQ.test(token))) return false;
+  if (tokens.some(token => token.startsWith('~') || token === '??')) return true;
   if (tokens.some(token => parseCustomCoeffs(token))) return true;
   if (tokens.length > 1 && (NUMBER.test(tokens[0]) || LEVEL_EQ.test(tokens[0]))) return true;
   if (tokens.length > 1 && findAnimal(tokens[0])) {
@@ -198,6 +244,13 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
         continue;
       }
 
+      if (tokens[i] === '??') {
+        current = { level, animal: null, unknown: true, weapon: null, passives: [] };
+        i++;
+        pending = null;
+        continue;
+      }
+
       const animalMatch = matchAnimal(tokens, i);
       if (!animalMatch) {
         return { error: `Hewan \`${tokens[i]}\` tidak dikenal.` };
@@ -205,6 +258,15 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
       current = { level, animal: animalMatch.found, weapon: null, passives: [] };
       i += animalMatch.length;
       pending = null;
+      continue;
+    }
+
+    if (token.startsWith('~')) {
+      const parsed = parseFinalStats(token);
+      if (parsed.error) return parsed;
+      current.finalStats = parsed.finalStats;
+      pending = null;
+      i++;
       continue;
     }
 
@@ -293,8 +355,10 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
   const specs = [];
   for (let index = 0; index < units.length; index++) {
     const unit = units[index];
-    const coeffs = unit.custom || coeffsOf(unit.animal);
-    if (!coeffs) return { error: `Stat \`${unit.animal ? unit.animal.name : 'custom'}\` tidak lengkap.` };
+    const coeffs = unit.custom || (unit.animal ? coeffsOf(unit.animal) : null);
+    if (!coeffs && !unit.finalStats) {
+      return { error: `Stat \`${unit.animal ? unit.animal.name : 'custom'}\` tidak lengkap.` };
+    }
 
     if (unit.passives.length && !unit.weapon) {
       return { error: `Unit ${index + 1}: pasif butuh senjata.` };
@@ -310,13 +374,17 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
       }
     }
 
+    const label = unit.custom
+      ? STAT_KEYS.map(key => unit.custom[key]).join('.')
+      : (unit.animal ? unit.animal.name : '??');
     specs.push({
       slot: index + 1,
-      label: unit.custom ? STAT_KEYS.map(key => unit.custom[key]).join('.') : unit.animal.name,
+      label,
       level: unit.level,
       coeffs,
       customStats: Boolean(unit.custom),
       animal: unit.animal || null,
+      finalStats: unit.finalStats || null,
       weapon: unit.weapon
         ? {
           id: unit.weapon.id,
@@ -334,9 +402,11 @@ function parseInlineSide(input, { defaultLevel = data.DEFAULT_LEVEL, prefix = 'd
   return {
     specs,
     label: units.map(unit => (
-      unit.custom ? STAT_KEYS.map(key => unit.custom[key]).join('.') : unit.animal.name
+      unit.custom
+        ? STAT_KEYS.map(key => unit.custom[key]).join('.')
+        : (unit.animal ? unit.animal.name : '??')
     )).join(' + '),
   };
 }
 
-module.exports = { tokenize, parseQuality, looksInline, parseInlineSide, findAnimal };
+module.exports = { tokenize, parseQuality, parseFinalStats, looksInline, parseInlineSide, findAnimal };

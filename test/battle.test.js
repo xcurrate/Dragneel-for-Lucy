@@ -9,6 +9,7 @@ const ROOT = path.join(__dirname, '..');
 const data = require(path.join(ROOT, 'src/data/owoBattle'));
 const engine = require(path.join(ROOT, 'src/services/battleEngine'));
 const sim = require(path.join(ROOT, 'src/services/battleSim'));
+const simCommand = require(path.join(ROOT, 'src/commands/battleSim'));
 const rngModule = require(path.join(ROOT, 'src/services/battleRng'));
 const { createPassive } = require(path.join(ROOT, 'src/services/battlePassives'));
 const { createBuff } = require(path.join(ROOT, 'src/services/battleBuffs'));
@@ -922,6 +923,21 @@ describe('balasan command memakai embed', () => {
     assert.strictEqual(replies.length, 1);
     assert.ok(replies[0].title.includes('vs.'), replies[0].title);
     assert.ok(replies[0].fields.some(f => f.name.includes('menang')));
+  });
+
+  it('d sim menerima stat final kartu raid dan -eboss', async () => {
+    store.createTeam('u', 'Solo');
+    store.setSlot('u', 'Solo', 1, { custom: COEFFS_STRONG, level: 60 });
+    store.setActiveTeam('u', 'Solo');
+    await handleSimCommand(
+      message('d sim 28 rabbit2 pdagger 97 ls 50 enra 100 ~80160/80160,212,46,668,156,46 -eboss'),
+      ['28', 'rabbit2', 'pdagger', '97', 'ls', '50', 'enra', '100', '~80160/80160,212,46,668,156,46', '-eboss'],
+      'd',
+      { sendEmbed }
+    );
+    assert.strictEqual(replies.length, 1);
+    assert.ok(!JSON.stringify(replies[0]).includes('tidak dikenal'), JSON.stringify(replies[0]));
+    assert.ok(replies[0].title.includes('vs.'), replies[0].title);
   });
 
   it('d sim panjang mengirim progres lalu menimpa dengan hasil akhir', async () => {
@@ -4301,5 +4317,51 @@ describe('pasif Lone Wolf', () => {
     engine.inflictDamage(ctxOf(), them[0], me[0], 1000, engine.PHYSICAL);
     assert.strictEqual(them[0].stats.hp[0], 4000);
     assert.strictEqual(me[0].stats.hp[0], 4000);
+  });
+});
+
+describe('stat final dan boss raid', () => {
+  it('memakai HP current/max serta stat final tanpa menambah stat senjata', () => {
+    const unit = engine.buildUnit({
+      level: 28,
+      finalStats: {
+        hp: 80160, hpCurrent: 70000, att: 212, pr: 46, wp: 668, mag: 156, mr: 46,
+      },
+      weapon: { id: 8, quality: 97, passives: [{ id: 7, quality: 50 }, { id: 18, quality: 100 }] },
+    }, rngModule.createRng(1));
+    assert.deepStrictEqual(unit.stats.hp, [70000, 80160, 80160, 0]);
+    assert.strictEqual(unit.stats.wp[0], 668);
+    assert.strictEqual(unit.stats.att[0], 212);
+    assert.strictEqual(unit.stats.mag[0], 156);
+    assert.strictEqual(engine.maxHp(unit), 80160);
+  });
+
+  it('menandai unit lawan sebagai boss untuk Giant Slayer', () => {
+    const unit = engine.buildUnit({ coeffs: COEFFS_STRONG, level: 40, isBoss: true }, rngModule.createRng(1));
+    assert.strictEqual(unit.isBoss, true);
+  });
+
+  it('menimpa HP unit yang hanya punya HP dari kartu', () => {
+    const unit = engine.buildUnit({
+      coeffs: COEFFS_STRONG, level: 40, hpOverride: { current: 80000, max: 100000 },
+    }, rngModule.createRng(1));
+    assert.deepStrictEqual(unit.stats.hp, [80000, 100000, 100000, 0]);
+  });
+
+  it('menerapkan -eboss dan -ehp ke semua unit lawan', () => {
+    const flags = simCommand.parseFlags(['-eboss', '-ehp', '80160/80160,98160/98160,94560/94560']).flags;
+    const result = simCommand.applyEnemyOptions([{ label: 'a' }, { label: 'b' }, { label: 'c' }], flags);
+    assert.ok(!result.error, result.error);
+    assert.deepStrictEqual(result.specs.map(s => s.isBoss), [true, true, true]);
+    assert.deepStrictEqual(result.specs.map(s => s.hpOverride), [
+      { current: 80160, max: 80160 },
+      { current: 98160, max: 98160 },
+      { current: 94560, max: 94560 },
+    ]);
+  });
+
+  it('menolak jumlah -ehp yang tidak cocok', () => {
+    const result = simCommand.applyEnemyOptions([{ label: 'a' }], { '-ehp': '1/2,3/4' });
+    assert.match(result.error, /butuh 1 pasangan/);
   });
 });

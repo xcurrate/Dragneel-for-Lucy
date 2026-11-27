@@ -251,6 +251,8 @@ function buildUnit(spec, rng, quality) {
   // `coeffs` adalah stat skala kecil (0-8 untuk hewan OwO, 0-14 untuk dex Lucy).
   // Keduanya koefisien, bukan HP final — kekuatan berasal dari level.
   const base = spec.finalStats ? null : data.baseStats(spec.coeffs, spec.level);
+  const finalHp = spec.finalStats ? spec.finalStats.hp : null;
+  const finalHpCurrent = spec.finalStats?.hpCurrent ?? finalHp;
   const unit = {
     pid: ++pidCounter,
     slot: spec.slot,
@@ -265,7 +267,7 @@ function buildUnit(spec, rng, quality) {
     team: null,
     foes: null,
     stats: spec.finalStats ? {
-      hp: [spec.finalStats.hp, spec.finalStats.hp, spec.finalStats.hp, 0],
+      hp: [finalHpCurrent, finalHp, finalHp, 0],
       wp: [spec.finalStats.wp, spec.finalStats.wp, spec.finalStats.wp, 0],
       att: [spec.finalStats.att, 0],
       mag: [spec.finalStats.mag, 0],
@@ -279,7 +281,11 @@ function buildUnit(spec, rng, quality) {
     // stat senjata untuk kedua kalinya pada slot hasil import.
     if (!spec.finalStats) unit.weapon.alterStats(unit.stats);
   }
-  unit.stats.hp[0] = maxHp(unit);
+  if (spec.hpOverride) {
+    unit.stats.hp = [spec.hpOverride.current, spec.hpOverride.max, spec.hpOverride.max, 0];
+  } else if (!spec.finalStats) {
+    unit.stats.hp[0] = maxHp(unit);
+  }
   unit.stats.wp[0] = maxWp(unit);
   return unit;
 }
