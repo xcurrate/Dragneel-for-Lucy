@@ -72,6 +72,7 @@ function simulateBattles(remaining, {
   tieRate = 0,
   maxStreak = null,
   extraXpPerBattle = 0,
+  xpMultiplier = 1,
 } = {}) {
   if (!Number.isFinite(remaining) || remaining <= 0) {
     return { battles: 0, gained: 0, xpPerBattle: 0, days: 0, streakAfter: Number(streak) || 0 };
@@ -92,7 +93,8 @@ function simulateBattles(remaining, {
       currentStreak = Math.min(cap, currentStreak + 1);
       total = XP_PER_WIN + bonusXpForStreak(currentStreak);
     }
-    const share = active ? Math.ceil(total / count) : Math.floor(total / count);
+    const boosted = Math.round(total * (Number(xpMultiplier) || 1));
+    const share = active ? Math.ceil(boosted / count) : Math.floor(boosted / count);
     const perPet = Math.max(1, Math.round((share + extraXpPerBattle) * multiplier));
     gained += perPet;
   }
@@ -114,6 +116,7 @@ function estimate(slot, {
   tieRate = 0,
   maxStreak = null,
   extraXpPerBattle = 0,
+  xpMultiplier = 1,
 } = {}) {
   if (slot?.xpMaxed) return { maxed: true, remaining: 0, battles: 0, days: 0, xpPerBattle: null };
   if (!Number.isFinite(slot?.xpCurrent) || !Number.isFinite(slot?.xpMax)) return null;
@@ -128,6 +131,7 @@ function estimate(slot, {
     tieRate,
     maxStreak,
     extraXpPerBattle,
+    xpMultiplier,
   });
   return {
     maxed: false,

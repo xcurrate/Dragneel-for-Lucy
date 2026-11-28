@@ -22,13 +22,14 @@ test('panel punya tombol impor, forecast, pengaturan, dan info', () => {
   assert.match(payload.embeds[0].data.footer.text, /Streak saat ini/);
 });
 
-test('modal pengaturan memuat empat field yang diminta', () => {
+test('modal pengaturan memuat lima field yang diminta', () => {
   const panel = panelModule.createPanel('user-2', parsedTeam());
   const modal = panelModule.settingsModal(panel).toJSON();
   const labels = modal.components.map(row => row.components[0].label);
   assert.deepEqual(labels, [
     'Battle per hari (1-5760)',
     'Rata-rata XP/hunt',
+    'Bonus XP Llumi (%)',
     'Peluang seri (%)',
     'Streak maksimum (opsional)',
   ]);
@@ -72,7 +73,8 @@ test('modal submit mengubah pengaturan panel', async () => {
   const updates = [];
   const values = {
     battles_per_day: '1200',
-    avg_xp_hunt: '500',
+    avg_xp_hunt: '21',
+    llumi_bonus: '1000',
     tie_rate: '5',
     max_streak: '200000',
   };
@@ -85,7 +87,8 @@ test('modal submit mengubah pengaturan panel', async () => {
   };
   await panelModule.handleModal(interaction);
   assert.equal(panel.settings.battlesPerDay, 1200);
-  assert.equal(panel.settings.avgHuntXp, 500);
+  assert.equal(panel.settings.avgHuntXp, 21);
+  assert.equal(panel.settings.llumiBonusPercent, 1000);
   assert.equal(panel.settings.tieRate, 5);
   assert.equal(panel.settings.maxStreak, 200000);
   assert.equal(updates.length, 1);

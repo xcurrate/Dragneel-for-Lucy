@@ -600,11 +600,13 @@ Panel berisi sisa XP tiap pet, multiplier level, perkiraan battle, dan tombol
 **Impor**, **Prediksi**, **Pengaturan**, serta **Info**.
 
 Tombol **Pengaturan** membuka form berisi `Battle per hari (1-5760)`,
-`Rata-rata XP/hunt`, `Peluang seri (%)`, dan `Streak maksimum (opsional)`.
-`Streak maksimum` boleh dikosongkan dan tidak diambil dari kartu; user bisa
-mengisinya sendiri dengan hasil simulasi global. Nilai ini bukan batas cap.
-XP/hunt adalah XP dari hunt; hunt dan battle aksi berbeda, jadi XP/hunt tidak
-dicampur ke forecast battle. Perubahan form langsung dipakai oleh statistik dan
+`Rata-rata XP/hunt`, `Bonus XP Llumi (%)`, `Peluang seri (%)`, dan
+`Streak maksimum (opsional)`. `Streak maksimum` boleh dikosongkan dan tidak
+diambil dari kartu; user bisa mengisinya sendiri dengan hasil simulasi global.
+Nilai ini bukan batas cap. XP/hunt adalah XP dari hunt; hunt dan battle aksi
+berbeda, jadi XP/hunt tidak dicampur ke forecast battle. `Bonus XP Llumi`
+dihitung sebagai pengali semua input XP (default 1000% = x11; isi 0 kalau
+akun tidak punya Llumi). Perubahan form langsung dipakai oleh statistik dan
 forecast.
 
 XP battle dibagi rata ke seluruh tim; jumlah tim dibaca dari tombol halaman

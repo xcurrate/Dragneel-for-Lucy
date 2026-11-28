@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   avgHuntXp: 0,
   tieRate: 2,
   maxStreak: 0,
+  llumiBonusPercent: 1000,
 });
 
 const panels = new Map();
@@ -81,6 +82,7 @@ function settingsOptions(panel) {
     maxStreak: null,
     battlesPerDay: panel.settings.battlesPerDay,
     extraXpPerBattle: 0,
+    xpMultiplier: 1 + (Number(panel.settings.llumiBonusPercent) || 0) / 100,
   };
 }
 
@@ -139,6 +141,7 @@ function statsPayload(panel) {
     text: `Streak saat ini: ${formatNumber(meta.streak)} • Rata-rata XP/battle: ${formatDecimal(avg)}`
       + `\n${formatNumber(panel.settings.battlesPerDay)} battle/hari • Seri ${formatNumber(panel.settings.tieRate)}%`
       + ` • Streak maks ${meta.streakMax == null ? '—' : formatNumber(meta.streakMax)}`
+      + ` • Llumi +${Number(panel.settings.llumiBonusPercent) || 0}%`
       + ` • ${meta.teamCount} tim ${meta.active ? 'aktif ceil' : 'nonaktif floor'}`,
   });
   return { embeds: [embed], components: panelComponents(panel, 'stats') };
@@ -206,7 +209,8 @@ function simulateForecast(panel) {
       if (streak > maxSeen) maxSeen = streak;
       total = petXp.XP_PER_WIN + petXp.bonusXpForStreak(streak);
     }
-    const share = meta.active ? Math.ceil(total / meta.teamCount) : Math.floor(total / meta.teamCount);
+    const boosted = Math.round(total * (1 + (Number(settings.llumiBonusPercent) || 0) / 100));
+    const share = meta.active ? Math.ceil(boosted / meta.teamCount) : Math.floor(boosted / meta.teamCount);
     const highest = states.reduce((max, state) => Math.max(max, state.level), 1);
     let leveled = false;
     const levels = states.map(state => ({ level: state.level, up: false }));
@@ -253,7 +257,8 @@ function forecastPayload(panel) {
     .setDescription(clip(description, 4096))
     .setFooter({
       text: `${rows.length} baris • ${formatNumber(panel.settings.battlesPerDay)} battle/hari`
-        + ` • Seri ${formatNumber(panel.settings.tieRate)}% • Streak maks ${formatNumber(maxSeen)}`,
+        + ` • Seri ${formatNumber(panel.settings.tieRate)}% • Streak maks ${formatNumber(maxSeen)}`
+        + ` • Llumi +${Number(panel.settings.llumiBonusPercent) || 0}%`,
     });
   return { embeds: [embed], components: panelComponents(panel, 'forecast') };
 }
@@ -271,7 +276,8 @@ function infoEmbed(panel) {
       + '• XP menang: `200 + bonus streak`; bonus hanya di kelipatan 10/50/100/500/1000.\n'
       + '• Level lawan dianggap sama karena tidak ada di kartu.\n'
       + '• Multiplier Knowledge belum dihitung.\n'
-      + `• Rata-rata XP/hunt adalah XP dari hunt. Hunt dan battle aksi berbeda, jadi tidak dicampur ke forecast battle: **${formatNumber(panel.settings.avgHuntXp)}**.\n`
+      + `• Rata-rata XP/hunt adalah XP dari hunt. Hunt dan battle aksi berbeda, jadi tidak dicampur ke forecast battle: **${formatNumber(panel.settings.avgHuntXp)}**`
+      + ` (setelah Llumi: **${formatNumber(Math.round(panel.settings.avgHuntXp * (1 + (Number(panel.settings.llumiBonusPercent) || 0) / 100)))}**).\n`
       + '• Streak maksimum opsional; tidak diambil dari kartu. Isi sendiri dengan hasil simulasi global kalau mau.',
     );
 }
@@ -298,6 +304,9 @@ function settingsModal(panel) {
         'avg_xp_hunt', 'Rata-rata XP/hunt', panel.settings.avgHuntXp, '0',
       )),
       new ActionRowBuilder().addComponents(input(
+        'llumi_bonus', 'Bonus XP Llumi (%)', panel.settings.llumiBonusPercent, '1000',
+      )),
+      new ActionRowBuilder().addComponents(input(
         'tie_rate', 'Peluang seri (%)', panel.settings.tieRate, '2',
       )),
       new ActionRowBuilder().addComponents(input(
@@ -310,6 +319,8 @@ function parseSettings(values, panel) {
   const battlesPerDay = Number(values.battlesPerDay);
   const avgHuntXp = Number(values.avgHuntXp);
   const tieRate = Number(values.tieRate);
+  const llumiRaw = String(values.llumiBonusPercent ?? '1000').trim();
+  const llumiBonusPercent = llumiRaw === '' ? 0 : Number(llumiRaw);
   const maxStreakRaw = String(values.maxStreak ?? '').trim();
   const maxStreak = maxStreakRaw === '' ? null : Number(maxStreakRaw);
   if (!Number.isInteger(battlesPerDay) || battlesPerDay < 1 || battlesPerDay > 5760) {
@@ -321,10 +332,13 @@ function parseSettings(values, panel) {
   if (!Number.isFinite(tieRate) || tieRate < 0 || tieRate > 100) {
     return { error: 'Peluang seri harus 0-100.' };
   }
+  if (!Number.isFinite(llumiBonusPercent) || llumiBonusPercent < 0 || llumiBonusPercent > 10000) {
+    return { error: 'Bonus XP Llumi harus 0-10000.' };
+  }
   if (maxStreak != null && (!Number.isInteger(maxStreak) || maxStreak < 0)) {
     return { error: 'Streak maksimum harus angka bulat 0 atau lebih, atau dikosongkan.' };
   }
-  return { settings: { battlesPerDay, avgHuntXp, tieRate, maxStreak } };
+  return { settings: { battlesPerDay, avgHuntXp, tieRate, maxStreak, llumiBonusPercent } };
 }
 
 async function handleButton(interaction) {
@@ -379,6 +393,7 @@ async function handleModal(interaction) {
   const values = {
     battlesPerDay: interaction.fields.getTextInputValue('battles_per_day'),
     avgHuntXp: interaction.fields.getTextInputValue('avg_xp_hunt'),
+    llumiBonusPercent: interaction.fields.getTextInputValue('llumi_bonus'),
     tieRate: interaction.fields.getTextInputValue('tie_rate'),
     maxStreak: interaction.fields.getTextInputValue('max_streak'),
   };
