@@ -626,6 +626,24 @@ Bot membutuhkan intent dan izin Discord berikut untuk fitur ini:
 - `GuildMessageReactions` dan partial `Message`/`Channel`/`Reaction`.
 - View Channel, Read Message History, Add Reactions, dan Send Messages.
 
+## Blackjack Hint
+
+Bot membaca kartu blackjack Lucy dari embed, lalu memberi rekomendasi **👊 HIT**
+atau **🛑 STAND**. Kartu blackjack Lucy otomatis diberi reaksi **🎯**; tekan
+reaksi itu untuk mendapat hint. Perintah teks bisa membalas kartu, memakai
+link/ID, atau mencari kartu blackjack terakhir di channel.
+
+```text
+d bjhint
+d bjhint https://discord.com/channels/.../.../...
+d bjhint 1576257300212228260
+d bjhint help
+```
+
+Analisis memakai strategi dasar hit/stand. Double dan split tidak dihitung
+karena kartu Lucy hanya menyediakan reaksi 👊 dan 🛑. Dealer dianggap memakai
+aturan standar; hasil tetap estimasi, bukan jaminan.
+
 ## Kalkulator HuntBot
 
 Bot membaca kartu **HuntBot** Lucy dari pesan Components V2 atau embed, lalu
