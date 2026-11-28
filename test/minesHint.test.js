@@ -59,6 +59,19 @@ describe('mines board parsing', () => {
     assert.equal(hint.safeProbability(parsed), 5 / 8);
   });
 
+  it('mengambil versi pesan terbaru saat pesan diedit', async () => {
+    const edited = minesMessage({ disabled: [0] });
+    let fetchCalls = 0;
+    const source = await hint.resolveSource({
+      id: 'command',
+      reference: { messageId: edited.id, resolved: minesMessage() },
+      channel: { messages: { fetch: async () => { fetchCalls += 1; return edited; } } },
+    }, {});
+    assert.equal(fetchCalls, 1);
+    assert.equal(source.message, edited);
+    assert.equal((await hint.freshMessage({ fetch: async () => edited })), edited);
+  });
+
   it('mendeteksi papan selesai saat semua tile disabled', () => {
     const parsed = hint.parseMinesMessage(minesMessage({ disabled: [0, 1, 2, 3, 4, 5, 6, 7, 8] }));
     assert.equal(parsed.finished, true);

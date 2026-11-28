@@ -239,6 +239,14 @@ async function fetchMessage(channel, messageId) {
   return channel?.messages?.fetch ? channel.messages.fetch(messageId).catch(() => null) : null;
 }
 
+async function freshMessage(message) {
+  if (!message) return message;
+  if (message.fetch) {
+    try { return await message.fetch(true); } catch { /* pakai objek lama */ }
+  }
+  return message;
+}
+
 async function resolveSource(message, options) {
   if (options.source?.type === 'link') {
     const channel = await getChannel(message.client, options.source.channelId);
@@ -249,11 +257,11 @@ async function resolveSource(message, options) {
     const found = await fetchMessage(message.channel, options.source.id);
     return found ? { message: found } : null;
   }
-  if (message.reference?.resolved) return { message: message.reference.resolved };
   if (message.reference?.messageId) {
     const found = await fetchMessage(message.channel, message.reference.messageId);
     if (found) return { message: found };
   }
+  if (message.reference?.resolved) return { message: message.reference.resolved };
   const collection = await message.channel?.messages?.fetch?.({ limit: 50 });
   if (!collection) return null;
   const messages = typeof collection.values === 'function' ? [...collection.values()] : Object.values(collection);
@@ -280,7 +288,7 @@ async function handleMessage(message) {
     await send(message, { content: 'Pesan mines Lucy tidak ditemukan. Balas pesan papannya, kirim link/ID, atau jalankan di channel yang punya papan mines.' });
     return true;
   }
-  const parsed = parseMinesMessage(source.message);
+  const parsed = parseMinesMessage(await freshMessage(source.message));
   if (!parsed) {
     await send(message, { content: 'Pesan sumber bukan papan mines Lucy yang bisa dibaca.' });
     return true;
@@ -304,7 +312,7 @@ async function autoReact(message) {
 async function handleReaction(reaction, user) {
   if (!reaction || user?.bot || reaction.emoji?.name !== REACTION) return false;
   let message = reaction.message;
-  if (message?.partial && message.fetch) message = await message.fetch();
+  if (message?.fetch) message = await message.fetch(true).catch(() => message);
   if (!developerFor(user, reaction.client || message?.client)) {
     await send(message, { content: 'Fitur Mines Hint khusus developer.' });
     return true;
@@ -320,6 +328,6 @@ async function handleReaction(reaction, user) {
 
 module.exports = {
   REACTION, LUCY_BOT_ID, BOARD_SIZE, parseMinesMessage, safeProbability, recommend,
-  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, deliverHint,
+  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, freshMessage, deliverHint,
   handleMessage, autoReact, handleReaction,
 };
