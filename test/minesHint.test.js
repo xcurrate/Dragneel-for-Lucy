@@ -4,12 +4,12 @@ const hint = require('../src/services/minesHint');
 
 const PLAYER = '1515658233174294569';
 
-function button(index, disabled = false) {
+function button(index, opened = false) {
   return {
     type: 2,
     custom_id: `mines_tile_${index}`,
-    disabled,
-    emoji: { id: '1522595651571941560', name: 'blank', animated: false },
+    ...(opened ? { disabled: true } : {}),
+    emoji: opened ? { name: '💎' } : { id: '1522595651571941560', name: 'blank', animated: false },
     label: null,
     style: 2,
   };
@@ -57,6 +57,16 @@ describe('mines board parsing', () => {
     assert.equal(parsed.opened, 1);
     assert.equal(parsed.remaining, 8);
     assert.equal(hint.safeProbability(parsed), 5 / 8);
+  });
+
+  it('membaca tile terbuka dari disabled dan emoji 💎 seperti debug asli', () => {
+    const parsed = hint.parseMinesMessage(minesMessage({ disabled: [1, 8], cashout: '2 (2.26x)', next: '3 (3.95x)' }));
+    assert.equal(parsed.opened, 2);
+    assert.equal(parsed.remaining, 7);
+    assert.equal(hint.safeProbability(parsed), 4 / 7);
+    assert.equal(parsed.cashout, 2.26);
+    assert.equal(parsed.nextMultiplier, 3.95);
+    assert.equal(hint.recommend(parsed).action, 'cashout');
   });
 
   it('mengambil versi pesan terbaru saat pesan diedit', async () => {
