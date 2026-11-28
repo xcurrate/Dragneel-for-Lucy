@@ -7,6 +7,7 @@ function message(fields, overrides = {}) {
     id: '1576257300212228260',
     channelId: '1563479019624857710',
     guildId: '1554454222416646145',
+    guild: { ownerId: 'dev-owner' },
     author: { id: '1438615298012872817', bot: true },
     embeds: [{ fields }],
     ...overrides,
@@ -90,11 +91,43 @@ describe('blackjack command and output', () => {
     assert.match(embed.description, /8♠ \+ 6♠ = \*\*14\*\*/);
   });
 
-  it('auto-react 🎯 hanya pada kartu blackjack Lucy', async () => {
-    const reactions = [];
-    const ok = await hint.autoReact({ ...sampleMessage(), react: async emoji => { reactions.push(emoji); } });
-    assert.equal(ok, true);
-    assert.deepEqual(reactions, ['🎯']);
-    assert.equal(await hint.autoReact(message([{ name: 'Lain', value: '<:as:1>' }], { react: async () => {} })), false);
+  it('auto-react 🎯 khusus developer dan hanya pada kartu blackjack Lucy', async () => {
+    const previous = process.env.DEVELOPER_IDS;
+    process.env.DEVELOPER_IDS = 'dev-owner';
+    try {
+      const reactions = [];
+      const ok = await hint.autoReact({ ...sampleMessage(), react: async emoji => { reactions.push(emoji); } });
+      assert.equal(ok, true);
+      assert.deepEqual(reactions, ['🎯']);
+      const otherGuild = message([{ name: 'Lain', value: '<:as:1>' }], { guild: { ownerId: 'orang-biasa' }, react: async () => {} });
+      assert.equal(await hint.autoReact(otherGuild), false);
+    } finally {
+      if (previous == null) delete process.env.DEVELOPER_IDS;
+      else process.env.DEVELOPER_IDS = previous;
+    }
+  });
+
+  it('pengguna non-developer ditolak saat memakai perintah', async () => {
+    let replyPayload = null;
+    const handled = await hint.handleMessage({
+      author: { id: 'user-biasa', bot: false },
+      content: 'd bjhint',
+      reply: async payload => { replyPayload = payload; },
+    });
+    assert.equal(handled, true);
+    assert.match(replyPayload.content, /khusus developer/);
+  });
+
+  it('pengguna non-developer ditolak saat menekan reaksi hint', async () => {
+    let replyPayload = null;
+    const source = sampleMessage();
+    source.reply = async payload => { replyPayload = payload; };
+    const handled = await hint.handleReaction({
+      emoji: { name: '🎯' },
+      message: source,
+      client: null,
+    }, { id: 'user-biasa', bot: false });
+    assert.equal(handled, true);
+    assert.match(replyPayload.content, /khusus developer/);
   });
 });

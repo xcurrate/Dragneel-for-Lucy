@@ -11,6 +11,29 @@ const SUIT_SYMBOL = { h: '♥', d: '♦', c: '♣', s: '♠' };
 const RANK_VALUE = { a: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, j: 10, q: 10, k: 10 };
 const RANK_LABEL = { a: 'A', j: 'J', q: 'Q', k: 'K' };
 
+function developerIds(client) {
+  const ids = new Set(String(process.env.DEVELOPER_IDS || '').split(',').map(value => value.trim()).filter(Boolean));
+  const owner = client?.application?.owner;
+  if (owner?.id) ids.add(String(owner.id));
+  else if (owner?.members) for (const id of owner.members.keys()) ids.add(String(id));
+  return ids;
+}
+
+function developerFor(user, client) {
+  return developerIds(client).has(String(user?.id || ''));
+}
+
+// Auto-react hanya di guild yang pemiliknya atau salah satu cached member-nya
+// developer bot. Command/reaction tetap dicek per user.
+function developerGuild(message) {
+  const ids = developerIds(message?.client);
+  const ownerId = message?.guild?.ownerId;
+  if (ownerId && ids.has(String(ownerId))) return true;
+  const members = message?.guild?.members?.cache;
+  if (members) for (const id of ids) if (members.has(id)) return true;
+  return false;
+}
+
 function dataOf(message) {
   if (!message) return {};
   if (typeof message.toJSON === 'function') {
@@ -269,6 +292,10 @@ async function handleMessage(message) {
   const prefix = (message.guildId && getGuildSettings(message.guildId).prefix) || DEFAULT_PREFIX;
   const command = parseCommand(message.content, prefix);
   if (!command) return false;
+  if (!developerFor(message.author, message.client)) {
+    await send(message, { content: 'Fitur Blackjack Hint khusus developer.' });
+    return true;
+  }
 
   const options = parseOptions(command.args);
   if (options.error) { await send(message, { content: options.error }); return true; }
@@ -289,6 +316,7 @@ async function handleMessage(message) {
 
 async function autoReact(message) {
   if (!message || message.author?.id !== LUCY_BOT_ID) return false;
+  if (!developerGuild(message)) return false;
   if (!parseBlackjackMessage(message)) return false;
   try {
     await message.react(REACTION);
@@ -302,6 +330,10 @@ async function handleReaction(reaction, user) {
   if (!reaction || user?.bot || reaction.emoji?.name !== REACTION) return false;
   let message = reaction.message;
   if (message?.partial && message.fetch) message = await message.fetch();
+  if (!developerFor(user, reaction.client || message?.client)) {
+    await send(message, { content: 'Fitur Blackjack Hint khusus developer.' });
+    return true;
+  }
   const parsed = parseBlackjackMessage(message);
   if (!parsed) return false;
   await send(message, { embeds: [buildHintEmbed(parsed)] });
@@ -310,6 +342,6 @@ async function handleReaction(reaction, user) {
 
 module.exports = {
   REACTION, LUCY_BOT_ID, parseCards, handValue, parseBlackjackMessage, recommend,
-  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource,
+  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, developerGuild,
   handleMessage, autoReact, handleReaction,
 };
