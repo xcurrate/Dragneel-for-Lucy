@@ -40,6 +40,55 @@ function emojiToken(emoji) {
   return '<' + (emoji.animated ? 'a' : '') + ':' + emoji.name + ':' + emoji.id + '>';
 }
 
+function messageData(message) {
+  if (!message) return {};
+  if (typeof message.toJSON === 'function') {
+    try {
+      const json = message.toJSON();
+      if (json && typeof json === 'object') return json;
+    } catch { /* fallback ke bentuk mentah */ }
+  }
+  return message.message || message;
+}
+
+function collectStrings(value, out = [], seen = new Set()) {
+  if (typeof value === 'string') {
+    out.push(value);
+    return out;
+  }
+  if (!value || typeof value !== 'object' || seen.has(value)) return out;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, out, seen);
+    return out;
+  }
+  for (const item of Object.values(value)) {
+    if (typeof item !== 'function') collectStrings(item, out, seen);
+  }
+  return out;
+}
+
+function emojisFromUrls(text) {
+  const found = [...String(text || '').matchAll(/https?:\/\/(?:cdn|media)\.discordapp\.(?:com|net)\/emojis\/(\d{17,20})\.(png|gif|webp)(?:\?[^\s]*)?/gi)]
+    .map(match => ({
+      animated: match[2].toLowerCase() === 'gif',
+      name: 'emoji_' + match[1],
+      id: match[1],
+    }));
+  const seen = new Set();
+  return found.filter(emoji => {
+    if (seen.has(emoji.id)) return false;
+    seen.add(emoji.id);
+    return true;
+  });
+}
+
+function emojisFromMessage(message) {
+  const text = collectStrings(messageData(message)).join('\n');
+  const tokens = emojisFromContent(text);
+  return tokens.length ? tokens : emojisFromUrls(text);
+}
+
 function safeEmojiName(name, id) {
   const cleaned = String(name || '').replace(/[^A-Za-z0-9_]/g, '_').slice(0, 32);
   return cleaned.length >= 2 ? cleaned : ('e_' + id).slice(0, 32);
@@ -92,7 +141,10 @@ async function stealSticker({ guild, sticker, download = defaultDownload }) {
 
 async function referencedMessage(message) {
   if (!message?.reference?.messageId) return null;
-  if (typeof message.fetchReference === 'function') return message.fetchReference().catch(() => null);
+  if (typeof message.fetchReference === 'function') {
+    const fetched = await message.fetchReference().catch(() => null);
+    if (fetched) return fetched;
+  }
   const fetchMessage = message.channel?.messages?.fetch;
   return fetchMessage ? fetchMessage.call(message.channel.messages, message.reference.messageId).catch(() => null) : null;
 }
@@ -110,8 +162,8 @@ async function resolveEmoji(message, value) {
     throw new Error('Emoji tidak ditemukan. Kirim token emoji utuh, mis. `<:nama:123456789012345678>`.');
   }
   const reference = await referencedMessage(message);
-  const fromReply = emojiFromContent(reference?.content);
-  if (fromReply) return fromReply;
+  const fromReply = emojisFromMessage(reference);
+  if (fromReply.length) return fromReply[0];
   throw new Error('Format: `steal emoji <emoji>` atau balas pesan yang berisi satu emoji custom.');
 }
 
@@ -130,7 +182,7 @@ async function resolveEmojis(message, value) {
   }
 
   const reference = await referencedMessage(message);
-  const fromReply = emojisFromContent(reference?.content);
+  const fromReply = emojisFromMessage(reference);
   if (fromReply.length) return fromReply;
   throw new Error('Format: `steal emoji <emoji> [emoji...]` atau balas pesan yang berisi emoji custom.');
 }
@@ -428,6 +480,7 @@ module.exports = {
   parseEmojiToken,
   emojiFromContent,
   emojisFromContent,
+  emojisFromMessage,
   emojiToken,
   safeEmojiName,
   safeStickerName,

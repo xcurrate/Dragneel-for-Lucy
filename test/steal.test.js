@@ -169,6 +169,53 @@ test('steal emoji dari balasan mengambil semua emoji custom', async () => {
   assert.equal(buttonIds(payload)[1].disabled, false);
 });
 
+test('steal emoji membaca emoji dari components dan embed pesan balasan', async () => {
+  const guild = makeGuild();
+  const message = makeMessage({
+    guild,
+    reference: { messageId: 'message-1' },
+    fetchReference: async () => ({
+      content: '',
+      components: [{
+        type: 17,
+        components: [
+          { type: 10, content: 'Emoji dari component <:component:123456789012345678>' },
+        ],
+      }],
+      embeds: [{ description: 'Emoji dari embed <a:embedded:223456789012345678>' }],
+    }),
+  });
+  const out = capture();
+  await steal.handleStealCommand(message, ['emoji'], 'd', {
+    send: out.send,
+    isDeveloper: () => true,
+  });
+  const payload = out.calls[0];
+  assert.match(payload.embeds[0].toJSON().description, /1\/2/);
+  assert.equal(buttonIds(payload)[1].disabled, false);
+});
+
+test('steal emoji memakai URL CDN emoji dari embed balasan', async () => {
+  const guild = makeGuild();
+  const message = makeMessage({
+    guild,
+    reference: { messageId: 'message-1' },
+    fetchReference: async () => ({
+      embeds: [{
+        image: { url: 'https://cdn.discordapp.com/emojis/323456789012345678.gif?size=128' },
+      }],
+    }),
+  });
+  const out = capture();
+  await steal.handleStealCommand(message, ['emoji'], 'd', {
+    send: out.send,
+    isDeveloper: () => true,
+  });
+  const payload = out.calls[0];
+  assert.match(payload.embeds[0].toJSON().description, /1\/1/);
+  assert.match(payload.embeds[0].toJSON().description, /emoji_323456789012345678/);
+});
+
 test('panel steal emoji hanya bisa dipakai pemiliknya', async () => {
   const guild = makeGuild();
   const message = makeMessage({ guild });
