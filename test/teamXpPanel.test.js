@@ -30,7 +30,7 @@ test('modal pengaturan memuat empat field yang diminta', () => {
     'Battle per hari (1-5760)',
     'Rata-rata XP/hunt',
     'Peluang seri (%)',
-    'Streak maksimum (pernah dicapai)',
+    'Streak maksimum (opsional)',
   ]);
 });
 
@@ -41,6 +41,8 @@ test('validasi pengaturan menolak nilai di luar batas', () => {
   assert.match(panelModule.parseSettings({ battlesPerDay: 3000, avgHuntXp: 0, tieRate: 101, maxStreak: 1 }, panel).error, /0-100/);
   const ok = panelModule.parseSettings({ battlesPerDay: 3000, avgHuntXp: 0, tieRate: 2, maxStreak: 100000 }, panel);
   assert.equal(ok.settings.tieRate, 2);
+  const empty = panelModule.parseSettings({ battlesPerDay: 3000, avgHuntXp: 0, tieRate: 2, maxStreak: '' }, panel);
+  assert.equal(empty.settings.maxStreak, null);
 });
 
 test('streak maksimum dari kartu ditampilkan, bukan dipakai sebagai cap', () => {

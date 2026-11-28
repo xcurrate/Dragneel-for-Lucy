@@ -28,10 +28,7 @@ function prune() {
 function createPanel(userId, parsed) {
   prune();
   const id = crypto.randomBytes(6).toString('hex');
-  const settings = {
-    ...DEFAULT_SETTINGS,
-    maxStreak: Math.max(Number(parsed.streakMax) || 0, Number(parsed.streak) || 0),
-  };
+  const settings = { ...DEFAULT_SETTINGS };
   panels.set(id, {
     id, userId, parsed, settings, imported: false, createdAt: Date.now(),
   });
@@ -282,13 +279,16 @@ function infoEmbed(panel) {
 }
 
 function settingsModal(panel) {
-  const input = (id, label, value, placeholder) => new TextInputBuilder()
-    .setCustomId(id)
-    .setLabel(label)
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setValue(String(value))
-    .setPlaceholder(placeholder);
+  const input = (id, label, value, placeholder, required = true) => {
+    const field = new TextInputBuilder()
+      .setCustomId(id)
+      .setLabel(label)
+      .setStyle(TextInputStyle.Short)
+      .setRequired(required)
+      .setPlaceholder(placeholder);
+    if (value !== '' && value != null) field.setValue(String(value));
+    return field;
+  };
   return new ModalBuilder()
     .setCustomId(panelId(panel, 'settings_modal'))
     .setTitle('Pengaturan XP')
@@ -303,7 +303,7 @@ function settingsModal(panel) {
         'tie_rate', 'Peluang seri (%)', panel.settings.tieRate, '2',
       )),
       new ActionRowBuilder().addComponents(input(
-        'max_streak', 'Streak maksimum (pernah dicapai)', panel.settings.maxStreak, '0',
+        'max_streak', 'Streak maksimum (opsional)', panel.settings.maxStreak || '', 'Hasil simulasi global', false,
       )),
     );
 }
@@ -312,7 +312,8 @@ function parseSettings(values, panel) {
   const battlesPerDay = Number(values.battlesPerDay);
   const avgHuntXp = Number(values.avgHuntXp);
   const tieRate = Number(values.tieRate);
-  const maxStreak = Number(values.maxStreak);
+  const maxStreakRaw = String(values.maxStreak ?? '').trim();
+  const maxStreak = maxStreakRaw === '' ? null : Number(maxStreakRaw);
   if (!Number.isInteger(battlesPerDay) || battlesPerDay < 1 || battlesPerDay > 5760) {
     return { error: 'Battle per hari harus 1-5760.' };
   }
@@ -322,12 +323,8 @@ function parseSettings(values, panel) {
   if (!Number.isFinite(tieRate) || tieRate < 0 || tieRate > 100) {
     return { error: 'Peluang seri harus 0-100.' };
   }
-  if (!Number.isInteger(maxStreak) || maxStreak < 0) {
-    return { error: 'Streak maksimum harus angka bulat 0 atau lebih.' };
-  }
-  const currentStreak = teamMeta(panel).streak;
-  if (maxStreak < currentStreak) {
-    return { error: `Streak maksimum tidak boleh di bawah streak saat ini (${formatNumber(currentStreak)}).` };
+  if (maxStreak != null && (!Number.isInteger(maxStreak) || maxStreak < 0)) {
+    return { error: 'Streak maksimum harus angka bulat 0 atau lebih, atau dikosongkan.' };
   }
   return { settings: { battlesPerDay, avgHuntXp, tieRate, maxStreak } };
 }
