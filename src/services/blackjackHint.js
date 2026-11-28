@@ -1,6 +1,6 @@
 // Analisis kartu blackjack Lucy. Hanya memberi rekomendasi hit/stand karena
 // reaksi yang tersedia di kartu Lucy adalah 👊 dan 🛑.
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const { getGuildSettings, DEFAULT_PREFIX } = require('../utils/storage');
 
 const REACTION = '🎯';
@@ -247,13 +247,28 @@ function parseOptions(args = []) {
 }
 
 function strictPayload(payload) {
-  return { ...payload, allowedMentions: { parse: [], repliedUser: false }, flags: MessageFlags.Ephemeral };
+  return { ...payload, allowedMentions: { parse: [], repliedUser: false } };
 }
 
 async function send(target, payload) {
   const body = strictPayload(payload);
   if (target?.reply) return target.reply(body);
   if (target?.channel?.send) return target.channel.send(body);
+}
+
+// Reaksi bukan interaction, jadi Discord tidak mengizinkan pesan ephemeral
+// di channel. Hint dikirim ke DM agar tidak tampil publik. Kalau DM tertutup,
+// jangan bocorkan hint ke channel.
+async function deliverHint(message, parsed, user) {
+  const embed = buildHintEmbed(parsed);
+  if (user?.send) {
+    try {
+      await user.send({ embeds: [embed], allowedMentions: { parse: [] } });
+      return 'dm';
+    } catch { /* lanjut ke pesan penjelasan */ }
+  }
+  await send(message, { content: 'Hint tidak bisa dikirim karena DM tertutup. Buka DM lalu coba lagi.' });
+  return 'failed';
 }
 
 function helpEmbed() {
@@ -265,7 +280,7 @@ function helpEmbed() {
       '',
       '**Cara pakai**',
       'Balas pesan blackjack Lucy lalu ketik `bjhint`, atau kirim link/ID pesan.',
-      'Reaksi 🎯 pada kartu blackjack juga langsung memberi hint.',
+      'Reaksi 🎯 pada kartu blackjack mengirim hint lewat DM.',
       '',
       '**Contoh**',
       '`d bjhint`',
@@ -331,7 +346,7 @@ async function handleMessage(message) {
     await send(message, { content: 'Pesan sumber bukan kartu blackjack Lucy yang bisa dibaca.' });
     return true;
   }
-  await send(message, { embeds: [buildHintEmbed(parsed)] });
+  await deliverHint(message, parsed, message.author);
   return true;
 }
 
@@ -364,12 +379,12 @@ async function handleReaction(reaction, user) {
     await send(message, { content: 'Hint ini hanya untuk pesan blackjack developer.' });
     return true;
   }
-  await send(message, { embeds: [buildHintEmbed(parsed)] });
+  await deliverHint(message, parsed, user);
   return true;
 }
 
 module.exports = {
   REACTION, LUCY_BOT_ID, parseCards, handValue, parseBlackjackMessage, recommend,
-  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, developerMembers, targetedForDeveloper,
+  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, developerMembers, targetedForDeveloper, deliverHint,
   handleMessage, autoReact, handleReaction,
 };

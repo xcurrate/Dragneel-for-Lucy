@@ -633,7 +633,8 @@ atau **🛑 STAND**. Kartu blackjack Lucy otomatis diberi reaksi **🎯**; tekan
 reaksi itu untuk mendapat hint. Reaksi 🎯 hanya dipasang kalau nama pemain di
 kartu cocok dengan username/nickname developer di guild itu. Perintah teks
 bisa membalas kartu, memakai link/ID, atau mencari kartu blackjack terakhir di
-channel. Balasan hint memakai flag ephemeral.
+channel. Karena reaksi bukan interaction, Discord tidak mengizinkan pesan ephemeral di
+channel. Hint dikirim sebagai DM ke developer agar tidak tampil publik.
 
 ```text
 d bjhint

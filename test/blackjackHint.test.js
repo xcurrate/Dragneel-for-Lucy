@@ -1,6 +1,5 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { MessageFlags } = require('discord.js');
 const hint = require('../src/services/blackjackHint');
 
 function message(fields, overrides = {}) {
@@ -122,7 +121,32 @@ describe('blackjack command and output', () => {
     });
     assert.equal(handled, true);
     assert.match(replyPayload.content, /khusus developer/);
-    assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+  });
+
+  it('developer menerima hint lewat DM, bukan pesan publik', async () => {
+    const previous = process.env.DEVELOPER_IDS;
+    process.env.DEVELOPER_IDS = 'dev-owner';
+    try {
+      let dm = null;
+      let replied = false;
+      const source = sampleMessage();
+      source.reply = async () => { replied = true; };
+      const handled = await hint.handleReaction({
+        emoji: { name: '🎯' },
+        message: source,
+        client: null,
+      }, {
+        id: 'dev-owner',
+        bot: false,
+        send: async payload => { dm = payload; },
+      });
+      assert.equal(handled, true);
+      assert.equal(replied, false);
+      assert.equal(dm.embeds[0].toJSON().title, '🃏 Blackjack Hint');
+    } finally {
+      if (previous == null) delete process.env.DEVELOPER_IDS;
+      else process.env.DEVELOPER_IDS = previous;
+    }
   });
 
   it('pengguna non-developer ditolak saat menekan reaksi hint', async () => {
@@ -136,6 +160,5 @@ describe('blackjack command and output', () => {
     }, { id: 'user-biasa', bot: false });
     assert.equal(handled, true);
     assert.match(replyPayload.content, /khusus developer/);
-    assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
   });
 });
