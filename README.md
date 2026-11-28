@@ -607,7 +607,8 @@ Nilai ini bukan batas cap. XP/hunt adalah XP dari hunt; hunt dan battle aksi
 berbeda, jadi XP/hunt tidak dicampur ke forecast battle. `Bonus XP Llumi`
 dihitung sebagai pengali semua input XP (default 1000% = x11; isi 0 kalau
 akun tidak punya Llumi). Perubahan form langsung dipakai oleh statistik dan
-forecast.
+forecast, lalu disimpan per user di `data/team-xp-settings.json` supaya tetap
+ada saat panel dibuka lagi atau bot restart.
 
 XP battle dibagi rata ke seluruh tim; jumlah tim dibaca dari tombol halaman
 kartu (mis. `2/4`). Tim aktif memakai pembulatan ke atas, tim nonaktif ke bawah.

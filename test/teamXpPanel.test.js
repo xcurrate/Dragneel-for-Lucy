@@ -1,6 +1,19 @@
-const test = require('node:test');
+const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const ROOT = path.join(__dirname, '..');
+let tempDir;
 const panelModule = require('../src/services/teamXpPanel');
+beforeEach(() => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'team-xp-panel-'));
+  process.chdir(tempDir);
+});
+afterEach(() => {
+  process.chdir(ROOT);
+  fs.rmSync(tempDir, { recursive: true, force: true });
+});
 
 function parsedTeam() {
   return {
@@ -66,6 +79,30 @@ test('forecast menghasilkan baris level-up dan tombol kembali ke statistik', () 
   assert.match(payload.embeds[0].data.description, /🆙/);
   const labels = payload.components[0].components.map(button => button.data.label);
   assert.deepEqual(labels, ['Impor', 'Prediksi', 'Pengaturan', 'Info']);
+});
+
+test('pengaturan tersimpan saat panel baru dibuka lagi', async () => {
+  const panel = panelModule.createPanel('user-persist', parsedTeam());
+  const values = {
+    battles_per_day: '1200',
+    avg_xp_hunt: '21',
+    llumi_bonus: '1000',
+    tie_rate: '5',
+    max_streak: '',
+  };
+  await panelModule.handleModal({
+    customId: `xp_panel:${panel.id}:settings_modal`,
+    user: { id: 'user-persist' },
+    fields: { getTextInputValue: key => values[key] },
+    update: async () => {},
+    reply: async () => {},
+  });
+  const next = panelModule.createPanel('user-persist', parsedTeam());
+  assert.equal(next.settings.battlesPerDay, 1200);
+  assert.equal(next.settings.avgHuntXp, 21);
+  assert.equal(next.settings.llumiBonusPercent, 1000);
+  assert.equal(next.settings.tieRate, 5);
+  assert.equal(next.settings.maxStreak, null);
 });
 
 test('modal submit mengubah pengaturan panel', async () => {

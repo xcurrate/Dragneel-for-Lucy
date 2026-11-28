@@ -5,6 +5,7 @@ const {
   ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags,
 } = require('discord.js');
 const petXp = require('./petXp');
+const settingsStore = require('../utils/teamXpSettingsStorage');
 
 const PREFIX = 'xp_panel';
 const PANEL_TTL_MS = 30 * 60 * 1000;
@@ -29,7 +30,8 @@ function prune() {
 function createPanel(userId, parsed) {
   prune();
   const id = crypto.randomBytes(6).toString('hex');
-  const settings = { ...DEFAULT_SETTINGS };
+  const saved = settingsStore.get(userId);
+  const settings = { ...DEFAULT_SETTINGS, ...(saved || {}) };
   panels.set(id, {
     id, userId, parsed, settings, imported: false, createdAt: Date.now(),
   });
@@ -402,6 +404,7 @@ async function handleModal(interaction) {
     return interaction.reply({ content: `❌ ${result.error}`, flags: MessageFlags.Ephemeral });
   }
   panel.settings = result.settings;
+  settingsStore.set(panel.userId, panel.settings);
   return interaction.update(statsPayload(panel));
 }
 
