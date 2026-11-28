@@ -149,6 +149,16 @@ describe('blackjack command and output', () => {
     }
   });
 
+  it('mengabaikan reaksi pada pesan mines', async () => {
+    let replied = false;
+    const handled = await hint.handleReaction({
+      emoji: { name: '🎯' },
+      message: { id: 'mines', components: [{ type: 17, components: [] }], reply: async () => { replied = true; } },
+    }, { id: 'user-biasa', bot: false });
+    assert.equal(handled, false);
+    assert.equal(replied, false);
+  });
+
   it('pengguna non-developer ditolak saat menekan reaksi hint', async () => {
     let replyPayload = null;
     const source = sampleMessage();

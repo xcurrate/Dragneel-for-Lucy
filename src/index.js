@@ -150,10 +150,13 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   } catch (e) { console.error('[LucyTeamImport] reaction:', e); }
   try { await huntbotCalc.handleReaction(reaction, user); }
   catch (e) { console.error('[HuntBotCalc] reaction:', e); }
-  try { await blackjackHint.handleReaction(reaction, user); }
+  let hintHandled = false;
+  try { hintHandled = await blackjackHint.handleReaction(reaction, user); }
   catch (e) { console.error('[BlackjackHint] reaction:', e); }
-  try { await minesHint.handleReaction(reaction, user); }
-  catch (e) { console.error('[MinesHint] reaction:', e); }
+  if (!hintHandled) {
+    try { await minesHint.handleReaction(reaction, user); }
+    catch (e) { console.error('[MinesHint] reaction:', e); }
+  }
 });
 client.on(Events.MessageUpdate, async (_old, message) => {
   try {

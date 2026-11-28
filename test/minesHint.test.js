@@ -127,6 +127,16 @@ describe('mines command and developer gate', () => {
     }
   });
 
+  it('mengabaikan reaksi pada pesan blackjack', async () => {
+    let replied = false;
+    const handled = await hint.handleReaction({
+      emoji: { name: '🎯' },
+      message: { id: 'blackjack', embeds: [{ fields: [{ name: 'Dealer', value: '<:10h:1>' }] }], reply: async () => { replied = true; } },
+    }, { id: PLAYER, bot: false });
+    assert.equal(handled, false);
+    assert.equal(replied, false);
+  });
+
   it('pengguna non-developer ditolak', async () => {
     let reply = null;
     await hint.handleMessage({

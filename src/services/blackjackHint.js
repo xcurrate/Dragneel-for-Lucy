@@ -376,12 +376,12 @@ async function handleReaction(reaction, user) {
   if (!reaction || user?.bot || reaction.emoji?.name !== REACTION) return false;
   let message = reaction.message;
   if (message?.fetch) message = await message.fetch(true).catch(() => message);
+  const parsed = parseBlackjackMessage(message);
+  if (!parsed) return false;
   if (!developerFor(user, reaction.client || message?.client)) {
     await send(message, { content: 'Fitur Blackjack Hint khusus developer.' });
     return true;
   }
-  const parsed = parseBlackjackMessage(message);
-  if (!parsed) return false;
   const members = await developerMembers(message);
   if (!(await targetedForDeveloper(parsed, members))) {
     await send(message, { content: 'Hint ini hanya untuk pesan blackjack developer.' });

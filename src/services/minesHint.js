@@ -331,12 +331,13 @@ async function handleReaction(reaction, user) {
   if (!reaction || user?.bot || reaction.emoji?.name !== REACTION) return false;
   let message = reaction.message;
   if (message?.fetch) message = await message.fetch(true).catch(() => message);
+  const parsed = parseMinesMessage(message);
+  if (!parsed) return false;
   if (!developerFor(user, reaction.client || message?.client)) {
     await send(message, { content: 'Fitur Mines Hint khusus developer.' });
     return true;
   }
-  const parsed = parseMinesMessage(message);
-  if (!parsed || parsed.playerId !== String(user.id)) {
+  if (parsed.playerId !== String(user.id)) {
     await send(message, { content: 'Hint ini hanya untuk papan mines developer.' });
     return true;
   }
