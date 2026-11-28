@@ -231,7 +231,7 @@ test('panel steal emoji hanya bisa dipakai pemiliknya', async () => {
   assert.equal(guild.calls.emoji.length, 0);
 });
 
-test('steal sticker dari pesan yang dibalas', async () => {
+test('steal sticker dari pesan yang dibalas membuka panel dan menyimpan', async () => {
   const guild = makeGuild();
   const sticker = {
     id: 'sticker-1',
@@ -251,27 +251,53 @@ test('steal sticker dari pesan yang dibalas', async () => {
     isDeveloper: () => true,
     download,
   });
+  assert.equal(guild.calls.sticker.length, 0, 'belum membuat sticker sebelum tombol Simpan');
+  const payload = out.calls[0];
+  assert.match(payload.embeds[0].toJSON().title, /Steal Sticker/);
+  assert.match(payload.embeds[0].toJSON().description, /Kucing Lucu/);
+  assert.equal(buttonIds(payload).length, 4);
+
+  const save = makeButtonInteraction(buttonIds(payload)[2].custom_id, guild);
+  await steal.handleStealPanelButton(save, { isDeveloper: () => true, download });
   assert.equal(guild.calls.sticker.length, 1);
   assert.equal(guild.calls.sticker[0].name, 'Kucing Lucu');
   assert.equal(guild.calls.sticker[0].tags, 'kucing');
-  assert.match(out.calls[0].embeds[0].toJSON().title, /Sticker Berhasil/);
+  assert.match(save.updated.content, /ditambahkan/);
 });
 
-test('steal sticker menerima sticker ID lewat REST', async () => {
+test('steal sticker menerima beberapa sticker ID lewat REST dan bisa download', async () => {
   const guild = makeGuild();
-  const sticker = { id: '123456789012345678', name: 'Sticker REST', tags: 'tag', url: 'https://cdn.discordapp.com/stickers/2.png' };
+  const stickers = [
+    { id: '123456789012345678', name: 'Sticker REST', tags: 'tag', url: 'https://cdn.discordapp.com/stickers/2.png' },
+    { id: '223456789012345678', name: 'Sticker Dua', tags: 'dua', url: 'https://cdn.discordapp.com/stickers/3.gif' },
+  ];
   const message = makeMessage({
     guild,
-    client: { rest: { get: async route => { assert.match(route, /123456789012345678/); return sticker; } } },
+    client: { rest: { get: async route => stickers.find(sticker => route.includes(sticker.id)) } },
   });
   const out = capture();
-  await steal.handleStealCommand(message, ['sticker', '123456789012345678'], 'd', {
+  await steal.handleStealCommand(message, ['sticker', '123456789012345678', '223456789012345678'], 'd', {
     send: out.send,
     isDeveloper: () => true,
     download,
   });
-  assert.equal(guild.calls.sticker.length, 1);
-  assert.equal(guild.calls.sticker[0].name, 'Sticker REST');
+  const payload = out.calls[0];
+  assert.match(payload.embeds[0].toJSON().description, /1\/2/);
+  assert.equal(buttonIds(payload)[1].disabled, false);
+
+  const next = makeButtonInteraction(buttonIds(payload)[1].custom_id, guild);
+  await steal.handleStealPanelButton(next, { isDeveloper: () => true });
+  assert.match(next.updated.embeds[0].toJSON().description, /2\/2/);
+
+  const downloadButton = makeButtonInteraction(buttonIds(next.updated)[3].custom_id, guild);
+  let downloaded = null;
+  await steal.handleStealPanelButton(downloadButton, {
+    isDeveloper: () => true,
+    download: async url => { downloaded = url; return Buffer.from('sticker'); },
+  });
+  assert.match(downloaded, /stickers\/3\.gif/);
+  assert.equal(downloadButton.replied.files.length, 1);
+  assert.match(downloadButton.replied.content, /Sticker Dua/);
 });
 
 test('format salah menampilkan panduan tanpa membuat aset', async () => {
@@ -305,6 +331,23 @@ test('slash steal menolak non-developer sebelum menyentuh guild', async () => {
   await steal.execute(interaction, { isDeveloper: () => false });
   assert.equal(guild.calls.emoji.length, 0);
   assert.match(interaction.replied.content, /developer/);
+});
+
+test('slash steal sticker membuka panel untuk developer', async () => {
+  const guild = makeGuild();
+  const sticker = { id: '123456789012345678', name: 'Sticker Slash', tags: 'slash', url: 'https://cdn.discordapp.com/stickers/4.png' };
+  const interaction = {
+    user: { id: 'dev-1' },
+    client: { rest: { get: async route => { assert.match(route, /123456789012345678/); return sticker; } } },
+    guild,
+    guildId: guild.id,
+    options: { getSubcommand: () => 'sticker', getString: () => '123456789012345678' },
+    reply: async payload => { interaction.replied = payload; },
+  };
+  await steal.execute(interaction, { isDeveloper: () => true, download });
+  assert.equal(guild.calls.sticker.length, 0);
+  assert.match(interaction.replied.embeds[0].toJSON().title, /Steal Sticker/);
+  assert.equal(buttonIds(interaction.replied).length, 4);
 });
 
 test('slash steal emoji membuka panel untuk developer', async () => {

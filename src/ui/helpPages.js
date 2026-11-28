@@ -187,9 +187,9 @@ const PAGES = {
           `\`${prefix} prefix [nilai]\` — lihat/ubah prefix`,
           `\`${prefix} boss admin-help\` — panduan moderator`,
           `\`${prefix} steal emoji <emoji> [emoji...]\` — panel emoji, simpan/download (developer)`,
-          `\`${prefix} steal sticker <id>\` — ambil sticker (developer)`,
+          `\`${prefix} steal sticker <id> [id...]\` — panel sticker, simpan/download (developer)`,
           '`/steal emoji emoji:<token>` — panel emoji, simpan/download (developer)',
-          '`/steal sticker sticker:<id>` — ambil sticker (developer)',
+          '`/steal sticker sticker:<id>` — panel sticker, simpan/download (developer)',
         ].join('\n'),
       },
       {

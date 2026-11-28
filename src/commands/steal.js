@@ -89,6 +89,71 @@ function emojisFromMessage(message) {
   return tokens.length ? tokens : emojisFromUrls(text);
 }
 
+function stickerUrl(sticker) {
+  if (sticker?.url) return sticker.url;
+  const format = String(sticker?.format || '').toUpperCase();
+  const type = Number(sticker?.format_type);
+  const ext = format === 'LOTTIE' || type === 3
+    ? 'json'
+    : (format === 'GIF' || type === 4 ? 'gif' : 'png');
+  return 'https://cdn.discordapp.com/stickers/' + sticker.id + '.' + ext;
+}
+
+function stickerFileName(sticker, url = stickerUrl(sticker)) {
+  const match = /\.([a-z0-9]+)(?:\?|$)/i.exec(String(url || ''));
+  const ext = match ? match[1].toLowerCase() : 'png';
+  return safeStickerName(sticker.name, sticker.id).replace(/\s+/g, '_') + '.' + ext;
+}
+
+function normalizeSticker(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'string') raw = { id: raw };
+  if (typeof raw !== 'object' || !raw.id) return null;
+  const sticker = { ...raw, id: String(raw.id) };
+  sticker.name = sticker.name || 'sticker_' + sticker.id;
+  sticker.url = stickerUrl(sticker);
+  return sticker;
+}
+
+function addStickers(value, out) {
+  if (!value) return;
+  if (Array.isArray(value)) {
+    for (const item of value) addStickers(item, out);
+    return;
+  }
+  if (typeof value.values === 'function') {
+    for (const item of value.values()) addStickers(item, out);
+    return;
+  }
+  if (typeof value.first === 'function') {
+    addStickers(value.first(), out);
+    return;
+  }
+  const sticker = normalizeSticker(value);
+  if (sticker) out.push(sticker);
+}
+
+function stickersFromMessage(message) {
+  if (!message) return [];
+  const data = messageData(message);
+  const out = [];
+  addStickers(message.stickers, out);
+  addStickers(message.stickerItems, out);
+  addStickers(data.stickers, out);
+  addStickers(data.stickerItems, out);
+  addStickers(data.sticker_items, out);
+  addStickers(data.message?.stickers, out);
+  addStickers(data.message?.stickerItems, out);
+  addStickers(data.message?.sticker_items, out);
+
+  const seen = new Set();
+  return out.filter(sticker => {
+    if (seen.has(sticker.id)) return false;
+    seen.add(sticker.id);
+    return true;
+  });
+}
+
 function safeEmojiName(name, id) {
   const cleaned = String(name || '').replace(/[^A-Za-z0-9_]/g, '_').slice(0, 32);
   return cleaned.length >= 2 ? cleaned : ('e_' + id).slice(0, 32);
@@ -124,8 +189,9 @@ async function stealEmoji({ guild, emoji, download = defaultDownload }) {
 
 async function stealSticker({ guild, sticker, download = defaultDownload }) {
   if (!guild) throw new Error('Perintah ini hanya bisa dipakai di server.');
-  if (!sticker?.url) throw new Error('Sticker ini tidak punya URL yang bisa diunduh.');
-  const buffer = await download(sticker.url);
+  const url = stickerUrl(sticker);
+  if (!url) throw new Error('Sticker ini tidak punya URL yang bisa diunduh.');
+  const buffer = await download(url);
   if (buffer.length > MAX_STICKER_BYTES) throw new Error('Ukuran sticker melebihi batas 512 KB.');
   const name = safeStickerName(sticker.name, sticker.id || 'sticker');
   const tags = String(sticker.tags || sticker.name || 'sticker').slice(0, 200);
@@ -187,19 +253,36 @@ async function resolveEmojis(message, value) {
   throw new Error('Format: `steal emoji <emoji> [emoji...]` atau balas pesan yang berisi emoji custom.');
 }
 
-async function resolveSticker(message, value) {
-  const trimmed = String(value || '').trim();
-  if (trimmed) {
-    if (!EMOJI_ID.test(trimmed)) throw new Error('Sticker ID harus berupa angka 17–20 digit.');
-    const restGet = message.client?.rest?.get;
-    const sticker = restGet ? await restGet.call(message.client.rest, Routes.sticker(trimmed)).catch(() => null) : null;
-    if (!sticker) throw new Error('Sticker tidak ditemukan.');
-    return sticker;
+async function fetchSticker(client, id) {
+  const restGet = client?.rest?.get;
+  const sticker = restGet ? await restGet.call(client.rest, Routes.sticker(id)).catch(() => null) : null;
+  return normalizeSticker(sticker);
+}
+
+async function resolveStickers(message, value) {
+  const text = String(value || '').trim();
+  if (text) {
+    const ids = text.split(/[\s,]+/).filter(part => EMOJI_ID.test(part));
+    if (!ids.length) throw new Error('Sticker ID harus berupa angka 17–20 digit.');
+    const stickers = [];
+    for (const id of ids) {
+      const sticker = await fetchSticker(message.client, id);
+      if (!sticker) throw new Error('Sticker tidak ditemukan.');
+      stickers.push(sticker);
+    }
+    return stickers;
   }
   const reference = await referencedMessage(message);
-  const sticker = reference?.stickers?.first?.() || message.stickers?.first?.();
-  if (sticker) return sticker;
-  throw new Error('Format: `steal sticker <sticker_id>` atau balas pesan yang berisi sticker.');
+  const fromReply = stickersFromMessage(reference);
+  if (fromReply.length) return fromReply;
+  const own = stickersFromMessage(message);
+  if (own.length) return own;
+  throw new Error('Format: `steal sticker <sticker_id> [sticker_id...]` atau balas pesan yang berisi sticker.');
+}
+
+async function resolveSticker(message, value) {
+  const stickers = await resolveStickers(message, value);
+  return stickers[0];
 }
 
 function cleanupPanels(now = Date.now()) {
@@ -211,14 +294,15 @@ function cleanupPanels(now = Date.now()) {
   }
 }
 
-function rememberPanel({ userId, guildId, emojis }) {
+function rememberPanel({ userId, guildId, kind = 'emoji', items }) {
   cleanupPanels();
   const token = crypto.randomBytes(8).toString('hex');
   const entry = {
     token,
     userId,
     guildId,
-    emojis,
+    kind,
+    items,
     index: 0,
     saved: new Set(),
     createdAt: Date.now(),
@@ -255,47 +339,54 @@ function parseStealPanelButton(customId) {
   return { ok: true, token: parts[1], action: parts[2], index };
 }
 
+function panelComponents(entry, index, total, saved) {
+  return [new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(panelId(entry.token, 'prev', index))
+      .setLabel('◀ Sebelumnya')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(index <= 0),
+    new ButtonBuilder()
+      .setCustomId(panelId(entry.token, 'next', index))
+      .setLabel('Berikutnya ▶')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(index >= total - 1),
+    new ButtonBuilder()
+      .setCustomId(panelId(entry.token, 'save', index))
+      .setLabel(saved ? '✅ Tersimpan' : '💾 Simpan')
+      .setStyle(saved ? ButtonStyle.Success : ButtonStyle.Primary)
+      .setDisabled(saved),
+    new ButtonBuilder()
+      .setCustomId(panelId(entry.token, 'download', index))
+      .setLabel('⬇️ Download')
+      .setStyle(ButtonStyle.Secondary),
+  )];
+}
+
 function panelPayload(entry) {
-  const index = Math.max(0, Math.min(entry.index, entry.emojis.length - 1));
-  const emoji = entry.emojis[index];
-  const total = entry.emojis.length;
+  const index = Math.max(0, Math.min(entry.index, entry.items.length - 1));
+  const item = entry.items[index];
+  const total = entry.items.length;
   const saved = entry.saved.has(index);
+  const sticker = entry.kind === 'sticker';
   const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('🧩 Steal Emoji')
-    .setDescription(`**${emoji.name}**\n${emojiToken(emoji)}\n\nEmoji **${index + 1}/${total}**`)
-    .setThumbnail(emojiUrl(emoji))
+    .setColor(sticker ? 0xFEE75C : 0x5865F2)
+    .setTitle(sticker ? '🧩 Steal Sticker' : '🧩 Steal Emoji')
+    .setDescription(sticker
+      ? `**${item.name}**\nID: \`${item.id}\`\n\nSticker **${index + 1}/${total}**`
+      : `**${item.name}**\n${emojiToken(item)}\n\nEmoji **${index + 1}/${total}**`)
+    .setThumbnail(sticker ? stickerUrl(item) : emojiUrl(item))
     .setFooter({ text: '◀ ▶ navigasi · Simpan ke server · Download file' });
   if (saved) embed.addFields({ name: 'Status', value: '✅ Sudah disimpan ke server ini' });
 
   return {
     embeds: [embed],
-    components: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(panelId(entry.token, 'prev', index))
-        .setLabel('◀ Sebelumnya')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(index <= 0),
-      new ButtonBuilder()
-        .setCustomId(panelId(entry.token, 'next', index))
-        .setLabel('Berikutnya ▶')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(index >= total - 1),
-      new ButtonBuilder()
-        .setCustomId(panelId(entry.token, 'save', index))
-        .setLabel(saved ? '✅ Tersimpan' : '💾 Simpan')
-        .setStyle(saved ? ButtonStyle.Success : ButtonStyle.Primary)
-        .setDisabled(saved),
-      new ButtonBuilder()
-        .setCustomId(panelId(entry.token, 'download', index))
-        .setLabel('⬇️ Download')
-        .setStyle(ButtonStyle.Secondary),
-    )],
+    components: panelComponents(entry, index, total, saved),
   };
 }
 
-function panelFor(userId, guildId, emojis) {
-  return rememberPanel({ userId, guildId, emojis });
+function panelFor(userId, guildId, items, kind = 'emoji') {
+  return rememberPanel({ userId, guildId, kind, items });
 }
 
 async function handleStealPanelButton(interaction, deps = {}) {
@@ -320,17 +411,17 @@ async function handleStealPanelButton(interaction, deps = {}) {
     guild: interaction.guild,
   })) {
     return interaction.reply({
-      content: 'Fitur steal emoji hanya untuk developer bot.',
+      content: 'Fitur steal emoji/sticker hanya untuk developer bot.',
       flags: MessageFlags.Ephemeral,
     });
   }
 
-  const index = Math.max(0, Math.min(entry.index, entry.emojis.length - 1));
-  const emoji = entry.emojis[index];
+  const index = Math.max(0, Math.min(entry.index, entry.items.length - 1));
+  const item = entry.items[index];
   if (parsed.action === 'prev' || parsed.action === 'next') {
     entry.index = Math.max(0, Math.min(
       index + (parsed.action === 'next' ? 1 : -1),
-      entry.emojis.length - 1,
+      entry.items.length - 1,
     ));
     return interaction.update(panelPayload(entry));
   }
@@ -339,15 +430,13 @@ async function handleStealPanelButton(interaction, deps = {}) {
     if (entry.saved.has(index)) {
       return interaction.update({
         ...panelPayload(entry),
-        content: `ℹ️ **${emoji.name}** sudah tersimpan di server ini.`,
+        content: `ℹ️ **${item.name}** sudah tersimpan di server ini.`,
       });
     }
     try {
-      const result = await stealEmoji({
-        guild: interaction.guild,
-        emoji,
-        download: deps.download,
-      });
+      const result = entry.kind === 'sticker'
+        ? await stealSticker({ guild: interaction.guild, sticker: item, download: deps.download })
+        : await stealEmoji({ guild: interaction.guild, emoji: item, download: deps.download });
       entry.saved.add(index);
       return interaction.update({
         ...panelPayload(entry),
@@ -364,10 +453,13 @@ async function handleStealPanelButton(interaction, deps = {}) {
   if (parsed.action === 'download') {
     try {
       const download = deps.download || defaultDownload;
-      const buffer = await download(emojiUrl(emoji));
-      const filename = safeEmojiName(emoji.name, emoji.id) + (emoji.animated ? '.gif' : '.png');
+      const url = entry.kind === 'sticker' ? stickerUrl(item) : emojiUrl(item);
+      const buffer = await download(url);
+      const filename = entry.kind === 'sticker'
+        ? stickerFileName(item, url)
+        : safeEmojiName(item.name, item.id) + (item.animated ? '.gif' : '.png');
       return interaction.reply({
-        content: `⬇️ **${emoji.name}**`,
+        content: `⬇️ **${item.name}**`,
         files: [new AttachmentBuilder(buffer, { name: filename })],
         flags: MessageFlags.Ephemeral,
       });
@@ -378,14 +470,6 @@ async function handleStealPanelButton(interaction, deps = {}) {
       });
     }
   }
-}
-
-function resultEmbed(result) {
-  const label = result.kind === 'emoji' ? 'Emoji' : 'Sticker';
-  return new EmbedBuilder()
-    .setColor(0x57F287)
-    .setTitle('✅ ' + label + ' Berhasil Diambil')
-    .setDescription('**' + result.name + '**' + (result.id ? ' (`' + result.id + '`)' : '') + ' sudah ditambahkan ke server ini.');
 }
 
 async function handleStealCommand(message, args, prefix, deps = {}) {
@@ -400,25 +484,24 @@ async function handleStealCommand(message, args, prefix, deps = {}) {
   const kind = String(args[0] || '').toLowerCase();
   const value = args.slice(1).join(' ').trim();
   try {
-    let result;
     if (kind === 'emoji' || kind === 'emote') {
       const emojis = await resolveEmojis(message, value);
       const entry = panelFor(message.author?.id || 'unknown', message.guildId || message.guild?.id, emojis);
       return send(message, panelPayload(entry));
-    } else if (kind === 'sticker' || kind === 'stiker') {
-      const sticker = await resolveSticker(message, value);
-      result = await stealSticker({ guild: message.guild, sticker, download: deps.download });
-    } else {
-      return send(message, {
-        embeds: [new EmbedBuilder().setColor(0xFEE75C).setTitle('ℹ️ Format Steal').setDescription(
-          '`' + prefix + ' steal emoji <emoji> [emoji...]` — buka panel emoji custom.\n' +
-          '`' + prefix + ' steal sticker <sticker_id>` — ambil sticker.\n' +
-          'Panel menyediakan navigasi ◀ ▶, Simpan ke server, dan Download.\n' +
-          'Bisa juga balas pesan yang berisi emoji/sticker lalu jalankan perintahnya.'
-        )],
-      });
     }
-    return send(message, { embeds: [resultEmbed(result)] });
+    if (kind === 'sticker' || kind === 'stiker') {
+      const stickers = await resolveStickers(message, value);
+      const entry = panelFor(message.author?.id || 'unknown', message.guildId || message.guild?.id, stickers, 'sticker');
+      return send(message, panelPayload(entry));
+    }
+    return send(message, {
+      embeds: [new EmbedBuilder().setColor(0xFEE75C).setTitle('ℹ️ Format Steal').setDescription(
+        '`' + prefix + ' steal emoji <emoji> [emoji...]` — buka panel emoji custom.\n' +
+        '`' + prefix + ' steal sticker <sticker_id> [sticker_id...]` — buka panel sticker.\n' +
+        'Panel menyediakan navigasi ◀ ▶, Simpan ke server, dan Download.\n' +
+        'Bisa juga balas pesan yang berisi emoji/sticker lalu jalankan perintahnya.'
+      )],
+    });
   } catch (error) {
     return send(message, { embeds: [new EmbedBuilder().setColor(0xED4245).setTitle('❌ Gagal Mengambil').setDescription(error.message || 'Terjadi kesalahan.')] });
   }
@@ -440,8 +523,8 @@ const data = new SlashCommandBuilder()
     .addStringOption(option => option.setName('emoji').setDescription('Token emoji atau ID').setRequired(true)))
   .addSubcommand(sub => sub
     .setName('sticker')
-    .setDescription('Ambil sticker')
-    .addStringOption(option => option.setName('sticker').setDescription('ID sticker').setRequired(true)));
+    .setDescription('Buka panel sticker: navigasi, simpan, download')
+    .addStringOption(option => option.setName('sticker').setDescription('ID sticker (bisa lebih dari satu, pisahkan spasi/koma)').setRequired(true)));
 
 async function execute(interaction, deps = {}) {
   if (!isDeveloperInteraction(interaction, deps)) {
@@ -455,16 +538,17 @@ async function execute(interaction, deps = {}) {
   }
   const kind = interaction.options.getSubcommand();
   try {
-    let result;
     if (kind === 'emoji') {
       const emojis = await resolveEmojis({ guild: interaction.guild }, interaction.options.getString('emoji'));
       const entry = panelFor(interaction.user.id, interaction.guildId, emojis);
       return interaction.reply({ ...panelPayload(entry), flags: MessageFlags.Ephemeral });
-    } else {
-      const sticker = await interaction.client.rest.get(Routes.sticker(interaction.options.getString('sticker')));
-      result = await stealSticker({ guild: interaction.guild, sticker, download: deps.download });
     }
-    return interaction.reply({ embeds: [resultEmbed(result)], flags: MessageFlags.Ephemeral });
+    const stickers = await resolveStickers(
+      { client: interaction.client, guild: interaction.guild },
+      interaction.options.getString('sticker'),
+    );
+    const entry = panelFor(interaction.user.id, interaction.guildId, stickers, 'sticker');
+    return interaction.reply({ ...panelPayload(entry), flags: MessageFlags.Ephemeral });
   } catch (error) {
     return interaction.reply({
       embeds: [new EmbedBuilder().setColor(0xED4245).setTitle('❌ Gagal Mengambil').setDescription(error.message || 'Terjadi kesalahan.')],
@@ -490,6 +574,9 @@ module.exports = {
   resolveEmoji,
   resolveEmojis,
   resolveSticker,
+  resolveStickers,
+  stickersFromMessage,
+  stickerUrl,
   isStealPanelButton,
   parseStealPanelButton,
   handleStealPanelButton,
