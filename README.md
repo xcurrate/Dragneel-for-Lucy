@@ -647,6 +647,23 @@ Analisis memakai strategi dasar hit/stand. Double dan split tidak dihitung
 karena kartu Lucy hanya menyediakan reaksi 👊 dan 🛑. Dealer dianggap memakai
 aturan standar; hasil tetap estimasi, bukan jaminan.
 
+## Mines Hint (khusus developer)
+
+Bot membaca papan mines 3x3 Lucy dari Components V2, menghitung peluang tile
+berikutnya, lalu memberi rekomendasi buka tile atau cash out. Reaksi 🎯 hanya
+dipasang pada papan mines milik developer. Hint dikirim lewat DM.
+
+```text
+d mhint
+d mhint https://discord.com/channels/.../.../...
+d mhint 1576266407027413134
+d mhint help
+```
+
+Karena papan mines tidak punya petunjuk angka, semua tile yang belum dibuka
+punya peluang sama. Hint hanya menghitung probabilitas dan EV; bukan posisi
+ranjau yang pasti.
+
 ## Kalkulator HuntBot
 
 Bot membaca kartu **HuntBot** Lucy dari pesan Components V2 atau embed, lalu

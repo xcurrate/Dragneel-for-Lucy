@@ -27,6 +27,7 @@ const lucyTeamImport = require('./services/lucyTeamImport');
 const teamXpPanel = require('./services/teamXpPanel');
 const huntbotCalc = require('./services/huntbotCalc');
 const blackjackHint = require('./services/blackjackHint');
+const minesHint = require('./services/minesHint');
 
 logBuffer.install();
 if (!process.env.DISCORD_TOKEN || !process.env.LUCY_BOT_ID) {
@@ -126,6 +127,8 @@ client.on(Events.MessageCreate, async message => {
   huntbotCalc.handleMessage(message).catch(e => console.error('[HuntBotCalc]', e));
   blackjackHint.autoReact(message).catch(e => console.error('[BlackjackHint] react:', e));
   blackjackHint.handleMessage(message).catch(e => console.error('[BlackjackHint]', e));
+  minesHint.autoReact(message).catch(e => console.error('[MinesHint] react:', e));
+  minesHint.handleMessage(message).catch(e => console.error('[MinesHint]', e));
   handlePrefixMessage(message).catch(e => {
     console.error('[PrefixCommand]', e);
     message.reply({ content: 'Terjadi kesalahan saat menjalankan perintah.' }).catch(() => {});
@@ -149,6 +152,8 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   catch (e) { console.error('[HuntBotCalc] reaction:', e); }
   try { await blackjackHint.handleReaction(reaction, user); }
   catch (e) { console.error('[BlackjackHint] reaction:', e); }
+  try { await minesHint.handleReaction(reaction, user); }
+  catch (e) { console.error('[MinesHint] reaction:', e); }
 });
 client.on(Events.MessageUpdate, async (_old, message) => {
   try {
@@ -159,6 +164,7 @@ client.on(Events.MessageUpdate, async (_old, message) => {
     captureAnimalDex(message);
     huntbotCalc.autoReact(message).catch(e => console.error('[HuntBotCalc] update react:', e));
     blackjackHint.autoReact(message).catch(e => console.error('[BlackjackHint] update react:', e));
+    minesHint.autoReact(message).catch(e => console.error('[MinesHint] update react:', e));
   } catch (e) { console.error('[MessageUpdate]', e.message); }
 });
 client.on(Events.InteractionCreate, async i => {
