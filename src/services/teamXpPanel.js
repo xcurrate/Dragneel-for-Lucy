@@ -65,11 +65,8 @@ function teamMeta(panel) {
     ? panel.parsed.teamCount : 1;
   const active = panel.parsed.isActive !== false;
   const streak = Number.isFinite(panel.parsed.streak) ? panel.parsed.streak : 0;
-  const streakMax = Math.max(
-    Number.isFinite(panel.parsed.streakMax) ? panel.parsed.streakMax : 0,
-    Number(panel.settings?.maxStreak) || 0,
-    streak,
-  );
+  const configuredMax = Number(panel.settings?.maxStreak);
+  const streakMax = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : null;
   const highestLevel = panel.parsed.slots.reduce((max, slot) => (
     Number.isFinite(slot.level) && slot.level > max ? slot.level : max
   ), 1);
@@ -141,7 +138,7 @@ function statsPayload(panel) {
   embed.setFooter({
     text: `Streak saat ini: ${formatNumber(meta.streak)} • Rata-rata XP/battle: ${formatDecimal(avg)}`
       + `\n${formatNumber(panel.settings.battlesPerDay)} battle/hari • Seri ${formatNumber(panel.settings.tieRate)}%`
-      + ` • Streak maks ${formatNumber(meta.streakMax)}`
+      + ` • Streak maks ${meta.streakMax == null ? '—' : formatNumber(meta.streakMax)}`
       + ` • ${meta.teamCount} tim ${meta.active ? 'aktif ceil' : 'nonaktif floor'}`,
   });
   return { embeds: [embed], components: panelComponents(panel, 'stats') };
@@ -274,7 +271,8 @@ function infoEmbed(panel) {
       + '• XP menang: `200 + bonus streak`; bonus hanya di kelipatan 10/50/100/500/1000.\n'
       + '• Level lawan dianggap sama karena tidak ada di kartu.\n'
       + '• Multiplier Knowledge belum dihitung.\n'
-      + `• Rata-rata XP/hunt adalah XP dari hunt. Hunt dan battle aksi berbeda, jadi tidak dicampur ke forecast battle: **${formatNumber(panel.settings.avgHuntXp)}**.`,
+      + `• Rata-rata XP/hunt adalah XP dari hunt. Hunt dan battle aksi berbeda, jadi tidak dicampur ke forecast battle: **${formatNumber(panel.settings.avgHuntXp)}**.\n`
+      + '• Streak maksimum opsional; tidak diambil dari kartu. Isi sendiri dengan hasil simulasi global kalau mau.',
     );
 }
 

@@ -601,10 +601,11 @@ Panel berisi sisa XP tiap pet, multiplier level, perkiraan battle, dan tombol
 
 Tombol **Pengaturan** membuka form berisi `Battle per hari (1-5760)`,
 `Rata-rata XP/hunt`, `Peluang seri (%)`, dan `Streak maksimum (opsional)`.
-`Streak maksimum` boleh dikosongkan; user bisa mengisinya dengan hasil simulasi
-global, bukan batas cap. XP/hunt adalah XP dari hunt; hunt dan battle aksi
-berbeda, jadi XP/hunt tidak dicampur ke forecast battle. Perubahan form langsung
-dipakai oleh statistik dan forecast.
+`Streak maksimum` boleh dikosongkan dan tidak diambil dari kartu; user bisa
+mengisinya sendiri dengan hasil simulasi global. Nilai ini bukan batas cap.
+XP/hunt adalah XP dari hunt; hunt dan battle aksi berbeda, jadi XP/hunt tidak
+dicampur ke forecast battle. Perubahan form langsung dipakai oleh statistik dan
+forecast.
 
 XP battle dibagi rata ke seluruh tim; jumlah tim dibaca dari tombol halaman
 kartu (mis. `2/4`). Tim aktif memakai pembulatan ke atas, tim nonaktif ke bawah.

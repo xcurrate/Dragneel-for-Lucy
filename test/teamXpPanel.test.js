@@ -45,15 +45,17 @@ test('validasi pengaturan menolak nilai di luar batas', () => {
   assert.equal(empty.settings.maxStreak, null);
 });
 
-test('streak maksimum dari kartu ditampilkan, bukan dipakai sebagai cap', () => {
+test('streak maksimum opsional tidak diambil dari kartu dan tidak menjadi cap', () => {
   const data = parsedTeam();
   data.streak = 10;
   data.streakMax = 500;
   const panel = panelModule.createPanel('user-max', data);
   const payload = panelModule.statsPayload(panel);
-  assert.match(payload.embeds[0].data.footer.text, /Streak maks 500/);
+  assert.match(payload.embeds[0].data.footer.text, /Streak maks —/);
   const forecast = panelModule.forecastPayload(panel);
   assert.match(forecast.embeds[0].data.footer.text, /Streak maks [\d.]+/);
+  panel.settings.maxStreak = 500;
+  assert.match(panelModule.statsPayload(panel).embeds[0].data.footer.text, /Streak maks 500/);
 });
 
 test('forecast menghasilkan baris level-up dan tombol kembali ke statistik', () => {
