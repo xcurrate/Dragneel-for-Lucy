@@ -1,0 +1,49 @@
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 4 — SIMULASI GLOBAL
+━━━━━━━━━━━━━━━━━━━━
+Kalau timmu sudah banyak, `d sim global` mengadu tim aktif melawan SEMUA tim tersimpan sekaligus.
+```
+d sim global
+```
+Opsinya sama seperti `d sim`:
+```
+d sim global -m 100          → 100 pertarungan per tim lawan
+d sim global -total 1000     → total 1000 pertarungan, dibagi rata
+d sim global lvl60           → semua lawan disamakan level 60
+d sim global -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
+```
+Batasnya 100 pertarungan per tim dan 10 juta pertarungan per perintah. Cooldown 10 detik.
+
+Tim yang sedang dipilih tidak ikut diadu, karena itulah timmu sendiri. Tim kosong dilewati dan jumlahnya dicatat di hasil.
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 5 — MEMBACA HASIL
+━━━━━━━━━━━━━━━━━━━━
+▸ Hasil `d sim`
+```
+🏆 37 menang (74%)      ← berapa kali menang + persentasenya
+   Turns: 6 (×13), ...  ← distribusi jumlah turn; makin panjang makin ketat
+💀 13 kalah (26%)       ← berapa kali kalah
+⚖️ 3 seri (6%)          ← hanya muncul kalau ada yang seri
+```
+
+Di atasnya ada komposisi kedua sisi. Arti ikonnya:
+• 🐾 hewan
+• 🔴 🟡 🟠 🟣 🔵 🟢 ⚪ peringkat kualitas senjata, dari tertinggi (fabled) ke terendah (common)
+• ⚔️ senjata
+• ✨ pasif
+• `100%` kualitas senjata
+
+Di footer ada jumlah simulasi dan seed. Seed itulah yang bisa dimasukkan lewat `-s` untuk mengulang hasil yang sama.
+
+▸ Tombol 🔁
+Setiap hasil punya tombol 🔁 untuk mengulang matchup yang sama. Hasilnya hanya terlihat olehmu dan memakai komposisi serta kualitas yang sama persis dengan hasil sebelumnya.
+
+▸ Hasil `d sim global`
+• 🪖 Komposisi tim kamu — tim yang kamu pakai
+• 🔅 Max level < 35 — hasil melawan tim berlevel di bawah 35
+• 🔆 Max level ≥ 35 — hasil melawan tim berlevel 35 ke atas
+• 📊 Rekap — total menang / seri / kalah
+• 🔥 Streak — rata-rata dan kemenangan beruntun terpanjang
+• 📉 Kalah per tim — rata-rata berapa kali kalah per tim lawan
+

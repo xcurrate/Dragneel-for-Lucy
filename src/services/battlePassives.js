@@ -1,0 +1,390 @@
+// Pasif senjata. Port 1:1 dari OwO `battle/passives/`, memakai layout stat yang
+// sama sehingga rumusnya tidak berubah.
+//
+// Hook yang dipakai mesin: alterStats, attack, postAttack, attacked,
+// postAttacked, healed, postHealed, postReplenished, postTurn.
+const passiveData = require('../data/owoPassives.json');
+
+// battleEngine mengimpor modul ini, jadi import top-level akan melingkar.
+// Aksesor malas ini membuat siklusnya aman dan tetap satu pintu.
+let engineRef = null;
+function engine() {
+  if (!engineRef) engineRef = require('./battleEngine');
+  return engineRef;
+}
+
+// battleBuffs mengimpor modul ini, jadi aksesornya juga malas.
+let buffsRef = null;
+function buffs() {
+  if (!buffsRef) buffsRef = require('./battleBuffs');
+  return buffsRef;
+}
+
+function statAt(range, quality) {
+  const q = Math.min(100, Math.max(0, Number(quality) || 0));
+  const [min, max] = range;
+  return Math.round((min + (max - min) * (q / 100)) * 100) / 100;
+}
+
+function statsFor(def, quality) {
+  return def.qualityList.map((range, index) => statAt(
+    range,
+    Array.isArray(quality) ? quality[index] : quality
+  ));
+}
+
+// Setiap pasif adalah factory: (stats, rng) → objek dengan hook.
+const PASSIVES = {
+  1: (stats) => ({ id: 1, name: 'Strength', stats, alterStats(s) { s.att[1] += s.att[0] * (stats[0] / 100); } }),
+  2: (stats) => ({ id: 2, name: 'Magic', stats, alterStats(s) { s.mag[1] += s.mag[0] * (stats[0] / 100); } }),
+  3: (stats) => ({ id: 3, name: 'Health Point', stats, alterStats(s) { s.hp[3] += s.hp[1] * (stats[0] / 100); } }),
+  4: (stats) => ({ id: 4, name: 'Weapon Point', stats, alterStats(s) { s.wp[3] += s.wp[1] * (stats[0] / 100); } }),
+  5: (stats) => ({ id: 5, name: 'Physical Resistance', stats, alterStats(s) { s.pr[1] += s.pr[0] * (stats[0] / 100); } }),
+  6: (stats) => ({ id: 6, name: 'Magical Resistance', stats, alterStats(s) { s.mr[1] += s.mr[0] * (stats[0] / 100); } }),
+
+  7: (stats) => ({
+    id: 7, name: 'Lifesteal', stats,
+    postAttack(ctx, unit, target, total) {
+      const { heal, tagged, withTag } = engine();
+      if (tagged(ctx, 'lifesteal', unit) || tagged(ctx, 'kamikaze', unit)) return;
+      if (unit.stats.hp[0] <= 0) return;
+      withTag(ctx, 'lifesteal', unit, () => heal(ctx, unit, (total * stats[0]) / 100, unit));
+    },
+  }),
+
+  8: (stats) => ({
+    id: 8, name: 'Thorns', stats,
+    postAttacked(ctx, unit, attacker, total) {
+      const { inflictDamage, tagged, withTag, TRUE } = engine();
+      if (tagged(ctx, 'thorns', unit) || unit.stats.hp[0] <= 0) return;
+      const damage = (total * stats[0]) / 100;
+      if (damage < 1) return;
+      withTag(ctx, 'thorns', unit, () => inflictDamage(ctx, unit, attacker, damage, TRUE));
+    },
+  }),
+
+  9: (stats) => ({
+    id: 9, name: 'Mana Tap', stats,
+    postAttack(ctx, unit, target, total) {
+      const { replenish } = engine();
+      replenish(ctx, unit, (total * stats[0]) / 100, unit);
+    },
+  }),
+
+  10: (stats) => ({
+    id: 10, name: 'Absolve', stats,
+    postHealed(ctx, unit, healer, total) {
+      const { inflictDamage, chooseTarget, tagged, withTag, MAGICAL } = engine();
+      if (tagged(ctx, 'absolve', unit)) return;
+      const damage = (total * stats[0]) / 100;
+      if (damage < 1) return;
+      const target = chooseTarget(unit, unit.team, unit.foes, ctx.rng, { ignoreChoose: true });
+      if (!target) return;
+      withTag(ctx, 'absolve', unit, () => inflictDamage(ctx, unit, target, damage, MAGICAL));
+    },
+  }),
+
+  // Adaptation: tiap kali menerima damage, dapat stack resistensi terhadap tipe
+  // damage terakhir. Stack dihitung terpisah untuk PHYSICAL dan MAGICAL karena
+  // sumber menyebut dua ikon berbeda (Stoneskin / Spellskin).
+  // Adaptation: resistensi terhadap tipe damage TERAKHIR. Physical memberi
+  // Stoneskin, Magical memberi Spellskin; menerima tipe lain menghapus semua
+  // stack. Satu pool stack saja (bukan dua), maksimal 5.
+  // Giant Slayer: +10-25% damage hanya bila sasaran bertanda boss. Battle biasa
+  // (PvP, mirror) tidak punya boss, jadi pasif ini tidak berefek di sana.
+  22: (stats) => ({
+    id: 22, name: 'Giant Slayer', stats,
+    attack(ctx, unit, target, bucket) {
+      if (!target?.isBoss) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * (stats[0] / 100);
+    },
+  }),
+
+  // Lone Wolf: hanya aktif saat komposisi tim berisi satu hewan. Bonus damage
+  // keluar dan pengurangan damage masuk memakai rentang quality yang sama.
+  23: (stats) => ({
+    id: 23, name: 'Lone Wolf', stats,
+    attack(ctx, unit, target, bucket) {
+      if (unit.team?.length !== 1) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * (stats[0] / 100);
+    },
+    attacked(ctx, unit, attacker, bucket) {
+      if (unit.team?.length !== 1) return;
+      bucket.bonus -= (bucket.amount + bucket.bonus) * (stats[1] / 100);
+    },
+  }),
+
+  27: (stats) => ({
+    id: 27, name: 'Adaptation', stats,
+    stackType: null, // 'p' (Stoneskin) | 'm' (Spellskin) | null
+    stacks: 0,
+    attacked(ctx, unit, attacker, bucket, type) {
+      const { PHYSICAL, MAGICAL: MAGICAL_KEY, MAX_ADAPT_STACKS } = engine();
+      if (unit.stats.hp[0] <= 0) return;
+      // Damage TRUE tidak termasuk Physical maupun Magical: sumber hanya
+      // menyebut dua tipe itu, jadi TRUE menghapus stack tanpa memberi stack.
+      const key = type === PHYSICAL ? 'p' : type === MAGICAL_KEY ? 'm' : null;
+      if (!key) {
+        this.stackType = null;
+        this.stacks = 0;
+        return;
+      }
+      if (this.stackType !== key) {
+        // Tipe lain: buang semua stack. Hit ini belum memakai stack baru.
+        this.stackType = key;
+        this.stacks = 0;
+      } else if (this.stacks > 0) {
+        // Stack yang sudah ada berlaku untuk hit ini, baru setelah itu bertambah.
+        bucket.bonus -= (bucket.amount + bucket.bonus) * ((stats[0] * this.stacks) / 100);
+      }
+      if (this.stacks < MAX_ADAPT_STACKS) this.stacks += 1;
+    },
+  }),
+
+  11: (stats) => ({
+    id: 11, name: 'Safeguard', stats,
+    attacked(ctx, unit, attacker, bucket) {
+      const { useMana, tagged, withTag } = engine();
+      if (tagged(ctx, 'safeguard', unit)) return;
+      let negate = (bucket.amount * stats[0]) / 100;
+      if (unit.stats.wp[0] < negate) negate = unit.stats.wp[0];
+      if (negate <= 0) return;
+      withTag(ctx, 'safeguard', unit, () => {
+        bucket.bonus -= useMana(unit, negate);
+      });
+    },
+  }),
+
+  12: (stats) => ({
+    id: 12, name: 'Critical', stats,
+    attack(ctx, unit, target, bucket) {
+      if (ctx.rng.next() * 100 > stats[0]) return;
+      bucket.bonus += (bucket.amount * stats[1]) / 100;
+    },
+    heal(ctx, unit, target, bucket) {
+      if (ctx.rng.next() * 100 > stats[0]) return;
+      bucket.bonus += (bucket.amount * stats[1]) / 100;
+    },
+  }),
+
+  13: (stats) => ({
+    id: 13, name: 'Discharge', stats,
+    postReplenished(ctx, unit, from, total) {
+      const { inflictDamage, chooseTarget, tagged, withTag, MAGICAL } = engine();
+      if (tagged(ctx, 'discharge', unit)) return;
+      const damage = (total * stats[0]) / 100;
+      if (damage < 1) return;
+      const target = chooseTarget(unit, unit.team, unit.foes, ctx.rng, { ignoreChoose: true });
+      if (!target) return;
+      withTag(ctx, 'discharge', unit, () => inflictDamage(ctx, unit, target, damage, MAGICAL));
+    },
+  }),
+
+  14: (stats) => ({
+    id: 14, name: 'Kamikaze', stats,
+    postAttacked(ctx, unit, attacker, _total, _type) {
+      const { inflictDamage, getDamageFromHpWp, tagged, withTag, MAGICAL } = engine();
+      if (tagged(ctx, 'kamikaze', unit) || unit.stats.hp[0] > 0) return;
+      const damage = getDamageFromHpWp(unit.stats.hp, stats[0] / 100, ctx.rng);
+      withTag(ctx, 'kamikaze', unit, () => inflictDamage(ctx, unit, attacker, damage, MAGICAL));
+    },
+  }),
+
+  15: (stats) => ({
+    id: 15, name: 'Regeneration', stats,
+    postTurn(ctx, unit) {
+      const { heal } = engine();
+      if (unit.stats.hp[0] <= 0) return;
+      const amount = (unit.stats.hp[1] + unit.stats.hp[3]) * (stats[0] / 100);
+      heal(ctx, unit, amount, unit);
+    },
+  }),
+
+  29: (stats) => ({
+    id: 29, name: 'Purification', stats, turns: 0,
+    postTurn(ctx, unit) {
+      const { heal, maxHp } = engine();
+      if (unit.stats.hp[0] <= 0) return;
+      this.turns += 1;
+      if (this.turns % 2 !== 0) return;
+      const debuff = unit.buffs.find(b => b.debuff);
+      if (!debuff) return;
+      if (ctx.rng.next() * 100 >= stats[0]) return;
+      const index = unit.buffs.indexOf(debuff);
+      if (index >= 0) unit.buffs.splice(index, 1);
+      heal(ctx, unit, maxHp(unit) * (stats[1] / 100), unit);
+    },
+  }),
+
+  16: (stats) => ({
+    id: 16, name: 'Energize', stats,
+    postTurn(ctx, unit) {
+      const { replenish, maxWp } = engine();
+      if (unit.stats.hp[0] <= 0) return;
+      if (unit.stats.wp[0] >= maxWp(unit)) return;
+      replenish(ctx, unit, stats[0], unit);
+    },
+  }),
+
+  17: (stats) => ({
+    id: 17, name: 'Sprout', stats,
+    healed(ctx, unit, healer, bucket) {
+      bucket.bonus += (bucket.amount * stats[0]) / 100;
+    },
+  }),
+
+  18: (stats) => ({
+    id: 18, name: 'Enrage', stats,
+    attack(ctx, unit, target, bucket) {
+      const max = unit.stats.hp[1] + unit.stats.hp[3];
+      const current = unit.stats.hp[0];
+      if (current >= max) return;
+      const missing = (1 - current / max) * 10;
+      const extra = bucket.amount * (stats[0] / 100) * missing;
+      if (Math.floor(extra) <= 0) return;
+      bucket.bonus += extra;
+    },
+  }),
+
+  19: (stats) => ({
+    id: 19, name: 'Sacrifice', stats,
+    postAttacked(ctx, unit, attacker, _total, _type) {
+      const { heal, replenish, getDamageFromHpWp, aliveOf, tagged, withTag } = engine();
+      if (tagged(ctx, 'sacrifice', unit) || unit.stats.hp[0] > 0) return;
+      withTag(ctx, 'sacrifice', unit, () => {
+        const targets = aliveOf(unit.team);
+        const healAmount = getDamageFromHpWp(unit.stats.hp, stats[0] / 100, ctx.rng);
+        const wpAmount = getDamageFromHpWp(unit.stats.wp, stats[1] / 100, ctx.rng);
+        for (const ally of targets) {
+          heal(ctx, ally, healAmount, unit);
+          replenish(ctx, ally, wpAmount, unit);
+        }
+      });
+    },
+  }),
+
+  // Double Strike: sekali per aksi, mengundi peluang lalu menyerang lagi dengan
+  // sebagian nilai mentah serangan pertama. Biaya tambahan memakai persentase
+  // dari biaya senjata, jadi senjata tanpa biaya tidak membayar WP.
+  26: (stats) => ({
+    id: 26, name: 'Double Strike', stats,
+    postAttack(ctx, unit, target, total, type) {
+      const { tagged, withTag, isAlive, useMana, inflictDamage, chooseTarget, PHYSICAL } = engine();
+      if (tagged(ctx, 'doubleStrike', unit) || !isAlive(unit)) return;
+      const action = ctx.actionId ?? null;
+      if (action !== null && this.lastAction === action) return;
+      if (action !== null) this.lastAction = action;
+      if (ctx.rng.next() * 100 > stats[0]) return;
+      let victim = target;
+      if (!isAlive(victim)) {
+        victim = chooseTarget(unit, unit.team, unit.foes, ctx.rng, { ignoreChoose: true });
+      }
+      if (!victim) return;
+      const cost = Math.max(0, Math.round((unit.weapon?.manaCost || 0) * (stats[2] / 100)));
+      if (cost > 0 && unit.stats.wp[0] < cost) return;
+      const raw = ctx.lastHit?.raw ?? total;
+      if (!(raw > 0)) return;
+      withTag(ctx, 'doubleStrike', unit, () => {
+        if (cost > 0) useMana(unit, cost);
+        inflictDamage(ctx, unit, victim, raw * (stats[1] / 100), type || PHYSICAL);
+      });
+    },
+  }),
+
+  20: (stats) => ({
+    id: 20, name: 'Snail', stats,
+    postAttack(ctx, unit, target, total, type) {
+      const { inflictDamage, chooseTarget, tagged, withTag } = engine();
+      if (tagged(ctx, 'snail', unit)) return;
+      const damage = (total * stats[0]) / 100;
+      const victim = chooseTarget(unit, unit.team, unit.foes, ctx.rng, { ignoreChoose: true });
+      if (!victim) return;
+      // Damage sudah melewati resistensi, jadi jangan dihitung ulang.
+      withTag(ctx, 'snail', unit, () => inflictDamage(ctx, unit, victim, damage, type, { bypassRes: true }));
+    },
+  }),
+
+  21: () => ({ id: 21, name: 'Knowledge', stats: [], }), // tidak berpengaruh di battle
+
+  // Resonance: buff yang menempel menambah damage keluar, debuff yang menempel
+  // mengurangi damage masuk. Keduanya dihitung dari jumlah instance buff, bukan
+  // dari jenisnya, jadi buff dan debuff yang bertumpuk ikut menambah.
+  28: (stats) => ({
+    id: 28, name: 'Resonance', stats,
+    attack(ctx, unit, target, bucket) {
+      const buffs = unit.buffs.filter(b => !b.debuff).length;
+      if (!buffs) return;
+      bucket.bonus += (bucket.amount + bucket.bonus) * ((stats[0] * buffs) / 100);
+    },
+    attacked(ctx, unit, attacker, bucket) {
+      const debuffs = unit.buffs.filter(b => b.debuff).length;
+      if (!debuffs) return;
+      bucket.bonus -= (bucket.amount + bucket.bonus) * ((stats[0] * debuffs) / 100);
+    },
+  }),
+
+  // Swarm: biaya WP per serangan, nilainya TURUN saat quality naik (8 -> 2).
+  // WP diambil dari jumlah yang benar-benar terpakai, jadi unit kehabisan WP
+  // tidak menempelkan Pest setengah harga.
+  25: (stats) => ({
+    id: 25, name: 'Living Hive', stats,
+    postAttack(ctx, unit, target, _total, _type) {
+      const { useMana, tagged, withTag, isAlive } = engine();
+      if (tagged(ctx, 'livingHive', unit) || tagged(ctx, 'pest', unit) || !isAlive(target)) return;
+      if (unit.stats.wp[0] < stats[0]) return;
+      withTag(ctx, 'livingHive', unit, () => {
+        useMana(unit, stats[0]);
+        const pest = buffs().createBuff(18, { quality: null, from: unit, rng: ctx.rng });
+        if (pest) engine().bindBuff(ctx, target, pest);
+      });
+    },
+  }),
+
+  // Frozen Armor: menempelkan Frostbite ke penyerang. Stack Frostbite sendiri
+  // yang menghitung 100; pasif ini hanya menambah.
+  24: (stats) => ({
+    id: 24, name: 'Frost Armor', stats,
+    postAttacked(ctx, unit, attacker, _total, _type) {
+      const { tagged, withTag, isAlive } = engine();
+      if (tagged(ctx, 'frostArmor', unit) || !isAlive(attacker)) return;
+      const stacks = Math.max(0, Math.round(stats[0]));
+      if (!stacks) return;
+      withTag(ctx, 'frostArmor', unit, () => {
+        for (let i = 0; i < stacks; i++) {
+          const frost = buffs().createBuff(17, { quality: null, from: unit, rng: ctx.rng });
+          if (frost) engine().bindBuff(ctx, attacker, frost);
+        }
+      });
+    },
+  }),
+};
+
+// Membangun instance pasif. `quality` 0-100; tanpa itu di-roll dari RNG.
+function createPassive(id, quality, rng) {
+  const def = passiveData.passives.find(p => p.id === Number(id));
+  const factory = PASSIVES[Number(id)];
+  if (!def || !factory) return null;
+  const q = quality == null ? Math.floor((rng ? rng.next() : Math.random()) * 101) : quality;
+  const passive = factory(statsFor(def, q), rng);
+  passive.quality = q;
+  return passive;
+}
+
+function rollPassives(count, rng, quality) {
+  const pool = Object.keys(PASSIVES).map(Number).filter(id => id !== 21);
+  const uniqueIds = new Set(passiveData.passives.filter(p => p.unique).map(p => p.id));
+  const picked = [];
+  const usedUnique = new Set();
+  for (let i = 0; i < count; i++) {
+    const candidates = pool.filter(id => !(uniqueIds.has(id) && usedUnique.has(id)));
+    if (!candidates.length) break;
+    const id = candidates[Math.floor((rng ? rng.next() : Math.random()) * candidates.length)];
+    const passive = createPassive(id, quality ?? null, rng);
+    if (!passive) continue;
+    picked.push(passive);
+    if (uniqueIds.has(id)) usedUnique.add(id);
+  }
+  return picked;
+}
+
+module.exports = { PASSIVES, createPassive, rollPassives, statsFor, statAt };

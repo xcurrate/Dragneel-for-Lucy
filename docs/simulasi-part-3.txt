@@ -1,0 +1,40 @@
+▸ Lawan tim milikmu sendiri
+```
+d sim                  → tim aktif vs salinan dirinya sendiri (mirror)
+d sim 2                → tim aktif vs tim ID 2
+d sim Blue             → tim aktif vs tim bernama Blue
+d sim 1 vs 2           → tim ID 1 vs tim ID 2
+d sim Rocket vs Blue   → memakai nama tim
+```
+
+`mirror` artinya tim diadu dengan salinan persisnya. Berguna untuk melihat seberapa besar pengaruh RNG: kalau winrate jauh dari 50%, berarti urutan serangan ikut menentukan.
+
+▸ Lawan dari dex atau stat manual (tanpa perlu bikin tim lawan)
+```
+d sim snail level=60
+d sim hp=14,att=6,pr=2,wp=3,mag=0,mr=1 level=60
+```
+
+▸ Atur jumlah pertarungan
+```
+d sim -m 100
+d sim 1 vs 2 -m 200
+```
+Makin banyak, makin stabil angka winrate-nya. Batasnya 200 per perintah untuk user biasa.
+
+Tanpa `-m`, tombol 🔁 di bawah hasil tetap mengulang matchup yang sama sebanyak 50 pertarungan sekaligus — lihat satu pertarungan dulu, lalu cek statistiknya tanpa mengetik ulang.
+
+▸ Atur level dan kualitas senjata
+```
+d sim 1 vs 2 lvl100          → kedua sisi level 100
+d sim 1 vs 2 lvl100/40       → kita 100, lawan 40
+d sim 1 vs 2 lvl/40          → kita tetap, lawan 40
+d sim 1 vs 2 -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
+```
+`-qp` untuk sisi kita, `-qe` untuk sisi lawan. Kualitas yang sudah terpasang di slot menang atas flag ini, jadi kalau hasilnya tidak berubah, cek dulu apakah slotnya punya `quality=` sendiri.
+
+▸ Ulangi hasil yang sama persis
+```
+d sim 1 vs 2 -m 100 -s 42
+```
+

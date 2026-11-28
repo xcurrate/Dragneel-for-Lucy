@@ -1,0 +1,2098 @@
+{
+  "source": "https://github.com/ChristopherBThai/Discord-OwO-Bot",
+  "sourceLicense": "CC BY-NC-SA 4.0",
+  "note": "Data battle OwO hasil pembacaan kode (animals, weapons, buffs). Angka divalidasi dengan menjalankan class asli. Stat hewan skala kecil (0-8); kekuatan berasal dari level. Tiga rune (Forgotten/Celebration/Luck) bertanda disabled=true di OwO: tidak bisa di-roll baru, tapi tetap berfungsi di battle.",
+  "passiveBonus": 1,
+  "passiveBonusNote": "Setiap senjata boleh memakai pasif bawaan `passiveCount` sampai `passiveCount + passiveBonus`. Senjata bisa menimpa lewat field `passiveBonus` sendiri (Rune of the Forgotten: 2, karena 0+1 masih dianggap terlalu sempit untuk rune ber-stat TRUE).",
+  "formulas": {
+    "hp": "500 + lvl * hpr * 2",
+    "wp": "500 + lvl * wpr * 2",
+    "att": "100 + lvl * attr",
+    "mag": "100 + lvl * magr",
+    "pr": "25 + lvl * prr * 2",
+    "mr": "25 + lvl * mrr * 2",
+    "damage": "round(multiplier * (stat[0] + stat[1]) + (rand*100 - 50))",
+    "resistance": "(res / (100 + res)) * 0.8",
+    "quality_stat": "min + (max - min) * quality / 100"
+  },
+  "statOrder": [
+    "hp",
+    "att",
+    "pr",
+    "wp",
+    "mag",
+    "mr"
+  ],
+  "animals": [
+    {
+      "rank": "common",
+      "hp": 1,
+      "att": 5,
+      "pr": 2,
+      "wp": 3,
+      "mag": 3,
+      "mr": 1,
+      "alias": [
+        "bee",
+        "wasp"
+      ],
+      "name": "bee"
+    },
+    {
+      "rank": "common",
+      "hp": 4,
+      "att": 2,
+      "pr": 2,
+      "wp": 3,
+      "mag": 2,
+      "mr": 2,
+      "alias": [
+        "beetle",
+        "ladybug"
+      ],
+      "name": "beetle"
+    },
+    {
+      "rank": "common",
+      "hp": 3,
+      "att": 2,
+      "pr": 2,
+      "wp": 4,
+      "mag": 2,
+      "mr": 2,
+      "alias": [
+        "bug",
+        "worm",
+        "caterpillar"
+      ],
+      "name": "bug"
+    },
+    {
+      "rank": "common",
+      "hp": 1,
+      "att": 1,
+      "pr": 1,
+      "wp": 5,
+      "mag": 5,
+      "mr": 2,
+      "alias": [
+        "butterfly"
+      ],
+      "name": "butterfly"
+    },
+    {
+      "rank": "common",
+      "hp": 8,
+      "att": 1,
+      "pr": 2,
+      "wp": 3,
+      "mag": 5,
+      "mr": 1,
+      "alias": [
+        "snail",
+        "slug"
+      ],
+      "name": "snail"
+    },
+    {
+      "rank": "epic",
+      "hp": 3,
+      "att": 4,
+      "pr": 4,
+      "wp": 2,
+      "mag": 1,
+      "mr": 4,
+      "alias": [
+        "crocodile",
+        "alligator"
+      ],
+      "name": "crocodile"
+    },
+    {
+      "rank": "epic",
+      "hp": 5,
+      "att": 5,
+      "pr": 3,
+      "wp": 1,
+      "mag": 1,
+      "mr": 3,
+      "alias": [
+        "elephant"
+      ],
+      "name": "elephant"
+    },
+    {
+      "rank": "epic",
+      "hp": 2,
+      "att": 1,
+      "pr": 2,
+      "wp": 6,
+      "mag": 5,
+      "mr": 2,
+      "alias": [
+        "penguin"
+      ],
+      "name": "penguin"
+    },
+    {
+      "rank": "epic",
+      "hp": 4,
+      "att": 6,
+      "pr": 2,
+      "wp": 1,
+      "mag": 3,
+      "mr": 2,
+      "alias": [
+        "tiger",
+        "tiger2",
+        "cheetah"
+      ],
+      "name": "tiger2"
+    },
+    {
+      "rank": "epic",
+      "hp": 7,
+      "att": 1,
+      "pr": 3,
+      "wp": 1,
+      "mag": 2,
+      "mr": 4,
+      "alias": [
+        "whale"
+      ],
+      "name": "whale"
+    },
+    {
+      "rank": "rare",
+      "hp": 3,
+      "att": 1,
+      "pr": 1,
+      "wp": 6,
+      "mag": 3,
+      "mr": 3,
+      "alias": [
+        "cat",
+        "cat2",
+        "kitty",
+        "kitten"
+      ],
+      "name": "cat2"
+    },
+    {
+      "rank": "rare",
+      "hp": 5,
+      "att": 4,
+      "pr": 3,
+      "wp": 1,
+      "mag": 1,
+      "mr": 3,
+      "alias": [
+        "cow",
+        "cow2"
+      ],
+      "name": "cow2"
+    },
+    {
+      "rank": "rare",
+      "hp": 4,
+      "att": 6,
+      "pr": 3,
+      "wp": 1,
+      "mag": 1,
+      "mr": 2,
+      "alias": [
+        "dog",
+        "dog2",
+        "doggy",
+        "puppy",
+        "wolf"
+      ],
+      "name": "dog2"
+    },
+    {
+      "rank": "rare",
+      "hp": 4,
+      "att": 2,
+      "pr": 3,
+      "wp": 2,
+      "mag": 2,
+      "mr": 4,
+      "alias": [
+        "pig",
+        "pig2"
+      ],
+      "name": "pig2"
+    },
+    {
+      "rank": "rare",
+      "hp": 5,
+      "att": 2,
+      "pr": 2,
+      "wp": 3,
+      "mag": 1,
+      "mr": 4,
+      "alias": [
+        "sheep",
+        "ram",
+        "goat"
+      ],
+      "name": "sheep"
+    },
+    {
+      "rank": "uncommon",
+      "hp": 3,
+      "att": 2,
+      "pr": 3,
+      "wp": 3,
+      "mag": 3,
+      "mr": 2,
+      "alias": [
+        "chick",
+        "baby_chick"
+      ],
+      "name": "baby_chick"
+    },
+    {
+      "rank": "uncommon",
+      "hp": 3,
+      "att": 5,
+      "pr": 2,
+      "wp": 3,
+      "mag": 2,
+      "mr": 1,
+      "alias": [
+        "chipmunk",
+        "squirrel"
+      ],
+      "name": "chipmunk"
+    },
+    {
+      "rank": "uncommon",
+      "hp": 3,
+      "att": 3,
+      "pr": 2,
+      "wp": 3,
+      "mag": 3,
+      "mr": 2,
+      "alias": [
+        "mouse",
+        "mouse2",
+        "rat"
+      ],
+      "name": "mouse2"
+    },
+    {
+      "rank": "uncommon",
+      "hp": 3,
+      "att": 4,
+      "pr": 2,
+      "wp": 3,
+      "mag": 2,
+      "mr": 2,
+      "alias": [
+        "rabbit",
+        "rabbit2",
+        "bunny"
+      ],
+      "name": "rabbit2"
+    },
+    {
+      "rank": "uncommon",
+      "hp": 3,
+      "att": 4,
+      "pr": 3,
+      "wp": 2,
+      "mag": 2,
+      "mr": 2,
+      "alias": [
+        "chicken",
+        "rooster"
+      ],
+      "name": "rooster"
+    }
+  ],
+  "weapons": [
+    {
+      "id": 1,
+      "name": "Great Sword",
+      "emojis": [
+        "<:csword:1551274046103101602>",
+        "<:usword:1551274097411887175>",
+        "<:rsword:1551274161266233344>",
+        "<:esword:1551274194292056154>",
+        "<:msword:1541875011047002113>",
+        "<:lsword:1551274227791831225>",
+        "<:fsword:1541875058526388304>"
+      ],
+      "aliases": [
+        "gsword",
+        "greatsword",
+        "gs",
+        "sword"
+      ],
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          35,
+          55
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "damage_all",
+        "stat": "att",
+        "target": "all_enemies"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcsword:1541874517318828113>",
+        "<:pusword:1541874543788822598>",
+        "<:prsword:1541874588860948621>",
+        "<:pesword:1541874621110812724>",
+        "<:pmsword:1541874653881180271>",
+        "<:plsword:1541874698885922919>",
+        "<:pfsword:1541874757186883594>"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Healing Staff",
+      "emojis": [
+        "<:chealstaff:1541875725249020045>",
+        "<:uhealstaff:1541875761634476104>",
+        "<:rhealstaff:1541875806740021430>",
+        "<:ehealstaff:1541875828164399134>",
+        "<:mhealstaff:1541875867901235350>",
+        "<:lhealstaff:1541875906212143134>",
+        "<:fhealstaff:1541875942928949319>"
+      ],
+      "aliases": [
+        "hstaff",
+        "healstaff",
+        "heal"
+      ],
+      "type": "HEAL",
+      "qualityList": [
+        [
+          110,
+          160
+        ]
+      ],
+      "manaRange": [
+        225,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "heal_lowest",
+        "stat": "mag",
+        "overheal": true
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pchstaff:1541876027523997736>",
+        "<:puhstaff:1541876070800822453>",
+        "<:prhstaff:1541876105986834484>",
+        "<:pehstaff:1541876152178704415>",
+        "<:pmhstaff:1541876172743245954>",
+        "<:plhstaff:1541876206318784553>",
+        "<:pfhstaff:1541876226178813962>"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Bow",
+      "emojis": [
+        "<:cbow:1541853184895483914>",
+        "<:ubow:1541853223558717550>",
+        "<:rbow:1541853278394912798>",
+        "<:ebow:1541853322107945050>",
+        "<:mbow:1541853372926140497>",
+        "<:lbow:1541853413783113799>",
+        "<:fbow:1541853458812899350>"
+      ],
+      "aliases": [
+        "bow"
+      ],
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          110,
+          160
+        ]
+      ],
+      "manaRange": [
+        220,
+        120
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "damage_one",
+        "stat": "att"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcbow:1541853509597528134>",
+        "<:pubow:1541853559362945034>",
+        "<:prbow:1541853616267071498>",
+        "<:pebow:1541853676317057155>",
+        "<:pmbow:1541853741765099520>",
+        "<:plbow:1541853779006197838>",
+        "<:pfbow:1541853834979184742>"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Rune of the Forgotten",
+      "emojis": [
+        "<:crune:1541883016094162974>",
+        "<:urune:1541882963342528553>",
+        "<:rrune:1541883066518085805>",
+        "<:erune:1541883090211831808>",
+        "<:mrune:1541883130179231814>",
+        "<:lrune:1541883173372436610>",
+        "<:frune:1541883206633132152>"
+      ],
+      "aliases": [
+        "rune",
+        "forgotten"
+      ],
+      "type": "TRUE",
+      "qualityList": [
+        [
+          5,
+          15
+        ]
+      ],
+      "manaRange": null,
+      "passiveCount": 0,
+      "buffList": [],
+      "ability": {
+        "kind": "none"
+      },
+      "statBoost": "all",
+      "basicAttack": {
+        "kind": "mixed_true",
+        "mixed": [
+          0.65,
+          0.65
+        ]
+      },
+      "disabled": true,
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "passiveBonus": 2,
+      "pristineEmojis": [
+        "<:pcrune:1541883260647243886>",
+        "<:purune:1541883281132490835>",
+        "<:prrune:1541883324644204634>",
+        "<:perune:1541883353991487548>",
+        "<:pmrune:1541883385688105130>",
+        "<:plrune:1541883412355223664>",
+        "<:pfrune:1541883433435930744>"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Defender's Aegis",
+      "emojis": [
+        "<:cshield:1541885988043890738>",
+        "<:ushield:1541886033405284372>",
+        "<:rshield:1541886079467135049>",
+        "<:eshield:1541886102347186206>",
+        "<:mshield:1541886150711574642>",
+        "<:lshield:1541886177727226026>",
+        "<:fshield:1541886215303991517>"
+      ],
+      "aliases": [
+        "aegis",
+        "shield",
+        "defender's aegis"
+      ],
+      "type": "TAUNT",
+      "qualityList": [],
+      "manaRange": [
+        250,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        1
+      ],
+      "ability": {
+        "kind": "taunt",
+        "duration": 2
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcshield:1541886242197741621>",
+        "<:pushield:1541886278398906428>",
+        "<:prshield:1541886304378429550>",
+        "<:peshield:1541886329430867968>",
+        "<:pmshield:1541886364323287051>",
+        "<:plshield:1541886407734460498>",
+        "<:pfshield:1541888266599665694>"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Orb of Potency",
+      "emojis": [
+        "<:corb:1541879108047347883>",
+        "<:uorb:1541879148040032337>",
+        "<:rorb:1541879181107920968>",
+        "<:eorb:1541879240302002236>",
+        "<:morb:1541879304311283763>",
+        "<:lorb:1541879366630244402>",
+        "<:forb:1541880180379746458>"
+      ],
+      "aliases": [
+        "orb",
+        "potency"
+      ],
+      "type": "PASSIVE",
+      "qualityList": [],
+      "manaRange": null,
+      "passiveCount": 2,
+      "buffList": [],
+      "ability": {
+        "kind": "none"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcorb:1541880235778384081>",
+        "<:puorb:1541880273845747843>",
+        "<:prorb:1541880308193042579>",
+        "<:peorb:1541880339037814867>",
+        "<:pmorb:1541880376761520268>",
+        "<:plorb:1541880415458172969>",
+        "<:pforb:1541880446894481528>"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Vampiric Staff",
+      "emojis": [
+        "<:cvampstaff:1541887299476914247>",
+        "<:uvampstaff:1541887341109452841>",
+        "<:rvampstaff:1541887381811105923>",
+        "<:evampstaff:1541887423653478410>",
+        "<:mvampstaff:1541887473486139574>",
+        "<:lvampstaff:1541887506385997915>",
+        "<:fvampstaff:1541887529886683196>"
+      ],
+      "aliases": [
+        "vstaff",
+        "vampiric",
+        "vamp"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          25,
+          45
+        ]
+      ],
+      "manaRange": [
+        190,
+        90
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "damage_all_heal_team",
+        "stat": "mag",
+        "target": "all_enemies"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcvstaff:1541887625265418290>",
+        "<:puvstaff:1541887678885273651>",
+        "<:prvstaff:1541887711454044261>",
+        "<:pevstaff:1541887732211523614>",
+        "<:pmvstaff:1541887762570154024>",
+        "<:plvstaff:1541887794291408906>",
+        "<:pfvstaff:1541887832002531378>"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Poison Dagger",
+      "emojis": [
+        "<:cpdagger:1541880684853993623>",
+        "<:updagger:1541880723533987973>",
+        "<:rpdagger:1541880765514522665>",
+        "<:epdagger:1541880787861770262>",
+        "<:mpdagger:1541880834108301482>",
+        "<:lpdagger:1541880874210041997>",
+        "<:fpdagger:1541880906220830810>"
+      ],
+      "aliases": [
+        "pdagger",
+        "poison",
+        "dagger",
+        "pdag",
+        "pd"
+      ],
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          70,
+          100
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        2
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "att",
+        "duration": 3
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcpdag:1541881021941940274>",
+        "<:pupdag:1541881051620573216>",
+        "<:prpdag:1541881069626724382>",
+        "<:pepdag:1541881113121792124>",
+        "<:pmpdag:1541896105384476712>",
+        "<:plpdag:1541881184592728128>",
+        "<:pfpdag:1541881203064578198>"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Wand of Absorption",
+      "emojis": [
+        "<:cawand:1541848363819991120>",
+        "<:uawand:1541848417767006228>",
+        "<:rawand:1541848463598161962>",
+        "<:eawand:1541848582980902914>",
+        "<:mawand:1541848645329100853>",
+        "<:lawand:1541848708130414662>",
+        "<:fawand:1541848764724150486>"
+      ],
+      "aliases": [
+        "wand",
+        "absorb",
+        "awand",
+        "absorbwand"
+      ],
+      "owoId": 109,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          80,
+          115
+        ],
+        [
+          20,
+          40
+        ]
+      ],
+      "manaRange": [
+        250,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "damage_one_steal_wp",
+        "stat": "mag"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcawand:1541849348328005632>",
+        "<:puawand:1541849466670415893>",
+        "<:prawand:1541849433271181443>",
+        "<:peawand:1541849538342420500>",
+        "<:pmawand:1541849566008049674>",
+        "<:plawand:1541849626137731112>",
+        "<:pfawand:1541849670886887484>"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Flame Staff",
+      "emojis": [
+        "<:cfstaff:1541869980864483358>",
+        "<:ufstaff:1541870020156457092>",
+        "<:rfstaff:1541872854839075018>",
+        "<:efstaff:1541870085734670529>",
+        "<:mfstaff:1541870139312709712>",
+        "<:lfstaff:1541870177170366615>",
+        "<:ffstaff:1541870212305911888>"
+      ],
+      "aliases": [
+        "fstaff",
+        "flame",
+        "flamestaff"
+      ],
+      "owoId": 110,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          75,
+          95
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        3
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "mag",
+        "duration": 3
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcfstaff:1541870328156786728>",
+        "<:pufstaff:1541870387984605355>",
+        "<:prfstaff:1541870409857630289>",
+        "<:pefstaff:1541870442652901556>",
+        "<:pmfstaff:1541870479193673829>",
+        "<:plfstaff:1541870511301206148>",
+        "<:pffstaff:1541870558247911434>"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Energy Staff",
+      "emojis": [
+        "<:cestaff:1541867494082355341>",
+        "<:uestaff:1541867508234190912>",
+        "<:restaff:1541867566400671785>",
+        "<:eestaff:1541867626613968967>",
+        "<:mestaff:1541867677696397465>",
+        "<:lestaff:1541867725989740658>",
+        "<:festaff:1541867787733958693>"
+      ],
+      "aliases": [
+        "estaff",
+        "energy",
+        "energystaff"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          35,
+          65
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "damage_all",
+        "stat": "mag",
+        "target": "all_enemies"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "owoId": 111,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "pristineEmojis": [
+        "<:pcestaff:1541867900627845170>",
+        "<:puestaff:1541867982249263274>",
+        "<:prestaff:1541868035026190338>",
+        "<:peestaff:1541868074553311313>",
+        "<:pmestaff:1541868127908794422>",
+        "<:plestaff:1541868155251466302>",
+        "<:pfestaff:1541868194799685652>"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Spirit Staff",
+      "emojis": [
+        "<:csstaff:1541886698575626271>",
+        "<:usstaff:1541886722391015497>",
+        "<:rsstaff:1541886798706245703>",
+        "<:esstaff:1541886837826654418>",
+        "<:msstaff:1541886869355102299>",
+        "<:lsstaff:1541886892927225917>",
+        "<:fsstaff:1541886933524025376>"
+      ],
+      "aliases": [
+        "sstaff",
+        "spirit"
+      ],
+      "type": "HEAL",
+      "qualityList": [
+        [
+          30,
+          50
+        ]
+      ],
+      "manaRange": [
+        250,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        4
+      ],
+      "ability": {
+        "kind": "heal_all_buff",
+        "stat": "mag",
+        "duration": 2
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcsstaff:1541887000485957803>",
+        "<:pusstaff:1541887031267827892>",
+        "<:prsstaff:1541887061991100456>",
+        "<:pesstaff:1541887087001739274>",
+        "<:pmsstaff:1541887123429392463>",
+        "<:plsstaff:1541887159060144158>",
+        "<:pfsstaff:1541887193298116660>"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Arcane Scepter",
+      "emojis": [
+        "<:cascept:1541850998400876694>",
+        "<:uascept:1541851078201712881>",
+        "<:rascept:1541851186620141579>",
+        "<:eascept:1541851242739925094>",
+        "<:mascept:1541851285404389416>",
+        "<:lascept:1541851338793689168>",
+        "<:fascept:1541851395240497164>"
+      ],
+      "aliases": [
+        "scepter",
+        "arcane",
+        "ascepter",
+        "ascept"
+      ],
+      "type": "MANA",
+      "qualityList": [
+        [
+          65,
+          95
+        ]
+      ],
+      "manaRange": [
+        200,
+        125
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "replenish_ally",
+        "stat": "mag"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcascept:1541851458155061420>",
+        "<:puascept:1541851518108565605>",
+        null,
+        "<:peascept:1541851578716389448>",
+        "<:pmascept:1541851732542488586>",
+        "<:plascept:1541851784484487199>",
+        "<:pfascept:1541851825819488307>"
+      ],
+      "pristineEmojiNote": "Token pristine belum ada untuk rank: rare (list.md)."
+    },
+    {
+      "id": 14,
+      "name": "Resurrection Staff",
+      "emojis": [
+        "<:crstaff:1541882270271676437>",
+        "<:urstaff:1541882290953654412>",
+        "<:rrstaff:1541882367927517246>",
+        "<:erstaff:1541882411082850494>",
+        "<:mrstaff:1541882446679769130>",
+        "<:lrstaff:1541882484462059591>",
+        "<:frstaff:1541882507308306532>"
+      ],
+      "aliases": [
+        "rstaff",
+        "resurrect",
+        "res"
+      ],
+      "type": "REVIVE",
+      "qualityList": [
+        [
+          60,
+          90
+        ]
+      ],
+      "manaRange": [
+        400,
+        300
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "revive",
+        "stat": "mag"
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcrstaff:1541884592884154500>",
+        "<:purstaff:1541882575499563088>",
+        "<:prrstaff:1541882603458531490>",
+        "<:perstaff:1541882644504256572>",
+        "<:pmrstaff:1541882669380403343>",
+        "<:plrstaff:1541882735373717565>",
+        "<:pfrstaff:1541882747797114890>"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Glacial Axe",
+      "emojis": [
+        "<:cgaxe:1541871405748981881>",
+        "<:ugaxe:1541871448883470398>",
+        "<:rgaxe:1541871469745938536>",
+        "<:egaxe:1541871501131649205>",
+        "<:mgaxe:1541871552448962610>",
+        "<:lgaxe:1541871594828206090>",
+        "<:fgaxe:1541871625589497910>"
+      ],
+      "aliases": [
+        "gaxe",
+        "glacial",
+        "axe",
+        "glacialaxe"
+      ],
+      "owoId": 115,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          40,
+          60
+        ]
+      ],
+      "manaRange": [
+        260,
+        160
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        5
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "att",
+        "type": "PHYSICAL",
+        "duration": 1,
+        "stacks": 2
+      },
+      "manaCostNote": "manaRange 260-160: biaya TURUN saat quality naik (q0 = 260, q100 = 160).",
+      "sourceText": "Deals **40-60%** of your STR to an enemy and apply 2 stacks of **Freeze**. Freeze: next turn, prevent the target from attacking. Remove a stack after triggering.",
+      "abilityNote": "Damage 40-60% STR lalu 2 stack Freeze terpisah; tiap stack memblokir satu giliran serang. Biaya 260-160 WP.",
+      "pristineEmojis": [
+        "<:pcgaxe:1541871682388631583>",
+        "<:pugaxe:1541871720649068654>",
+        "<:prgaxe:1541871737799581727>",
+        "<:pegaxe:1541871777221976234>",
+        "<:pmgaxe:1541871824181133402>",
+        "<:plgaxe:1541871841495351351>",
+        "<:pfgaxe:1541871898525175930>"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Vanguard's Banner",
+      "emojis": [
+        "<:cvban:1541889031476875454>",
+        "<:uvban:1541889065903849604>",
+        "<:rvban:1541889100779618344>",
+        "<:evban:1541889123890237562>",
+        "<:mvban:1541889167875899412>",
+        "<:lvban:1541889229594951790>",
+        "<:fvban:1541889417654837379>"
+      ],
+      "aliases": [
+        "vban",
+        "banner",
+        "vanguard",
+        "vbanner",
+        "vanguard's banner"
+      ],
+      "type": "BUFF",
+      "qualityList": [],
+      "manaRange": [
+        290,
+        235
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        6,
+        7,
+        8
+      ],
+      "ability": {
+        "kind": "attack_up_chain",
+        "duration": 2
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcvban:1541889463544971397>",
+        "<:puvban:1541889496415477850>",
+        "<:prvban:1541889526333448254>",
+        "<:pevban:1541889569916723242>",
+        "<:pmvban:1541889708710301777>",
+        "<:plvban:1541889788812992585>",
+        "<:pfvban:1541889810237489202>"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Culling Scythe",
+      "emojis": [
+        "<:csythe:1541866786721636392>",
+        "<:usythe:1541866829323178094>",
+        "<:rsythe:1541866863066218518>",
+        "<:esythe:1541866896872448050>",
+        "<:msythe:1541866932528218173>",
+        "<:lsythe:1541866964518182932>",
+        "<:fsythe:1541867014442848267>"
+      ],
+      "aliases": [
+        "cscythe",
+        "culling",
+        "sythe",
+        "csyth",
+        "csy",
+        "scythe"
+      ],
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          70,
+          100
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        9
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "att",
+        "duration": 2
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcsythe:1541867080591089715>",
+        "<:pusythe:1541867155795214466>",
+        "<:prsythe:1541867114384719902>",
+        "<:pesythe:1541867188670177280>",
+        "<:pmsythe:1541867216872669244>",
+        "<:plsythe:1541867262057652316>",
+        "<:pfsythe:1541867290117804152>"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Rune of Celebration",
+      "emojis": [
+        "<:ccrune:1541865880630198322>",
+        "<:ucrune:1541865942710222900>",
+        "<:rcrune:1541865987459256350>",
+        "<:ecrune:1541866029339254876>",
+        "<:mcrune:1541866110641635378>",
+        "<:lcrune:1541868822552903770>",
+        "<:fcrune:1541866214262046790>"
+      ],
+      "aliases": [
+        "crune",
+        "celebration",
+        "cel"
+      ],
+      "type": "BUFF",
+      "qualityList": [],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        10
+      ],
+      "ability": {
+        "kind": "celebration",
+        "duration": 3
+      },
+      "disabled": true,
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pccrune:1541866286433435658>",
+        "<:pucrune:1541866374115098694>",
+        "<:prcrune:1541866422039351487>",
+        "<:pecrune:1541866513202675805>",
+        "<:pmcrune:1541866549030162592>",
+        "<:plcrune:1541866593821134858>",
+        "<:pfcrune:1541866644047921303>"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Staff of Purity",
+      "emojis": [
+        "<:cpstaff:1541881664387416067>",
+        "<:upstaff:1541881703369285763>",
+        "<:rpstaff:1541881751662624808>",
+        "<:epstaff:1541881771832901674>",
+        "<:mpstaff:1541881820801663026>",
+        "<:lpstaff:1541881848257581146>",
+        "<:fpstaff:1541881879907803186>"
+      ],
+      "aliases": [
+        "pstaff",
+        "purity"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          50,
+          100
+        ]
+      ],
+      "manaRange": [
+        250,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        13
+      ],
+      "ability": {
+        "kind": "purify",
+        "stat": "mag",
+        "duration": 2
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "note": "Hapus debuff dari rekan acak, heal 50-100% MAG, pasang Sacred Ward 2 turn.",
+      "pristineEmojis": [
+        "<:pcpstaff:1541881960102891590>",
+        "<:pupstaff:1541881987847954443>",
+        "<:prpstaff:1541882016805691412>",
+        "<:pepstaff:1541882051802697959>",
+        "<:pmpstaff:1541882110426742824>",
+        "<:plpstaff:1541882131251204166>",
+        "<:pfpstaff:1541882161282682931>"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Leeching Scythe",
+      "emojis": [
+        "<:clsyth:1541876443925975190>",
+        "<:ulsyth:1541876497588031590>",
+        "<:rlsyth:1541876545730252872>",
+        "<:elsyth:1541876587065249832>",
+        "<:mlsyth:1541876626403500113>",
+        "<:llsyth:1541876672666538034>",
+        "<:flsyth:1541876710914400410>"
+      ],
+      "aliases": [
+        "lscythe",
+        "leeching",
+        "lsyth",
+        "lsy",
+        "leechscythe"
+      ],
+      "owoId": 120,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          50,
+          80
+        ],
+        [
+          40,
+          60
+        ]
+      ],
+      "manaRange": [
+        230,
+        130
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        11
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "att",
+        "duration": 3,
+        "bonusIfBuffed": 1
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pclsyth:1541876747161702540>",
+        "<:pulsyth:1541876790795173998>",
+        "<:prlsyth:1541876834323669052>",
+        "<:pelsyth:1541876855081017505>",
+        "<:pmlsyth:1541876890279612648>",
+        "<:pllsyth:1541876928166764664>",
+        "<:pflsyth:1541876967601606757>"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Foul Fish",
+      "emojis": [
+        "<:cffish:1541870681095020636>",
+        "<:uffish:1541870691664793630>",
+        "<:rffish:1541870750032724019>",
+        "<:effish:1541870870274773042>",
+        "<:mffish:1541870919952244786>",
+        "<:lffish:1541870939216674929>",
+        "<:fffish:1541870987916877832>"
+      ],
+      "aliases": [
+        "ffish",
+        "fish",
+        "foul",
+        "foulfish"
+      ],
+      "owoId": 121,
+      "owoIdNote": "ID resmi OwO. `id` internal tidak diubah karena dipakai kode & tes.",
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          50,
+          80
+        ]
+      ],
+      "manaRange": [
+        280,
+        180
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        12
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "att",
+        "duration": 2
+      },
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pcffish:1541871029356331018>",
+        "<:puffish:1541871077070737526>",
+        "<:prffish:1541871112076533870>",
+        "<:peffish:1541871153432240199>",
+        "<:pmffish:1541871183773827203>",
+        "<:plffish:1541871220071600261>",
+        "<:pfffish:1541871259770429482>"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Rune of Luck",
+      "emojis": [
+        "<:clrune:1541878331790721024>",
+        "<:ulrune:1541878447570165850>",
+        "<:rlrune:1541878505376186409>",
+        "<:elrune:1541878543800340652>",
+        "<:mlrune:1541878572841574610>",
+        "<:llrune:1541878614084288773>",
+        "<:flrune:1541878635466596432>"
+      ],
+      "aliases": [
+        "lrune",
+        "luck"
+      ],
+      "type": "MIXED",
+      "qualityList": [
+        [
+          1,
+          40
+        ],
+        [
+          1,
+          40
+        ],
+        [
+          1,
+          40
+        ],
+        [
+          1,
+          40
+        ],
+        [
+          1,
+          40
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "luck_hits",
+        "hits": 5
+      },
+      "disabled": true,
+      "manaCostNote": "manaCost = stats[last] dari quality manaRange; q0 = nilai pertama, q100 = nilai kedua (biaya TURUN saat quality naik)",
+      "pristineEmojis": [
+        "<:pclrune:1541878688499634266>",
+        "<:pulrune:1541878728190332988>",
+        "<:prlrune:1541878772590968842>",
+        "<:pelrune:1541878806669959290>",
+        "<:pmlrune:1541878841327362090>",
+        "<:pllrune:1541878858373013618>",
+        "<:pflrune:1541878888517345300>"
+      ]
+    },
+    {
+      "id": 132,
+      "name": "Withering Staff",
+      "emojis": [
+        "<:cwstaff:1571815624139739188>",
+        "<:uwstaff:1571815643253317712>",
+        "<:rwstaff:1571815661930422273>",
+        "<:ewstaff:1571815684613210162>",
+        "<:mwstaff:1571815701776175104>",
+        "<:lwstaff:1571815720105410730>",
+        "<:fwstaff:1571815741965996083>"
+      ],
+      "aliases": [
+        "witheringstaff",
+        "wstaff"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          55,
+          80
+        ]
+      ],
+      "manaRange": [
+        220,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        14
+      ],
+      "ability": {
+        "kind": "damage_one_buff",
+        "stat": "mag",
+        "type": "MAGICAL",
+        "duration": 2
+      }
+    },
+    {
+      "id": 133,
+      "name": "Witching Hour",
+      "emojis": [
+        "<:cwhour:1559090385949696081>",
+        "<:uwhour:1559090416224178236>",
+        "<:rwhour:1559090450277736499>",
+        "<:ewhour:1559090478388088912>",
+        "<:mwhour:1559090505747271711>",
+        "<:lwhour:1559090531546697728>",
+        "<:fwhour:1559090556540424264>"
+      ],
+      "aliases": [
+        "witchinghour",
+        "witching",
+        "whour"
+      ],
+      "type": "DEBUFF",
+      "qualityList": [],
+      "manaRange": [
+        140,
+        140
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        15
+      ],
+      "ability": {
+        "kind": "curse_all",
+        "stat": "mag",
+        "duration": 2,
+        "costPerTurn": true
+      },
+      "abilityNote": "preTurn: mengutuk semua musuh 2 turn. Biaya 140 WP dibayar tiap giliran selama WP cukup; bila WP kurang, kutukan tidak dipasang dan unit menyerang biasa.",
+      "assumptionNotes": [
+        "Sumber tidak menyebut slot pasif; dipakai 1 mengikuti mayoritas senjata dan aturan rentang pasif global (1-2).",
+        "Sumber tidak menyebut senjata ini menyerang; karena itu tidak ada damage langsung dan unit tetap melakukan serangan fisik biasa setelah kutukan terpasang."
+      ]
+    },
+    {
+      "id": 123,
+      "name": "Bleeding Gaze",
+      "owoId": 123,
+      "emojis": [
+        "<:cbgaze:1550293795525107762>",
+        "<:ubgaze:1550294757874606131>",
+        "<:rbgaze:1550294788530503691>",
+        "<:ebgaze:1550294815315460148>",
+        "<:mbgaze:1550294841160896552>",
+        "<:lbgaze:1550294866020405310>",
+        "<:fbgaze:1550294886463438896>"
+      ],
+      "aliases": [
+        "bleedinggaze",
+        "bgaze"
+      ],
+      "type": "MIXED",
+      "qualityList": [
+        [
+          30,
+          50
+        ],
+        [
+          150,
+          200
+        ],
+        [
+          20,
+          10
+        ]
+      ],
+      "manaRange": [
+        0,
+        0
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "bleeding_gaze",
+        "stat": "mag"
+      },
+      "abilityNote": "Biaya WP 0, biaya HP 20-10% Max HP (stats[2]). Satu musuh dipaksa menyerang sekutunya dengan 30-50% efektivitas; kalau musuh cuma satu, damage langsung 150-200% MAG."
+    },
+    {
+      "id": 124,
+      "name": "Conduit Claw",
+      "owoId": 124,
+      "emojis": [
+        "<:ccclaw:1550496878523711599>",
+        "<:ucclaw:1550496898786529311>",
+        "<:rcclaw:1550496924497354762>",
+        "<:ecclaw:1550496947981394042>",
+        "<:mcclaw:1550496970412662834>",
+        "<:lcclaw:1550496995444133908>",
+        "<:fcclaw:1550497014855237723>"
+      ],
+      "aliases": [
+        "cclaw",
+        "claw",
+        "conduitclaw"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          20,
+          50
+        ],
+        [
+          120,
+          170
+        ]
+      ],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "conduit",
+        "stat": "mag"
+      },
+      "abilityNote": "Pindahkan satu debuff dari musuh ke sekutu dengan buff terbanyak, efektivitasnya -20-50%, lalu beri 120-170% MAG ke musuh itu.",
+      "sourceText": "Move a **debuff** from an enemy to the ally with the most **buffs**. Reduce the debuff's effectiveness by **-20-50%** and deal **120-170%** of your MAG to the enemy. Moved buffs are calculated based on the original caster's stats."
+    },
+    {
+      "id": 125,
+      "name": "Staff of Corruption",
+      "owoId": 125,
+      "emojis": [
+        "<:ccorstaff:1550629532824764446>",
+        "<:ucorstaff:1550629551120580719>",
+        "<:rcorstaff:1550629571676872724>",
+        "<:ecorstaff:1550629598381875290>",
+        "<:mcorstaff:1550629618229321819>",
+        "<:lcorstaff:1550629639532314705>",
+        "<:fcorstaff:1550629660080087071>"
+      ],
+      "aliases": [
+        "corruptionstaff",
+        "cstaff"
+      ],
+      "type": "MAGICAL",
+      "qualityList": [
+        [
+          70,
+          50
+        ],
+        [
+          80,
+          120
+        ]
+      ],
+      "manaRange": [
+        250,
+        150
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "corrupt_buff",
+        "stat": "att"
+      },
+      "abilityNote": "Efektivitas buff musuh acak turun menjadi 70-50% dari nilai aslinya, lalu buff itu mengenai pemakai 80-120% STR."
+    },
+    {
+      "id": 131,
+      "name": "Scepter of Celebrations",
+      "owoId": 131,
+      "emojis": [
+        "<:ccscept:1570878664332284045>",
+        "<:ucscept:1570878686696181833>",
+        "<:rcscept:1570878717306343495>",
+        "<:ecscept:1570878744267071638>",
+        "<:mcscept:1570878775741259868>",
+        "<:lcscept:1570878802177949879>",
+        "<:fcscept:1570878826488143934>"
+      ],
+      "aliases": [
+        "cscept",
+        "cscepter",
+        "scepterofcelebrations"
+      ],
+      "type": "BUFF",
+      "qualityList": [],
+      "manaRange": [
+        200,
+        100
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        16
+      ],
+      "ability": {
+        "kind": "anniversary",
+        "duration": 2,
+        "interval": 4
+      },
+      "abilityNote": "preTurn: tiap 4 giliran (turn 1, 5, 9, ...) memasang Anniversary Blessing 2 turn ke seluruh tim. Biaya 200-100 WP dibayar saat memasang."
+    },
+    {
+      "id": 129,
+      "name": "Wounding Crossbow",
+      "owoId": 129,
+      "emojis": [
+        "<:cwcross:1552772849398186025>",
+        "<:uwcross:1552772874190979112>",
+        "<:rwcross:1552772898039791708>",
+        "<:ewcross:1552772923163410512>",
+        "<:mwcross:1552772942860128387>",
+        "<:lwcross:1552773096346226809>",
+        "<:fwcross:1552773121067450369>"
+      ],
+      "aliases": [
+        "woundingcrossbow",
+        "crossbow",
+        "wcb",
+        "wcbow",
+        "xbow"
+      ],
+      "type": "PHYSICAL",
+      "qualityList": [
+        [
+          220,
+          300
+        ],
+        [
+          10,
+          25
+        ]
+      ],
+      "manaRange": [
+        480,
+        280
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "heavy_arrow",
+        "stat": "att",
+        "type": "PHYSICAL"
+      },
+      "abilityNote": "Dua fase: memuat panah gratis (tanpa WP, tanpa damage), lalu menembak dengan 220-300% STR + 10-25 stack Exposed. Biaya 480-280 WP hanya dibayar saat menembak.",
+      "manaCostNote": "manaRange 480-280: biaya TURUN saat quality naik, dan hanya dipakai saat panah dilepas.",
+      "sourceText": "If **Heavy Arrow** is not loaded, load one. Otherwise, consume it. Loading an arrow does not cost WP. Heavy Arrow: deal **220-300%** of your STR and apply **10-25** stacks of **Exposed** to an enemy. Exposed: the next instance of damage taken is increased by 1% per stack; consume all stacks after triggering."
+    },
+    {
+      "id": 126,
+      "name": "Soul Tithe",
+      "owoId": 126,
+      "aliases": [
+        "stithe",
+        "soul",
+        "tithe",
+        "soultithe"
+      ],
+      "emojis": [
+        "<:cstithe:1550633745588027433>",
+        "<:ustithe:1550633772054216805>",
+        "<:rstithe:1550633791280906251>",
+        "<:estithe:1550633816928821299>",
+        "<:mstithe:1550633844682657903>",
+        "<:lstithe:1550633869831573624>",
+        "<:fstithe:1550633888559145021>"
+      ],
+      "qualityList": [
+        [
+          10,
+          25
+        ],
+        [
+          0.35,
+          0.45
+        ]
+      ],
+      "manaRange": [
+        100,
+        50
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "soul_tithe",
+        "stat": "mag"
+      },
+      "sourceText": "Absorb **10-25%** of all allies' current WP to deal damage to an enemy. Deals **0.35-0.45%** of your MAG for every 1 WP absorbed."
+    },
+    {
+      "id": 127,
+      "name": "Briar-Heart Staff",
+      "owoId": 127,
+      "aliases": [
+        "bhstaff",
+        "briarheart",
+        "briarheartstaff",
+        "briar"
+      ],
+      "emojis": [
+        "<:cbhstaff:1552754741812142190>",
+        "<:ubhstaff:1552754808731992175>",
+        "<:rbhstaff:1552754929335279747>",
+        "<:ebhstaff:1552754950004805732>",
+        "<:mbhstaff:1552754972767289544>",
+        "<:lbhstaff:1552755004626968699>",
+        "<:fbhstaff:1552755035350499348>"
+      ],
+      "qualityList": [
+        [
+          25,
+          50
+        ],
+        [
+          20,
+          30
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "manaRange": [
+        240,
+        140
+      ],
+      "passiveCount": 1,
+      "buffList": [
+        22
+      ],
+      "ability": {
+        "kind": "thorn_tether",
+        "duration": 2
+      },
+      "sourceText": "At the start of the turn, apply **Thorn Tether** to your allies for 2 turns. Thorn Tether: create a tether from the weapon owner to this animal. The owner absorbs **25-50%** of the incoming damage dealt, but also intercepts **20-30%** of healing and **20-30%** replenishing from the target. Cannot be applied if the animal already has a defense buff."
+    },
+    {
+      "id": 128,
+      "name": "Arbiter's Edge",
+      "owoId": 128,
+      "aliases": [
+        "aedge",
+        "edge",
+        "arbitersedge"
+      ],
+      "emojis": [
+        "<:caedge:1552762989491265577>",
+        "<:uaedge:1552763018218184754>",
+        "<:raedge:1552763041748361336>",
+        "<:eaedge:1552763073746440283>",
+        "<:maedge:1552763201450541197>",
+        "<:laedge:1552763103559815198>",
+        "<:faedge:1552763230584180857>"
+      ],
+      "qualityList": [
+        [
+          10,
+          20
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "manaRange": [
+        225,
+        125
+      ],
+      "passiveCount": 1,
+      "buffList": [],
+      "ability": {
+        "kind": "arbiters_edge",
+        "sinLimit": 10,
+        "virtueLimit": 10
+      },
+      "sourceText": "Unleash judgement upon an enemy. Consume all stacks of Sin and Virtue. Gain a stack of Sin when an ally deals damage to an animal. Gain a stack of Virtue when an ally heals or replenishes an animal. Sin: when consumed, each stack deals 10-20% of your highest offense stat as physical damage to an enemy; stack limit 10. Virtue: when consumed, each stack deals 20-30% of your lowest offense stat as magical damage to an enemy; stack limit 10."
+    }
+  ],
+  "buffs": [
+    {
+      "id": 1,
+      "name": "Taunt",
+      "debuff": false,
+      "qualityList": [
+        [
+          30,
+          50
+        ]
+      ],
+      "note": "Memaksa musuh menyerang pemilik; kurangi damage masuk."
+    },
+    {
+      "id": 2,
+      "name": "Poison",
+      "debuff": true,
+      "qualityList": [
+        [
+          30,
+          50
+        ]
+      ],
+      "note": "TRUE damage 30-50% MAG di akhir turn, 3 turn."
+    },
+    {
+      "id": 3,
+      "name": "Flame",
+      "debuff": true,
+      "qualityList": [
+        [
+          20,
+          40
+        ],
+        [
+          80,
+          110
+        ]
+      ],
+      "note": "MAG di akhir turn 20-40%; menimpa Flame yang ada = ledakan 80-110%."
+    },
+    {
+      "id": 4,
+      "name": "Defense Up",
+      "debuff": false,
+      "qualityList": [
+        [
+          20,
+          30
+        ]
+      ],
+      "note": "Kurangi damage masuk 20-30%."
+    },
+    {
+      "id": 5,
+      "name": "Freeze",
+      "debuff": true,
+      "qualityList": [],
+      "note": "Tidak bisa menyerang satu turn."
+    },
+    {
+      "id": 6,
+      "name": "Attack Up",
+      "debuff": false,
+      "qualityList": [
+        [
+          15,
+          25
+        ]
+      ],
+      "note": "+15-25% semua damage."
+    },
+    {
+      "id": 7,
+      "name": "Attack Up+",
+      "debuff": false,
+      "qualityList": [
+        [
+          25,
+          35
+        ]
+      ],
+      "note": "+25-35% semua damage."
+    },
+    {
+      "id": 8,
+      "name": "Attack Up++",
+      "debuff": false,
+      "qualityList": [
+        [
+          40,
+          50
+        ]
+      ],
+      "note": "+40-50% semua damage."
+    },
+    {
+      "id": 9,
+      "name": "Mortality",
+      "debuff": true,
+      "qualityList": [
+        [
+          45,
+          75
+        ]
+      ],
+      "note": "Kurangi heal masuk 45-75%."
+    },
+    {
+      "id": 10,
+      "name": "Celebration",
+      "debuff": false,
+      "qualityList": [
+        [
+          20,
+          50
+        ],
+        [
+          15,
+          40
+        ]
+      ],
+      "note": "Heal 20-50% PR dan isi WP 15-40% MR tiap akhir turn."
+    },
+    {
+      "id": 11,
+      "name": "Leech",
+      "debuff": true,
+      "qualityList": [
+        [
+          30,
+          60
+        ],
+        [
+          30,
+          60
+        ]
+      ],
+      "note": "Penyerang mencuri heal/WP yang masuk."
+    },
+    {
+      "id": 12,
+      "name": "Stinky",
+      "debuff": true,
+      "qualityList": [
+        [
+          20,
+          50
+        ]
+      ],
+      "note": "Cegah buff/debuff baru, beri MAG damage."
+    },
+    {
+      "id": 13,
+      "name": "Sacred Ward",
+      "debuff": false,
+      "qualityList": [
+        [
+          15,
+          25
+        ]
+      ],
+      "note": "Cegah debuff masuk; tiap penolakan menghabiskan 1 stack dan replenish 15-25% MAG."
+    },
+    {
+      "id": 14,
+      "name": "Wither",
+      "debuff": true,
+      "qualityList": [
+        [
+          25,
+          40
+        ],
+        [
+          20,
+          35
+        ],
+        [
+          25,
+          40
+        ]
+      ],
+      "note": "Kurangi heal HP 25-40% dan replenish WP 20-35% selama 2 turn. Tiap giliran berpeluang 25-40% menyebar ke musuh lain yang belum terkena; salinan hasil sebar memakai efektivitas separuh sehingga rantai makin lemah dan berhenti sendiri.",
+      "spreadWeakening": 0.5,
+      "spreadWeakeningNote": "Deskripsi sumber hanya menyebut 'semakin melemah' tanpa angka. Dipakai 0.5 (separuh) per lompatan: efek dan peluang sebar ikut terbagi dua, sehingga rantai berhenti sendiri. Ubah angka ini bila sumber menyebut nilai lain.",
+      "stackingNote": "Menumpuk dengan cara menggabung durasi (seperti Mortality), bukan menjumlah persen, supaya dua Wither di satu unit tidak menjadi -80% heal."
+    },
+    {
+      "id": 15,
+      "name": "Midnight Curse",
+      "debuff": true,
+      "qualityList": [
+        [
+          30,
+          30
+        ]
+      ],
+      "damageReduction": 20,
+      "healReduction": 40,
+      "wpDrain": 20,
+      "note": "Damage MAG 30% di akhir tiap turn, damage keluar -20%, heal diterima -40%, dan kehilangan 20% Max WP tiap turn selama 2 turn.",
+      "percentNotes": [
+        "qualityList hanya memuat damage MAG (30%); sumber tidak menyebut quality untuk -20% damage, -40% heal, dan -20% Max WP, jadi ketiganya tetap di semua tier.",
+        "Damage dari kutukan ini mengurangi angka damage, bukan peluang terkena; tidak ada roll RNG tambahan."
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Anniversary Blessing",
+      "debuff": false,
+      "qualityList": [
+        [
+          15,
+          50
+        ],
+        [
+          10,
+          30
+        ],
+        [
+          5,
+          10
+        ]
+      ],
+      "note": "ATT & MAG +15-50%, PR & MR +10-30%, dan heal 5-10% Max HP tiap akhir turn selama 2 turn."
+    },
+    {
+      "id": 17,
+      "name": "Frostbite",
+      "debuff": true,
+      "qualityList": [],
+      "note": "Stack menumpuk tanpa batas. Pada 100 stack, pasang 1 stack Freeze lalu hapus semua stack Frostbite.",
+      "stackingNote": "Independent: tiap stack instance terpisah, jadi jumlah stack dihitung dari panjang array buff."
+    },
+    {
+      "id": 18,
+      "name": "Pest",
+      "debuff": true,
+      "qualityList": [
+        [
+          2,
+          8
+        ]
+      ],
+      "note": "Di akhir turn, tiap stack Pest memberi damage MAG 2-8% dari MAG pemberi, lalu Pest hilang.",
+      "stackingNote": "Independent: tiap stack instance terpisah dan hilang setelah menyerang."
+    },
+    {
+      "id": 19,
+      "name": "Exposed",
+      "debuff": true,
+      "qualityList": [],
+      "note": "Damage berikutnya yang diterima naik 1% per stack, lalu semua stack dihapus.",
+      "stackingNote": "Independent: tiap stack instance terpisah, jumlahnya dijumlahkan saat menghitung bonus."
+    },
+    {
+      "id": 22,
+      "name": "Thorn Tether",
+      "debuff": false,
+      "defenseBuff": true,
+      "qualityList": [
+        [
+          25,
+          50
+        ],
+        [
+          20,
+          30
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "note": "Pemilik senjata menyerap 25-50% damage masuk ke hewan yang ditautkan, serta menyerap 20-30% heal dan 20-30% replenish WP yang diterima hewan itu. Tidak bisa dipasang jika hewan sudah punya defense buff."
+    }
+  ],
+  "limits": {
+    "maxAnimals": 6,
+    "maxSlots": 3,
+    "maxTurns": 24
+  },
+  "wear": {
+    "pristine": {
+      "id": 4,
+      "name": "Pristine",
+      "chance": 0.01,
+      "buff": 5
+    },
+    "fine": {
+      "id": 3,
+      "name": "Fine",
+      "chance": 0.05,
+      "buff": 3
+    },
+    "decent": {
+      "id": 2,
+      "name": "Decent",
+      "chance": 0.1,
+      "buff": 1
+    },
+    "worn": {
+      "id": 1,
+      "name": "Worn",
+      "chance": 0,
+      "buff": 0
+    }
+  },
+  "emojiCatalog": "src/data/battleEmojiCatalog.json"
+}

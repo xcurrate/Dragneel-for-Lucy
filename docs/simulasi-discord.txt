@@ -1,0 +1,210 @@
+📖 PANDUAN SIMULASI BATTLE
+
+Panduan dari nol sampai bisa membaca hasil. Contoh memakai prefix `d`; kalau prefix servermu beda, ganti `d` dengan prefix itu.
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 1 — BUAT TIM DULU
+━━━━━━━━━━━━━━━━━━━━
+Simulasi butuh tim, jadi ini selalu langkah pertama. Ada 2 cara.
+
+▸ CARA 1 — Susun manual
+
+```
+d team new Rocket
+```
+Tim baru langsung jadi tim aktif. Balasannya menyebut ID-nya, misal `[1] Rocket`. ID itu dipakai untuk memanggil tim ini nanti.
+
+Satu tim punya 3 slot. Isi satu per satu:
+```
+d team add 1 snail level=50 weapon=gsword passive=12
+d team add 2 snail level=50 weapon=bow passive=12
+d team add 3 hp=14,att=6,pr=2,wp=3,mag=0,mr=1 level=50
+```
+
+Yang perlu diketahui:
+• Hewan dex diisi namanya (`snail`); stat diambil otomatis dari dex.
+• Stat manual diisi 6 angka berurutan: hp, att, pr, wp, mag, mr. Berguna untuk pet yang belum ada di dex.
+• Senjata wajib punya pasif. `weapon=gsword` tanpa `passive=` akan ditolak.
+• Di `d team add`, pasif ditulis sebagai ID angka (`passive=12`), bukan nama. Beberapa pasif dipisah koma: `passive=1,12`.
+
+Mau pakai nama pasif? Pasang senjatanya lewat perintah lain:
+```
+d tm s gsword crit
+d tm s bow crit 2      ← angka terakhir = nomor slot
+```
+
+Opsi tambahan saat mengisi slot:
+```
+d team add 1 snail level=80 weapon=gsword passive=1,12 quality=80 label=tank
+```
+`quality=80` memasang kualitas senjata 80%. `label=tank` mengganti nama tampil slot.
+
+▸ CARA 2 — Impor dari kartu tim Lucy
+
+1. Kirim (atau biarkan muncul) kartu tim Lucy di channel. Ciri-cirinya: pesan dari bot Lucy berisi baris `**[1] ...**`, `**[2] ...**`, `**[3] ...**` lengkap dengan stat, level, senjata, dan pasif.
+2. Bot menambahkan reaksi 📊 otomatis pada kartu itu.
+3. Klik reaksi 📊 tersebut.
+4. Bot membalas: `✅ Tim **Lucy Import - <nama>** berhasil diimpor (N slot)`.
+
+Stat, level, senjata, dan pasif ikut tersalin, jadi timnya langsung siap disimulasikan. Satu kartu hanya bisa diimpor sekali.
+
+Kalau reaksi 📊 tidak muncul, berarti pesannya tidak dikenali sebagai kartu tim Lucy — pastikan itu pesan asli dari bot Lucy, bukan screenshot atau teks yang disalin ulang.
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 2 — CEK TIMNYA
+━━━━━━━━━━━━━━━━━━━━
+```
+d tm
+```
+Panel menampilkan komposisi tim aktif beserta tombol:
+• ◀ ▶ — pindah ke tim sebelumnya / berikutnya
+• menu pilih — lompat langsung ke tim tertentu
+• 🗑️ Hapus — hapus tim yang sedang tampil (ada konfirmasi)
+
+Lihat semua tim beserta ID-nya:
+```
+d team list
+```
+Tim bertanda ✅ adalah tim aktif. Ganti tim aktif:
+```
+d team pick 2
+d team pick Rocket
+```
+Tim yang masih kosong tidak bisa dipakai simulasi; bot akan menolak.
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 3 — JALANKAN SIMULASI
+━━━━━━━━━━━━━━━━━━━━
+`d sim` punya dua bentuk hasil:
+• TANPA `-m` → satu pertarungan. Isinya kondisi akhir tiap hewan: sisa HP/WP, senjata, siapa yang menang, dan dalam berapa turn. Footer-nya juga merangkum rekap 50 pertarungan untuk matchup itu, contoh: "🏆 kamu menang dalam 7 turn | 🎲 48 win, 2 lose, 0 tie".
+• FILTER HASIL: `-win`, `-lose`, `-tie` mengulang pertarungan sampai hasilnya cocok, lalu hasil itu yang ditampilkan. Contoh: `d sim 2 -lose`, `d sim 2 -lose -m 20`. Kalau tidak ada yang cocok, perintah dilaporkan gagal (bukan menampilkan hasil lain). Tanpa `-m` dicoba 50 pertarungan; dengan `-m N` dijalankan tepat N lalu dihitung yang cocok.
+• DENGAN `-m <jumlah>` → statistik banyak pertarungan (menang/kalah/seri + distribusi turn). Default 50 kalau `-m` disebut tanpa angka.
+
+▸ Lawan tim milikmu sendiri
+```
+d sim                  → tim aktif vs salinan dirinya sendiri (mirror)
+d sim 2                → tim aktif vs tim ID 2
+d sim Blue             → tim aktif vs tim bernama Blue
+d sim 1 vs 2           → tim ID 1 vs tim ID 2
+d sim Rocket vs Blue   → memakai nama tim
+```
+
+`mirror` artinya tim diadu dengan salinan persisnya. Berguna untuk melihat seberapa besar pengaruh RNG: kalau winrate jauh dari 50%, berarti urutan serangan ikut menentukan.
+
+▸ Lawan dari dex atau stat manual (tanpa perlu bikin tim lawan)
+```
+d sim snail level=60
+d sim hp=14,att=6,pr=2,wp=3,mag=0,mr=1 level=60
+```
+
+▸ Atur jumlah pertarungan
+```
+d sim -m 100
+d sim 1 vs 2 -m 200
+```
+Makin banyak, makin stabil angka winrate-nya. Batasnya 200 per perintah untuk user biasa.
+
+Tanpa `-m`, tombol 🔁 di bawah hasil tetap mengulang matchup yang sama sebanyak 50 pertarungan sekaligus — lihat satu pertarungan dulu, lalu cek statistiknya tanpa mengetik ulang.
+
+▸ Atur level dan kualitas senjata
+```
+d sim 1 vs 2 lvl100          → kedua sisi level 100
+d sim 1 vs 2 lvl100/40       → kita 100, lawan 40
+d sim 1 vs 2 lvl/40          → kita tetap, lawan 40
+d sim 1 vs 2 -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
+```
+`-qp` untuk sisi kita, `-qe` untuk sisi lawan. Kualitas yang sudah terpasang di slot menang atas flag ini, jadi kalau hasilnya tidak berubah, cek dulu apakah slotnya punya `quality=` sendiri.
+
+▸ Ulangi hasil yang sama persis
+```
+d sim 1 vs 2 -m 100 -s 42
+```
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 4 — SIMULASI GLOBAL
+━━━━━━━━━━━━━━━━━━━━
+Kalau timmu sudah banyak, `d sim global` mengadu tim aktif melawan SEMUA tim tersimpan sekaligus.
+```
+d sim global
+```
+Opsinya sama seperti `d sim`:
+```
+d sim global -m 100          → 100 pertarungan per tim lawan
+d sim global -total 1000     → total 1000 pertarungan, dibagi rata
+d sim global lvl60           → semua lawan disamakan level 60
+d sim global -qp 100 -qe 10  → senjata kita 100%, senjata lawan 10%
+```
+Batasnya 100 pertarungan per tim dan 10 juta pertarungan per perintah. Cooldown 10 detik.
+
+Tim yang sedang dipilih tidak ikut diadu, karena itulah timmu sendiri. Tim kosong dilewati dan jumlahnya dicatat di hasil.
+
+━━━━━━━━━━━━━━━━━━━━
+LANGKAH 5 — MEMBACA HASIL
+━━━━━━━━━━━━━━━━━━━━
+▸ Hasil `d sim`
+```
+🏆 37 menang (74%)      ← berapa kali menang + persentasenya
+   Turns: 6 (×13), ...  ← distribusi jumlah turn; makin panjang makin ketat
+💀 13 kalah (26%)       ← berapa kali kalah
+⚖️ 3 seri (6%)          ← hanya muncul kalau ada yang seri
+```
+
+Di atasnya ada komposisi kedua sisi. Arti ikonnya:
+• 🐾 hewan
+• 🔴 🟡 🟠 🟣 🔵 🟢 ⚪ peringkat kualitas senjata, dari tertinggi (fabled) ke terendah (common)
+• ⚔️ senjata
+• ✨ pasif
+• `100%` kualitas senjata
+
+Di footer ada jumlah simulasi dan seed. Seed itulah yang bisa dimasukkan lewat `-s` untuk mengulang hasil yang sama.
+
+▸ Tombol 🔁
+Setiap hasil punya tombol 🔁 untuk mengulang matchup yang sama. Hasilnya hanya terlihat olehmu dan memakai komposisi serta kualitas yang sama persis dengan hasil sebelumnya.
+
+▸ Hasil `d sim global`
+• 🪖 Komposisi tim kamu — tim yang kamu pakai
+• 🔅 Max level < 35 — hasil melawan tim berlevel di bawah 35
+• 🔆 Max level ≥ 35 — hasil melawan tim berlevel 35 ke atas
+• 📊 Rekap — total menang / seri / kalah
+• 🔥 Streak — rata-rata dan kemenangan beruntun terpanjang
+• 📉 Kalah per tim — rata-rata berapa kali kalah per tim lawan
+
+Hasil dipisah pada level 35 supaya tidak tertipu: menang banyak melawan tim level rendah tidak berarti timmu kuat.
+
+Tombol "Lihat kekalahan" menampilkan tim mana saja yang mengalahkanmu. Hanya terlihat olehmu, dan senjata lawan disembunyikan.
+
+━━━━━━━━━━━━━━━━━━━━
+RINGKASAN PERINTAH
+━━━━━━━━━━━━━━━━━━━━
+`d team new <nama>` — buat tim baru (langsung aktif)
+`d team add <slot> <hewan|stat> [level=] [weapon=] [passive=] [quality=]` — isi slot
+`d tm s <senjata> [pasif] [slot]` — pasang / ganti senjata
+`d tm` — panel tim (pindah, pilih, hapus)
+`d team list` — daftar semua tim + ID
+`d team pick <id|nama>` — jadikan tim aktif
+`d team show [id|nama]` — lihat isi satu tim
+`d team clear <slot>` — kosongkan slot
+`d team rename <lama> <baru>` — ganti nama tim
+`d team del <id|nama>` — hapus tim
+`d sim` — tim aktif vs mirror
+`d sim <id|nama>` — tim aktif vs tim lain
+`d sim A vs B` — dua tim milikmu diadu
+`d sim <hewan> level=N` — lawan dari dex
+`d sim <stat manual> level=N` — lawan dari stat manual
+`d sim global` — tim aktif vs semua tim tersimpan
+`d sim help` / `d sim global help` — bantuan di Discord
+
+━━━━━━━━━━━━━━━━━━━━
+KALAU ADA YANG TIDAK JALAN
+━━━━━━━━━━━━━━━━━━━━
+`Belum ada tim aktif` → buat dulu: `d team new <nama>`
+`Tim ... masih kosong` → isi minimal satu slot: `d team add 1 <hewan>`
+`... butuh minimal 1 pasif` → tambahkan `passive=<id>` saat memasang senjata
+`Senjata ... tidak dikenal` → cek nama senjata yang tersedia atau pakai alias yang benar
+`Slot ... masih kosong` → isi hewannya dulu sebelum memasang senjata lewat `d tm s`
+`Tunggu 5.0 detik lagi` → cooldown `d sim` 5 detik
+`Simulasi global baru bisa dipakai lagi dalam ...` → cooldown `d sim global` 10 detik
+`Maksimum ... pertarungan per tim` → turunkan `-m`, atau minta developer menaikkan batasnya
+`Belum ada tim lawan yang bisa dipakai` → `d sim global` butuh minimal satu tim lain
+`Butuh 6 angka (hp,att,pr,wp,mag,mr)` → stat manual harus tepat 6 angka
+`Pesan tim Lucy ini sudah kamu impor sebelumnya` → pakai kartu baru

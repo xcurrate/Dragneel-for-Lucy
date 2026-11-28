@@ -1,0 +1,582 @@
+// Mesin simulasi battle. Meniru mekanik OwO, tapi deterministik: semua
+// randomness lewat RNG ber-seed supaya hasil bisa direproduksi dan diuji.
+//
+// Layout stat sengaja sama persis dengan OwO supaya port pasif/senjata tidak
+// perlu diterjemahkan:
+//   hp/wp         : [current, base, prev, bonus] → maksimum = base + bonus
+//   att/mag/pr/mr : [base, bonus]                → nilai efektif = base + bonus
+//
+// Perbedaan yang disengaja dari OwO: `Math.random` diganti RNG ber-seed, dan
+// wear/takedown/XP tidak disimulasikan karena tidak memengaruhi hasil battle.
+const data = require('../data/owoBattle');
+const { createRng } = require('./battleRng');
+const { buildWeapon, weaponAbility } = require('./battleWeapon');
+const { stackOf } = require('./battleBuffs');
+const { createRecorder } = require('./battleLog');
+
+const MAX_TURNS = data.limits.maxTurns;
+const MAX_SLOTS = data.limits.maxSlots;
+
+const PHYSICAL = 'p';
+const MAGICAL = 'm';
+const TRUE = 't';
+
+// Batas stack pasif Adaptation (Stoneskin/Spellskin), dari deskripsi sumber.
+const MAX_ADAPT_STACKS = 5;
+
+let pidCounter = 0;
+
+function resistanceFromDisplayedPercent(percent) {
+  const value = Math.max(0, Math.min(79.999, Number(percent) || 0));
+  return (value * 100) / (80 - value);
+}
+
+function maxHp(unit) { return unit.stats.hp[1] + unit.stats.hp[3]; }
+function maxWp(unit) { return unit.stats.wp[1] + unit.stats.wp[3]; }
+function isAlive(unit) { return unit.stats.hp[0] > 0; }
+function aliveOf(team) { return team.filter(isAlive); }
+
+// Penanda anti-rekursi, pengganti `tags.has(...)` OwO. Contoh: lifesteal yang
+// memicu lifesteal lagi, atau thorns yang memantulkan damage pantulan.
+function tagged(ctx, tag, unit) { return ctx.tags.has(`${tag}:${unit.pid}`); }
+
+function withTag(ctx, tag, unit, fn) {
+  const key = `${tag}:${unit.pid}`;
+  if (ctx.tags.has(key)) return undefined;
+  ctx.tags.add(key);
+  try {
+    return fn();
+  } finally {
+    ctx.tags.delete(key);
+  }
+}
+
+// Senjata seperti Arbiter's Edge perlu tahu aktivitas seluruh tim, bukan hanya
+// pemiliknya. Hook dipanggil pada senjata tiap rekan yang masih hidup.
+function notifyTeamWeapons(team, hook, ctx, ...args) {
+  for (const owner of team || []) {
+    if (!isAlive(owner) || !owner.weapon) continue;
+    owner.weapon[hook]?.(ctx, owner, ...args);
+  }
+}
+
+// (res / (100 + res)) * 0.8 — resistensi jenuh, plafon 80%.
+function resToPercent(res) {
+  const total = res[0] + res[1];
+  return (total / (100 + total)) * 0.8;
+}
+
+function getDamage(stat, multiplier, rng) {
+  return Math.round(multiplier * (stat[0] + stat[1]) + (rng.next() * 100 - 50));
+}
+
+function getDamageFromHpWp(stat, multiplier, rng) {
+  return Math.round(multiplier * (stat[1] + stat[3]) + (rng.next() * 100 - 50));
+}
+
+function getMixedDamage(statA, pctA, statB, pctB, rng) {
+  return Math.round((statA[0] + statA[1]) * pctA + (statB[0] + statB[1]) * pctB + (rng.next() * 100 - 50));
+}
+
+function pickRandom(list, rng) {
+  if (!list.length) return null;
+  return list[Math.floor(rng.next() * list.length)];
+}
+
+function lowestHp(team, excludeBuffId) {
+  let lowest = null;
+  for (const unit of team) {
+    if (!isAlive(unit)) continue;
+    if (excludeBuffId && unit.buffs.some(b => b.id === excludeBuffId)) continue;
+    if (!lowest) { lowest = unit; continue; }
+    if (unit.stats.hp[0] / maxHp(unit) < lowest.stats.hp[0] / maxHp(lowest)) lowest = unit;
+  }
+  return lowest;
+}
+
+function lowestWp(team, excludeSelf) {
+  let lowest = null;
+  for (const unit of team) {
+    if (!isAlive(unit) || unit === excludeSelf) continue;
+    if (!lowest) { lowest = unit; continue; }
+    if (unit.stats.wp[0] / maxWp(unit) < lowest.stats.wp[0] / maxWp(lowest)) lowest = unit;
+  }
+  return lowest;
+}
+
+// Taunt diprioritaskan; `ignoreChoose` melewati taunt (dipakai pasif).
+function chooseTarget(attacker, allies, enemies, rng, { hasBuff, excludeBuffId, ignoreChoose } = {}) {
+  const alive = aliveOf(enemies);
+  if (!ignoreChoose) {
+    for (const unit of alive) {
+      if (unit.buffs.some(b => b.id === 1)) return unit;
+    }
+  }
+  let pool = alive;
+  if (hasBuff) pool = pool.filter(u => u.buffs.some(b => !b.debuff));
+  if (excludeBuffId) pool = pool.filter(u => !u.buffs.some(b => b.id === excludeBuffId));
+  return pickRandom(pool, rng);
+}
+
+// Satu-satunya jalur damage. Urutan hook mengikuti inflictDamage OwO:
+// attacked (penerima) → attack (penyerang) → kurangi HP → postAttacked → postAttack.
+function inflictDamage(ctx, attacker, target, rawDamage, type, { bypassRes = false } = {}) {
+  let amount = rawDamage;
+  if (!bypassRes) {
+    if (type === PHYSICAL) amount *= 1 - resToPercent(target.stats.pr);
+    else if (type === MAGICAL) amount *= 1 - resToPercent(target.stats.mr);
+  }
+  if (amount < 0) amount = 0;
+  const bucket = { amount, bonus: 0 };
+
+  for (const buff of target.buffs) buff.attacked?.(ctx, target, attacker, bucket, type);
+  if (target.weapon) for (const p of target.weapon.passives) p.attacked?.(ctx, target, attacker, bucket, type);
+  for (const buff of attacker.buffs) buff.attack?.(ctx, attacker, target, bucket, type);
+  if (attacker.weapon) for (const p of attacker.weapon.passives) p.attack?.(ctx, attacker, target, bucket, type);
+
+  let total = bucket.amount + bucket.bonus;
+  if (total < 0) total = 0;
+  // Nilai mentah dipakai pasif yang mengulang serangan (Double Strike) agar
+  // resistensi sasaran dihitung sekali lagi, bukan dua kali dari nilai final.
+  ctx.lastHit = { raw: rawDamage, total, type, target };
+  target.stats.hp[0] -= total;
+  ctx.damageDealt += total;
+  if (!ctx.damageBySide) ctx.damageBySide = { player: 0, enemy: 0 };
+  if (attacker.side === 'player') ctx.damageBySide.player += total;
+  else if (attacker.side === 'enemy') ctx.damageBySide.enemy += total;
+  notifyTeamWeapons(attacker.team, 'onAllyDamage', ctx, attacker, target, total, type);
+
+  for (const buff of target.buffs) buff.postAttacked?.(ctx, target, attacker, total, type);
+  if (target.weapon) for (const p of target.weapon.passives) p.postAttacked?.(ctx, target, attacker, total, type);
+  for (const buff of attacker.buffs) buff.postAttack?.(ctx, attacker, target, total, type);
+  if (attacker.weapon) for (const p of attacker.weapon.passives) p.postAttack?.(ctx, attacker, target, total, type);
+
+  ctx.log?.damage(attacker, target, total, type);
+  return Math.round(total);
+}
+
+// `revive` membolehkan target ber-HP 0 ikut disembuhkan. OwO memanggil heal
+// setelah menyetel `hp[0] = 0`, jadi jalur revive memang lewat sini.
+function heal(ctx, target, amount, from, { overheal = false, revive = false } = {}) {
+  if (!target) return 0;
+  if (!revive && !isAlive(target)) return 0;
+  const cap = maxHp(target) * (overheal ? 1.5 : 1);
+  if (target.stats.hp[0] >= cap) return 0;
+  const bucket = { amount, bonus: 0 };
+
+  for (const buff of target.buffs) buff.healed?.(ctx, target, from, bucket);
+  if (target.weapon) for (const p of target.weapon.passives) p.healed?.(ctx, target, from, bucket);
+  for (const buff of from.buffs) buff.heal?.(ctx, target, from, bucket);
+  if (from.weapon) for (const p of from.weapon.passives) p.heal?.(ctx, target, from, bucket);
+
+  let total = bucket.amount + bucket.bonus;
+  if (total < 0) total = 0;
+  const room = cap - target.stats.hp[0];
+  if (total > room) total = room;
+
+  target.stats.hp[0] += total;
+  if (from) notifyTeamWeapons(from.team, 'onAllyHeal', ctx, from, target, total);
+
+  const prevHealBudget = ctx.healBudget;
+  // Hook postHealed menerima jumlah yang benar-benar masuk, bukan angka mentah:
+  // pencuri heal (Leech) tidak boleh mengambil lebih dari heal yang diterima target.
+  // `healBudget` membatasi total curian beberapa stack sekaligus — dua stack 60%
+  // tidak boleh menjumlah jadi 120% sehingga heal justru mengurangi HP.
+  ctx.healBudget = { remaining: total };
+  try {
+    for (const buff of target.buffs) buff.postHealed?.(ctx, target, from, total);
+    if (target.weapon) for (const p of target.weapon.passives) p.postHealed?.(ctx, target, from, total);
+    for (const buff of from.buffs) buff.postHeal?.(ctx, target, from, total);
+    if (from.weapon) for (const p of from.weapon.passives) p.postHeal?.(ctx, target, from, total);
+  } finally {
+    // Pencuri heal memanggil heal() lagi (bersarang); tanpa pemulihan ini budget
+    // milik heal luar ikut tertimpa dan batasnya hilang.
+    ctx.healBudget = prevHealBudget;
+  }
+
+  ctx.log?.heal(target, total, from);
+  return Math.round(total);
+}
+
+// `overreplenish` mengizinkan WP melewati maksimum hingga 150% (OwO: Arcane Scepter).
+function replenish(ctx, target, amount, from, { overreplenish = false } = {}) {
+  if (!target || !isAlive(target)) return 0;
+  const cap = maxWp(target) * (overreplenish ? 1.5 : 1);
+  if (target.stats.wp[0] >= cap) return 0;
+  const bucket = { amount, bonus: 0 };
+
+  for (const buff of target.buffs) buff.replenished?.(ctx, target, from, bucket);
+  if (target.weapon) for (const p of target.weapon.passives) p.replenished?.(ctx, target, from, bucket);
+  for (const buff of from.buffs) buff.replenish?.(ctx, target, from, bucket);
+  if (from.weapon) for (const p of from.weapon.passives) p.replenish?.(ctx, target, from, bucket);
+
+  let total = bucket.amount + bucket.bonus;
+  if (total < 0) total = 0;
+  const room = cap - target.stats.wp[0];
+  if (total > room) total = room;
+
+  target.stats.wp[0] += total;
+  if (from) notifyTeamWeapons(from.team, 'onAllyReplenish', ctx, from, target, total);
+
+  const prevReplenishBudget = ctx.replenishBudget;
+  ctx.replenishBudget = { remaining: total };
+  try {
+    for (const buff of target.buffs) buff.postReplenished?.(ctx, target, from, total);
+    if (target.weapon) for (const p of target.weapon.passives) p.postReplenished?.(ctx, target, from, total);
+    for (const buff of from.buffs) buff.postReplenish?.(ctx, target, from, total);
+    if (from.weapon) for (const p of from.weapon.passives) p.postReplenish?.(ctx, target, from, total);
+  } finally {
+    ctx.replenishBudget = prevReplenishBudget;
+  }
+
+  ctx.log?.wp(target, total, from);
+  return Math.round(total);
+}
+
+function useMana(unit, amount) {
+  const used = Math.min(amount, Math.max(0, unit.stats.wp[0]));
+  unit.stats.wp[0] = Math.max(0, unit.stats.wp[0] - amount);
+  return Math.round(used);
+}
+
+function buildStats(base) {
+  return {
+    hp: [base.hp, base.hp, base.hp, 0],
+    wp: [base.wp, base.wp, base.wp, 0],
+    att: [base.att, 0],
+    mag: [base.mag, 0],
+    pr: [base.pr, 0],
+    mr: [base.mr, 0],
+  };
+}
+
+function buildUnit(spec, rng, quality) {
+  // `coeffs` adalah stat skala kecil (0-8 untuk hewan OwO, 0-14 untuk dex Lucy).
+  // Keduanya koefisien, bukan HP final — kekuatan berasal dari level.
+  const base = spec.finalStats ? null : data.baseStats(spec.coeffs, spec.level);
+  const finalHp = spec.finalStats ? spec.finalStats.hp : null;
+  const finalHpCurrent = spec.finalStats?.hpCurrent ?? finalHp;
+  const unit = {
+    pid: ++pidCounter,
+    slot: spec.slot,
+    nickname: spec.label || (spec.animal ? spec.animal.name : 'custom'),
+    level: spec.level || 1,
+    custom: Boolean(spec.customStats),
+    animal: spec.animal || null,
+    // Hanya sasaran bertanda boss yang terpengaruh pasif seperti Giant Slayer.
+    isBoss: Boolean(spec.isBoss),
+    buffs: [],
+    weapon: null,
+    team: null,
+    foes: null,
+    stats: spec.finalStats ? {
+      hp: [finalHpCurrent, finalHp, finalHp, 0],
+      wp: [spec.finalStats.wp, spec.finalStats.wp, spec.finalStats.wp, 0],
+      att: [spec.finalStats.att, 0],
+      mag: [spec.finalStats.mag, 0],
+      pr: [resistanceFromDisplayedPercent(spec.finalStats.pr), 0],
+      mr: [resistanceFromDisplayedPercent(spec.finalStats.mr), 0],
+    } : buildStats(base),
+  };
+  if (spec.weapon) {
+    unit.weapon = buildWeapon(spec.weapon, rng, quality);
+    // Lucy mengirim stat final yang sudah termasuk equipment; jangan tambahkan
+    // stat senjata untuk kedua kalinya pada slot hasil import.
+    if (!spec.finalStats) unit.weapon.alterStats(unit.stats);
+  }
+  if (spec.hpOverride) {
+    unit.stats.hp = [spec.hpOverride.current, spec.hpOverride.max, spec.hpOverride.max, 0];
+  } else if (!spec.finalStats) {
+    unit.stats.hp[0] = maxHp(unit);
+  }
+  unit.stats.wp[0] = maxWp(unit);
+  return unit;
+}
+
+// Buff masuk lewat satu pintu supaya Stinky dan penumpukan durasi konsisten.
+function bindBuff(ctx, target, buff) {
+  if (!isAlive(target)) return;
+  const stinky = target.buffs.find(b => b.id === 12);
+  if (stinky) { stinky.preBind?.(ctx, target, buff); ctx.log?.buff(target, buff); return; }
+
+  // Sacred Ward menolak debuff: satu stack habis, lalu replenish MAG pemasang.
+  const ward = buff.debuff && target.buffs.find(b => b.id === 13);
+  if (ward) {
+    target.buffs = target.buffs.filter(b => b !== ward);
+    const amount = getDamage(ward.from.stats.mag, ward.stats[0] / 100, ctx.rng);
+    if (amount > 0) replenish(ctx, target, amount, ward.from);
+    return;
+  }
+
+  const rule = stackOf(buff);
+  const same = b => b.id === buff.id && (!rule.sameFrom || b.from === buff.from);
+
+  if (rule.kind === 'independent') { target.buffs.push(buff); ctx.log?.buff(target, buff); return; }
+
+  if (rule.kind === 'replace') {
+    // Flame: instance lama meledak lalu dibuang. OwO menghitung ledakan dari
+    // buff yang BARU menempel (`this.stats[1]`), bukan dari yang lama.
+    for (const old of target.buffs.filter(same)) {
+      old.explode?.(ctx, target, buff);
+      target.buffs = target.buffs.filter(b => b !== old);
+    }
+    target.buffs.push(buff);
+    ctx.log?.buff(target, buff);
+    return;
+  }
+
+  // `refresh`: satu instance, durasi disetel ulang dan nilai buff ikut yang baru
+  // (Leech dipasang ulang = efek baru menggantikan yang lama, bukan menumpuk).
+  if (rule.kind === 'refresh') {
+    const existing = target.buffs.find(same);
+    if (existing) {
+      existing.duration = buff.duration;
+      existing.stats = buff.stats;
+      existing.from = buff.from;
+      ctx.log?.buff(target, buff);
+      return;
+    }
+    target.buffs.push(buff);
+    ctx.log?.buff(target, buff);
+    return;
+  }
+
+  const existing = target.buffs.find(same);
+  if (existing) { existing.duration += buff.duration; ctx.log?.buff(target, buff); return; }
+  target.buffs.push(buff);
+  ctx.log?.buff(target, buff);
+}
+
+function runTurn(ctx, player, enemy) {
+  // Nomor giliran dipakai senjata berjadwal (Scepter of Celebrations: tiap 4 turn).
+  ctx.turn = (ctx.turn || 0) + 1;
+  ctx.log?.startTurn(ctx.turn);
+  for (const [team, foe] of [[player, enemy], [enemy, player]]) {
+    for (const unit of team) {
+      if (!isAlive(unit)) continue;
+      unit.skippedAttack = false;
+      for (const buff of unit.buffs) buff.preTurn?.(ctx, unit, team, foe);
+      if (unit.weapon) {
+        unit.weapon.preTurn?.(ctx, unit, team, foe);
+        for (const passive of unit.weapon.passives) passive.preTurn?.(ctx, unit, team, foe);
+      }
+    }
+  }
+
+  // OwO selalu memberi giliran pertama ke tim pemain (`executeTurn` dipanggil
+  // dengan tim pemain sebagai `team`). Simulasi mengikuti itu apa adanya: yang
+  // diukur adalah peluang menang tim ini di battle sungguhan, jadi keuntungan
+  // giliran pertama memang bagian dari hasil, bukan noise yang perlu dibuang.
+  const playerFirst = ctx.playerFirst;
+  const first = playerFirst ? player : enemy;
+  const second = playerFirst ? enemy : player;
+  let firstPos = 0;
+  let secondPos = 0;
+  for (let i = 0; i < MAX_SLOTS * 2; i++) {
+    let actor, allies, foes;
+    if (firstPos <= secondPos) {
+      actor = first[firstPos++];
+      allies = first; foes = second;
+    } else {
+      actor = second[secondPos++];
+      allies = second; foes = first;
+    }
+    if (!actor || !isAlive(actor)) continue;
+    // OwO Shield.attackWeapon: setelah Taunt baru dipasang di preTurn, unit
+    // melewati serangan pada turn itu.
+    if (actor.skippedAttack) { ctx.log?.act(actor, 'skip'); ctx.log?.action(actor); continue; }
+    // OwO memanggil canAttack semua buff (tidak berhenti di yang pertama),
+    // karena buff bisa mengubah durasinya sendiri di sini. Freeze hanya boleh
+    // menghabiskan SATU stack per giliran ("remove a stack after triggering"),
+    // jadi stack lain pada unit yang sama tidak ikut ditembak di giliran ini.
+    let blocked = false;
+    let consumedStack = false;
+    for (const buff of actor.buffs) {
+      if (buff.id === 5) {
+        if (consumedStack) continue;
+        if (buff.canAttack?.(ctx, actor, allies, foes) === false) {
+          blocked = true;
+          consumedStack = true;
+        }
+        continue;
+      }
+      if (buff.canAttack?.(ctx, actor, allies, foes) === false) blocked = true;
+    }
+    if (blocked) { ctx.log?.act(actor, 'blocked'); ctx.log?.action(actor); continue; }
+    act(ctx, actor, allies, foes);
+    ctx.log?.action(actor);
+  }
+
+  for (const [team, foe] of [[player, enemy], [enemy, player]]) {
+    for (const unit of team) {
+      if (!isAlive(unit)) continue;
+      for (const buff of [...unit.buffs]) buff.postTurn?.(ctx, unit, team, foe);
+      if (unit.weapon) {
+        unit.weapon.postTurn?.(ctx, unit, team, foe);
+        for (const passive of unit.weapon.passives) passive.postTurn?.(ctx, unit, team, foe);
+      }
+    }
+  }
+
+  for (const unit of [...player, ...enemy]) {
+    unit.buffs = unit.buffs.filter(b => {
+      if (b.expired) return false;
+      // Freeze menurunkan durasinya sendiri di canAttack, bukan di sini.
+      if (b.managesOwnDuration) return true;
+      if (b.duration == null) return true;
+      b.duration -= 1;
+      return b.duration > 0;
+    });
+  }
+
+  // Efek postTurn (Frostbite -> Freeze, regen) mengubah state di luar aksi
+  // aktor; snapshot terpisah membuat perubahan itu tidak hilang dari seekbar.
+  ctx.log?.flush();
+}
+
+function act(ctx, actor, allies, foes) {
+  // Satu aksi bisa menghasilkan beberapa hit (ability multi-hit). Pasif seperti
+  // Double Strike memakai nomor ini agar hanya mengundi sekali per aksi.
+  ctx.actionId = (ctx.actionId || 0) + 1;
+  const weapon = actor.weapon;
+  // `manaCost` bisa 0 (Bleeding Gaze), jadi yang diperiksa keberadaan ability,
+  // bukan truthiness biayanya — kalau tidak, senjata berbiaya WP 0 tidak pernah
+  // memakai ability-nya.
+  const hasAbility = weapon && weapon.ability && weapon.ability.kind !== 'none';
+  // Memuat Heavy Arrow tidak memakai WP; hanya menembak yang membayar. Tanpa
+  // pengecualian ini unit ber-WP rendah tidak pernah memuat panah dan jatuh ke
+  // serangan biasa selamanya.
+  const freeNow = weapon?.ability?.kind === 'heavy_arrow' && !weapon.arrowLoaded;
+  if (hasAbility && (freeNow || actor.stats.wp[0] >= (weapon.manaCost || 0))) {
+    ctx.log?.act(actor, 'ability', weapon.ability.kind);
+    if (weaponAbility(ctx, weapon, actor, allies, foes)) return;
+    // Ability menolak jalan (mis. tidak ada sasaran sah); jatuh ke serangan biasa.
+    ctx.log?.act(actor, 'ability_fail', weapon.ability.kind);
+  }
+  basicAttack(ctx, actor, allies, foes);
+}
+
+function basicAttack(ctx, actor, allies, foes) {
+  const target = chooseTarget(actor, allies, foes, ctx.rng);
+  if (!target) return;
+  ctx.log?.act(actor, 'attack');
+  // Sebagian senjata mengganti serangan dasarnya, bukan menambah ability aktif
+  // (OwO: override attackPhysical). Bentuknya `basicAttack` di data.
+  const weapon = actor.weapon;
+  const override = weapon && weapon.def && weapon.def.basicAttack;
+  if (override && override.kind === 'mixed_true') {
+    const [pAtt, pMag] = override.mixed;
+    const mixed = getMixedDamage(actor.stats.att, pAtt, actor.stats.mag, pMag, ctx.rng);
+    inflictDamage(ctx, actor, target, mixed, TRUE);
+    return;
+  }
+  const damage = getDamage(actor.stats.att, 1, ctx.rng);
+  inflictDamage(ctx, actor, target, damage, PHYSICAL);
+}
+
+function isTeamDead(team) { return team.every(u => !isAlive(u)); }
+
+// Satu pertarungan. Mengembalikan { winner, turns, timeout, units }.
+// winner: 'player' | 'enemy' | 'tie'
+// `units` berisi kondisi akhir tiap unit (HP/WP sisa) dan hanya dipakai
+// tampilan; simulasi massal tidak membacanya supaya tidak ada alokasi tambahan.
+function runBattle(playerSpecs, enemySpecs, options = {}) {
+  const rng = options.rng || createRng(options.seed ?? 1);
+  const player = playerSpecs.map(s => buildUnit(s, rng, options.playerQuality));
+  const enemy = enemySpecs.map(s => buildUnit(s, rng, options.enemyQuality));
+  for (const unit of player) { unit.team = player; unit.foes = enemy; unit.side = 'player'; }
+  for (const unit of enemy) { unit.team = enemy; unit.foes = player; unit.side = 'enemy'; }
+  const ctx = {
+    rng,
+    tags: new Set(),
+    damageDealt: 0,
+    damageBySide: { player: 0, enemy: 0 },
+    playerFirst: options.playerFirst ?? true,
+    // Pencatatan hanya aktif bila diminta; simulasi massal tidak membayarnya.
+    log: null,
+  };
+
+  if (options.log) {
+    ctx.log = createRecorder({
+      seed: options.seed ?? null,
+      playerSpecs,
+      enemySpecs,
+    });
+    for (const unit of player) ctx.log.register(unit, 'player');
+    for (const unit of enemy) ctx.log.register(unit, 'enemy');
+  }
+
+  let turns = 0;
+  let winner = 'tie';
+  let timeout = false;
+  while (turns < MAX_TURNS) {
+    turns++;
+    runTurn(ctx, player, enemy);
+    // Kematian dicatat setelah satu turn penuh, saat giliran sudah berakhir.
+    if (ctx.log) {
+      for (const unit of [...player, ...enemy]) {
+        if (unit.stats.hp[0] <= 0 && !unit.loggedDeath) {
+          unit.loggedDeath = true;
+          ctx.log.death(unit);
+        }
+      }
+      // Kematian dicatat di luar giliran aktor. Snapshot penutup ini membuat
+      // baris "gugur" tetap punya aksi induk dan HP 0 muncul di seekbar akhir.
+      ctx.log.flush();
+    }
+    const playerDead = isTeamDead(player);
+    const enemyDead = isTeamDead(enemy);
+    if (playerDead || enemyDead) {
+      winner = playerDead && enemyDead ? 'tie' : enemyDead ? 'player' : 'enemy';
+      break;
+    }
+    if (turns >= MAX_TURNS) { timeout = true; winner = 'tie'; }
+  }
+
+  const battle = {
+    winner,
+    turns,
+    timeout,
+    units: { player, enemy },
+    damage: {
+      player: Math.round(ctx.damageBySide.player),
+      enemy: Math.round(ctx.damageBySide.enemy),
+      total: Math.round(ctx.damageDealt),
+    },
+  };
+  if (ctx.log) battle.log = ctx.log.finish(battle);
+  return battle;
+}
+
+module.exports = {
+  runBattle,
+  buildUnit,
+  buildStats,
+  inflictDamage,
+  heal,
+  replenish,
+  useMana,
+  bindBuff,
+  getDamage,
+  getDamageFromHpWp,
+  getMixedDamage,
+  resToPercent,
+  chooseTarget,
+  lowestHp,
+  lowestWp,
+  pickRandom,
+  aliveOf,
+  isAlive,
+  maxHp,
+  maxWp,
+  resistanceFromDisplayedPercent,
+  tagged,
+  withTag,
+  PHYSICAL,
+  MAGICAL,
+  TRUE,
+  MAX_ADAPT_STACKS,
+  MAX_TURNS,
+  MAX_SLOTS,
+  runTurn,
+};

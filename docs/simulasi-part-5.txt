@@ -1,0 +1,25 @@
+Hasil dipisah pada level 35 supaya tidak tertipu: menang banyak melawan tim level rendah tidak berarti timmu kuat.
+
+Tombol "Lihat kekalahan" menampilkan tim mana saja yang mengalahkanmu. Hanya terlihat olehmu, dan senjata lawan disembunyikan.
+
+━━━━━━━━━━━━━━━━━━━━
+RINGKASAN PERINTAH
+━━━━━━━━━━━━━━━━━━━━
+`d team new <nama>` — buat tim baru (langsung aktif)
+`d team add <slot> <hewan|stat> [level=] [weapon=] [passive=] [quality=]` — isi slot
+`d tm s <senjata> [pasif] [slot]` — pasang / ganti senjata
+`d tm` — panel tim (pindah, pilih, hapus)
+`d team list` — daftar semua tim + ID
+`d team pick <id|nama>` — jadikan tim aktif
+`d team show [id|nama]` — lihat isi satu tim
+`d team clear <slot>` — kosongkan slot
+`d team rename <lama> <baru>` — ganti nama tim
+`d team del <id|nama>` — hapus tim
+`d sim` — tim aktif vs mirror
+`d sim <id|nama>` — tim aktif vs tim lain
+`d sim A vs B` — dua tim milikmu diadu
+`d sim <hewan> level=N` — lawan dari dex
+`d sim <stat manual> level=N` — lawan dari stat manual
+`d sim global` — tim aktif vs semua tim tersimpan
+`d sim help` / `d sim global help` — bantuan di Discord
+

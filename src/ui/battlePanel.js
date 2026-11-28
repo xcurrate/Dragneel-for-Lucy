@@ -1,0 +1,753 @@
+// Embed untuk tim kustom & hasil simulasi.
+//
+// Warna mengikuti palet yang sudah dipakai bot (lihat services/reminders.js)
+// supaya tampilan battle konsisten dengan panel dan game lain.
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const data = require('../data/owoBattle');
+const sim = require('../services/battleSim');
+const engine = require('../services/battleEngine');
+const { createRng } = require('../services/battleRng');
+const dexStore = require('../utils/animalDexStorage');
+const emoji = require('../services/battleEmoji');
+
+const COLOR = { info: 0x5865F2, ok: 0x57F287, warn: 0xFEE75C, error: 0xED4245, panel: 0xEB459E, blue: 0x3498DB, tie: 0x95A5A6 };
+const TEAM_BUTTON = 'battle_team_pick';
+const ID_SEP = ':';
+const MAX_SLOTS = data.limits.maxSlots;
+
+// Seed tetap supaya stat di `d team show` tidak berubah tiap kali dibuka
+// (pasif yang tidak disimpan di slot diundi dari RNG).
+const DISPLAY_SEED = 1;
+
+function weaponName(id) {
+  if (!id) return null;
+  const weapon = data.weapons().find(w => w.id === id);
+  return weapon ? weapon.name : `#${id}`;
+}
+
+// Quality bisa berupa satu angka atau daftar per-stat (mis. Aegis 100,50).
+// Rank memakai rata-rata semua nilai, sama dengan quality efektif senjata.
+function qualityRank(quality) {
+  if (Array.isArray(quality)) {
+    const values = quality.filter(value => Number.isFinite(Number(value))).map(Number);
+    if (!values.length) return data.DEFAULT_QUALITY;
+    return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
+  }
+  return quality ?? data.DEFAULT_QUALITY;
+}
+
+function qualityText(quality) {
+  return `${qualityRank(quality)}%`;
+}
+
+function bar(value, max, size = 12) {
+  if (!max) return '▱'.repeat(size);
+  const filled = Math.max(0, Math.min(size, Math.round((value / max) * size)));
+  return '▰'.repeat(filled) + '▱'.repeat(size - filled);
+}
+
+// Ringkasan ikon satu slot: hewan, rank senjata, senjata, lalu pasif.
+function slotIcon(entry) {
+  const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
+  const parts = [emoji.animalEmoji(animal)];
+  if (entry.weaponId) {
+    const rank = qualityRank(entry.weaponQuality);
+    parts.push(emoji.rankEmoji(rank));
+    parts.push(emoji.weaponEmoji(entry.weaponId, rank));
+  }
+  for (const raw of entry.passives || []) {
+    const id = raw && typeof raw === 'object' ? raw.id : raw;
+    const passiveQuality = raw && typeof raw === 'object' && raw.quality != null
+      ? raw.quality
+      : qualityRank(entry.weaponQuality);
+    parts.push(emoji.passiveEmoji(id, passiveQuality));
+  }
+  return parts.join('');
+}
+
+// Stat final satu slot, dihitung lewat mesin yang sama dengan simulasi supaya
+// angka di `d team show` persis sama dengan yang dipakai battle.
+function slotStats(entry) {
+  if (!entry) return null;
+  // Slot hanya menyimpan `animalKey`; objek dex-nya diambil dari storage.
+  const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
+  const spec = {
+    slot: entry.slot,
+    label: entry.label || entry.animalKey || `slot${entry.slot}`,
+    level: entry.level || data.DEFAULT_LEVEL,
+    coeffs: entry.custom || (animal ? sim.dexStatsToCustom(animal) : null),
+    finalStats: entry.finalStats || null,
+    customStats: Boolean(entry.custom),
+    animal,
+    weapon: entry.weaponId
+      ? { id: entry.weaponId, quality: entry.weaponQuality, passives: entry.passives }
+      : null,
+  };
+  if (!spec.coeffs && !spec.finalStats) return null;
+  try {
+    const unit = engine.buildUnit(spec, createRng(DISPLAY_SEED), entry.weaponQuality);
+    if (entry.finalStats) return { ...entry.finalStats };
+    return {
+      hp: Math.ceil(engine.maxHp(unit)),
+      wp: Math.ceil(engine.maxWp(unit)),
+      att: Math.ceil(unit.stats.att[0] + unit.stats.att[1]),
+      mag: Math.ceil(unit.stats.mag[0] + unit.stats.mag[1]),
+      pr: Math.round(engine.resToPercent(unit.stats.pr) * 100),
+      mr: Math.round(engine.resToPercent(unit.stats.mr) * 100),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Emoji senjata + pasif beserta quality, mis. `<fabled><frstaff><fhgen> 100%`.
+function weaponLine(entry) {
+  if (!entry.weaponId) return '*tanpa senjata*';
+  const quality = entry.weaponQuality ?? data.DEFAULT_QUALITY;
+  const rank = qualityRank(quality);
+  const icons = [
+    emoji.rankEmoji(rank),
+    emoji.weaponEmoji(entry.weaponId, rank),
+    ...(entry.passives || []).map(raw => {
+      const id = raw && typeof raw === 'object' ? raw.id : raw;
+      const passiveQuality = raw && typeof raw === 'object' && raw.quality != null ? raw.quality : rank;
+      return emoji.passiveEmoji(id, passiveQuality);
+    }),
+  ].join('');
+  return `${icons} ${qualityText(quality)}`;
+}
+
+// Nama field kosong: Discord menolak nama kosong, jadi pakai karakter tak
+// terlihat supaya slot kosong hanya menampilkan perintah pengisian.
+const BLANK = '\u200b';
+
+function addHint(prefix, slot) {
+  return `*\`${prefix} team add ${slot} [level] <animal> [weapon]\`*`;
+}
+
+// Satu slot jadi satu field: judul `[1] L.100 <emoji> nama`, isi stat 4 baris.
+function slotField(entry, slot, prefix) {
+  if (!entry) return { name: BLANK, value: addHint(prefix, slot), inline: false };
+
+  const animal = entry.animalKey ? dexStore.resolveAnimal(entry.animalKey) : null;
+  const name = sim.slotLabel({
+    label: entry.label, animalKey: entry.animalKey, animal, custom: entry.custom,
+  }) || 'custom';
+  const level = entry.level || data.DEFAULT_LEVEL;
+  const stats = slotStats(entry);
+
+  const body = stats
+    ? [
+      `${emoji.statIcon('hp')} \`${stats.hp}\` ${emoji.statIcon('wp')} \`${stats.wp}\``,
+      `${emoji.statIcon('att')} \`${stats.att}\` ${emoji.statIcon('mag')} \`${stats.mag}\``,
+      `${emoji.statIcon('pr')} \`${stats.pr}%\` ${emoji.statIcon('mr')} \`${stats.mr}%\``,
+      weaponLine(entry),
+    ].join('\n')
+    : '*stat tidak terbaca*';
+
+  return {
+    name: `[${slot}] L.${level} ${emoji.animalEmoji(animal)} ${name}`,
+    value: body,
+    inline: false,
+  };
+}
+
+function teamEmbed(team, { prefix = 'd', active = false, slotId = null } = {}) {
+  const id = slotId ?? team.slotId;
+  const embed = new EmbedBuilder()
+    .setColor(active ? COLOR.ok : COLOR.info)
+    .setTitle(`🐾 ${id != null ? `[${id}] ` : ''}${team.name}`)
+    .setFooter({
+      text: `Team ${team.slots.length}/${MAX_SLOTS}${active ? ' · tim aktif' : ''}`
+        + ` · Simulasi: ${prefix} sim`,
+    });
+
+  for (let slot = 1; slot <= MAX_SLOTS; slot++) {
+    embed.addFields(slotField(team.slots.find(s => s.slot === slot), slot, prefix));
+  }
+  return embed;
+}
+
+function teamListEmbed(teams, active, prefix = 'd') {
+  if (!teams.length) {
+    return new EmbedBuilder()
+      .setColor(COLOR.warn)
+      .setTitle('🐾 Tim Battle')
+      .setDescription(`Belum ada tim.\nBuat dengan \`${prefix} team new <nama>\`.`);
+  }
+  const lines = [...teams]
+    .sort((a, b) => (a.slotId ?? 99) - (b.slotId ?? 99))
+    .map(team => {
+      const mark = active && active.id === team.id ? ' ✅' : '';
+      const icons = team.slots.map(slot => slotIcon(slot)).join(' ');
+      const detail = icons ? `\n${icons}` : '';
+      const id = team.slotId != null ? `\`#${team.slotId}\` ` : '';
+      return `${id}**${team.name}**${mark} — ${team.slots.length}/${MAX_SLOTS} slot${detail}`;
+    });
+  return new EmbedBuilder()
+    .setColor(COLOR.info)
+    .setTitle('🐾 Tim Battle')
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: `Pilih lewat ${prefix} tm, atau ${prefix} team pick <id|nama>` });
+}
+
+// Hasil sementara selama simulasi panjang masih berjalan. Angkanya dari tally
+// yang sama dengan hasil akhir, jadi tidak ada hitungan ulang.
+function formatDuration(ms) {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds} detik`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} menit ${seconds % 60} detik`;
+}
+
+function simProgressEmbed(progress, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan', title = null, mode = null } = {}) {
+  const { done, total, tally } = progress;
+  const percent = Math.min(100, Math.round((done / total) * 1000) / 10);
+
+  return new EmbedBuilder()
+    .setColor(mode === 'global' ? COLOR.blue : COLOR.warn)
+    .setTitle(title || `${playerLabel} vs. ${enemyLabel}`)
+    .setDescription(`⏳ **Berjalan** — ${percent}%\n\`${bar(done, total)}\``)
+    .addFields(
+      { name: `🏆 **${tally.player.toLocaleString('id-ID')}** menang (${progress.winRate}%)`, value: `\`${bar(tally.player, done)}\``, inline: false },
+      { name: '📊 Selesai', value: `**${done.toLocaleString('id-ID')}** / ${total.toLocaleString('id-ID')}`, inline: true },
+      {
+        name: '⏱️ Perkiraan',
+        // `etaMs` hanya ada pada simulasi global; simulasi duel memakai rata-rata
+        // turn. Saat global belum punya satu pun sampel, ETA belum bisa dihitung.
+        value: progress.queued
+          ? 'Menunggu antrean…'
+          : progress.etaMs != null
+            ? `Sisa ~**${formatDuration(progress.etaMs)}**`
+            : mode === 'global' ? 'Menghitung…' : `Rata-rata **${progress.avgTurns}** turn`,
+        inline: true,
+      }
+    )
+    .setFooter({ text: 'Hasil akhir menyusul.' });
+}
+
+// Warna mengikuti dominasi hasil: menang hijau, kalah merah, seri abu-abu.
+function simColor(winRate, lossRate = null, tieRate = null) {
+  if (lossRate != null && tieRate != null) {
+    if (winRate > lossRate && winRate > tieRate) return COLOR.ok;
+    if (lossRate > winRate && lossRate > tieRate) return COLOR.error;
+    return COLOR.tie;
+  }
+  if (winRate >= 55) return COLOR.ok;
+  if (winRate <= 45) return COLOR.error;
+  return COLOR.warn;
+}
+
+// "0s", "12s", "1m 5s" — durasi simulasi di footer.
+function shortDuration(ms) {
+  const seconds = Math.max(0, Math.round((ms || 0) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+// Distribusi turn ringkas: "16 (×4), 17 (×10), 18 (×14)".
+// Bila terlalu banyak baris, sisanya diringkas agar field tidak terpotong.
+function turnDistribution(histogram, limit = 12) {
+  if (!histogram || !histogram.length) return '-';
+  const shown = histogram.slice(0, limit)
+    .map(({ turns, count }) => `${turns} (×${count.toLocaleString('id-ID')})`);
+  const rest = histogram.length - limit;
+  return shown.join(', ') + (rest > 0 ? `, +${rest} lain` : '');
+}
+
+// Satu baris komposisi satu sisi: level, hewan, senjata, pasif, quality.
+function sideLine(spec) {
+  const icons = [emoji.animalEmoji(spec.animal)];
+  if (spec.weapon) {
+    // `spec.displayQuality` = hasil akhir dari flag -qp/-qe yang menimpa
+    // kualitas slot. Tanpa ini komposisi menampilkan tier database, bukan tier
+    // yang benar-benar dipakai simulasi (dan tombol 🔁 jadi berbeda).
+    const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
+    const rank = qualityRank(quality);
+    icons.push(emoji.rankEmoji(rank), emoji.weaponEmoji(spec.weapon.id, rank));
+    for (const passive of spec.weapon.passives || []) {
+      const id = passive && typeof passive === 'object' ? passive.id : passive;
+      const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
+        ? passive.quality
+        : quality;
+      icons.push(emoji.passiveEmoji(id, qualityRank(passiveQuality)));
+    }
+    icons.push(qualityText(quality));
+  }
+  // Pet dari stat manual memakai statnya sebagai label (mis. `8.6.2.3.5.1`).
+  const label = sim.slotLabel({
+    label: spec.label, animalKey: spec.animal?.nameKey, animal: spec.animal, custom: spec.coeffs,
+  });
+  const name = label ? ` ${label}` : '';
+  return `**\`L.${spec.level}\`**${name} ${icons.join('')}`.trimEnd();
+}
+
+// Satu blok komposisi: nama tim sebagai judul, lalu isi slot di bawahnya.
+function sideBlock(label, specs) {
+  const rows = specs.map((spec, i) => `> \`${i + 1}\` ${sideLine(spec)}`);
+  return [`**${label}**`, ...rows].join('\n');
+}
+
+// Ringkasan komposisi kedua tim, dipakai sebagai isi description embed.
+// Nama tim dipakai sebagai pemisah karena keduanya tampil berurutan.
+function renderMatchup(playerSpecs, enemySpecs, { playerLabel = 'Tim kamu', enemyLabel = 'Lawan' } = {}) {
+  return [sideBlock(playerLabel, playerSpecs), sideBlock(enemyLabel, enemySpecs)].join('\n');
+}
+
+// Satu unit versi ringkas untuk hasil satu pertarungan: baris pertama kondisi
+// akhir HP/WP, baris kedua senjata bila ada.
+function duelUnitLines(unit) {
+  const maxHpValue = Math.ceil(engine.maxHp(unit));
+  const maxWpValue = Math.ceil(engine.maxWp(unit));
+  const hp = Math.max(0, Math.ceil(unit.stats.hp[0]));
+  const wp = Math.max(0, Math.ceil(unit.stats.wp[0]));
+  const head = `> ${emoji.statIcon('hp')} \`${hp}/${maxHpValue}\` ${emoji.statIcon('wp')} \`${wp}/${maxWpValue}\``;
+  const body = `> **L.${unit.level}** ${emoji.animalEmoji(unit.animal)} ${unit.nickname}`;
+  if (!unit.weapon) return `${body}\n${head}`;
+  const quality = unit.weapon.qualityAverage ?? unit.weapon.quality ?? data.DEFAULT_QUALITY;
+  const rank = qualityRank(quality);
+  const icons = [emoji.rankEmoji(rank), emoji.weaponEmoji(unit.weapon.id, rank)];
+  return `${body}\n${head}\n> ${icons.join('')} ${qualityText(quality)}`;
+}
+
+// Satu field per tim. Nama tim dipakai sebagai pemisah supaya jelas sisi mana
+// yang menang dan mana yang kalah.
+function duelTeamField(label, units) {
+  return {
+    name: `**${label}**`,
+    value: units.map(duelUnitLines).join('\n'),
+    inline: false,
+  };
+}
+
+// Hasil satu pertarungan: kondisi akhir tiap unit, bukan statistik agregat.
+//
+// `stats` = hasil agregat `sim.simulate` untuk matchup yang sama (opsional).
+// Kalau ada, footer menampilkan rekap menang/seri/kalah sekaligus supaya user
+// tidak perlu menjalankan `-m` terpisah hanya untuk tahu rasio akhirnya.
+function damageText(damage, runs = 1) {
+  if (!damage) return null;
+  const fmt = value => Number(value || 0).toLocaleString('id-ID');
+  const hasRange = runs > 1
+    && Number.isFinite(damage.playerMin) && Number.isFinite(damage.playerMax);
+  const line = (label, min, max, total) => (
+    hasRange
+      ? `${label}: **${fmt(min)}–${fmt(max)}**/pertarungan · total **${fmt(total)}**`
+      : `${label}: **${fmt(total)}**`
+  );
+  return [
+    line('Kita', damage.playerMin, damage.playerMax, damage.player),
+    line('Lawan', damage.enemyMin, damage.enemyMax, damage.enemy),
+  ].join('\n');
+}
+
+function damageFieldName(runs = 1) {
+  return runs > 1 ? `⚔️ Damage (${runs} simulasi)` : '⚔️ Damage';
+}
+
+function duelEmbed(battle, {
+  playerLabel = 'Tim kamu', enemyLabel = 'Lawan', elapsedMs = 0, seed = null, stats = null,
+  logUrl = null, showDamage = false,
+} = {}) {
+  const { units, winner, turns, timeout } = battle;
+  const color = winner === 'player' ? COLOR.ok : winner === 'enemy' ? COLOR.error : COLOR.tie;
+  const verdict = winner === 'player' ? 'Menang' : winner === 'enemy' ? 'Kalah' : 'Seri';
+  const icon = winner === 'player' ? '🏆' : winner === 'enemy' ? '💀' : '⚖️';
+
+  // Footer tidak mendukung markdown: `**tebal**` akan tampil sebagai tanda bintang
+  // mentah di Discord, jadi teks footer sengaja tanpa penanda apa pun.
+  const footer = stats
+    ? `${icon} kamu ${verdict.toLowerCase()} dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`
+      + ` | 🎲 ${stats.tally.player} win, ${stats.tally.enemy} lose, ${stats.tally.tie} tie`
+    : `1 pertarungan | ${shortDuration(elapsedMs)} ⚡${seed != null ? ` | seed ${seed}` : ''}`;
+
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${playerLabel} vs. ${enemyLabel}`)
+    .setDescription(`${icon} **${verdict}** dalam ${turns} turn${timeout ? ' (batas turn)' : ''}`)
+    .addFields([
+      duelTeamField(playerLabel, units.player),
+      duelTeamField(enemyLabel, units.enemy),
+    ])
+    .setFooter({ text: footer });
+
+  if (showDamage) {
+    const damageSource = stats?.damage || battle.damage;
+    const damageRuns = stats?.damage ? (stats.runs || 1) : 1;
+    const damage = damageText(damageSource, damageRuns);
+    if (damage) embed.addFields({ name: damageFieldName(damageRuns), value: damage, inline: false });
+  }
+  // Tautan log hanya ada bila `-log` dipakai DAN URL publik dashboard diisi.
+  if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
+  return embed;
+}
+
+function simEmbed(result, {
+  playerLabel = 'Tim kamu', enemyLabel = 'Lawan', matchup = null, logUrl = null, showDamage = false,
+} = {}) {
+  const { tally, runs } = result;
+  const color = simColor(result.winRate, result.lossRate, result.tieRate);
+  const turns = `**Turns:** ${turnDistribution(result.turnHistogram)}`;
+
+  // Hasil utama selalu tampil; kalah dan seri hanya bila ada, supaya embed
+  // tidak penuh field kosong saat satu sisi mendominasi.
+  const fields = [
+    {
+      name: `🏆 **${tally.player.toLocaleString('id-ID')}** menang (${result.winRate}%)`,
+      value: turns,
+      inline: false,
+    },
+  ];
+  if (tally.enemy) {
+    fields.push({
+      name: `💀 **${tally.enemy.toLocaleString('id-ID')}** kalah (${result.lossRate}%)`,
+      value: `\`${bar(tally.enemy, runs)}\``,
+      inline: false,
+    });
+  }
+  if (tally.tie) {
+    fields.push({
+      name: `⚖️ **${tally.tie.toLocaleString('id-ID')}** seri (${result.tieRate}%)`,
+      value: `\`${bar(tally.tie, runs)}\``
+        + (result.timeouts ? `\n${result.timeouts} mencapai batas ${data.limits.maxTurns} turn` : ''),
+      inline: false,
+    });
+  }
+  if (showDamage) {
+    const damage = damageText(result.damage, runs);
+    if (damage) fields.push({ name: damageFieldName(runs), value: damage, inline: false });
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${playerLabel} vs. ${enemyLabel}`)
+    .addFields(fields)
+    .setFooter({
+      text: `Hasil dari ${runs.toLocaleString('id-ID')} simulasi`
+        + ` | ${shortDuration(result.elapsedMs)} ⚡ | seed ${result.seed}`,
+    });
+
+  // Discord menolak description kosong, jadi hanya dipasang bila ada isinya.
+  if (matchup) embed.setDescription(matchup);
+  if (logUrl) embed.addFields({ name: '📜 Battle log', value: `[Buka log lengkap](${logUrl})`, inline: false });
+  return embed;
+}
+
+// Menerima string maupun array baris.
+function usageEmbed(title, lines) {
+  const body = Array.isArray(lines) ? lines.join('\n') : String(lines);
+  return new EmbedBuilder().setColor(COLOR.info).setTitle(title).setDescription(body);
+}
+
+// Pesan panduan/validasi: bukan error keras, tapi butuh perhatian.
+function warnEmbed(message) {
+  return new EmbedBuilder().setColor(COLOR.warn).setDescription(message);
+}
+
+function errorEmbed(message) {
+  return new EmbedBuilder().setColor(COLOR.error).setDescription(message);
+}
+
+function okEmbed(message) {
+  return new EmbedBuilder().setColor(COLOR.ok).setDescription(message);
+}
+
+// Tombol pemilih tim. customId memuat userId + index tim (bukan nama, karena
+// nama bisa mengandung karakter yang tidak aman untuk customId).
+function teamButtons(teams, active, userId) {
+  if (!teams.length) return [];
+  const rows = [];
+  let row = new ActionRowBuilder();
+  teams.slice(0, 15).forEach((team, index) => {
+    const isActive = active && active.id === team.id;
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${TEAM_BUTTON}${ID_SEP}${userId}${ID_SEP}${index}`)
+        .setLabel(`${isActive ? '✓ ' : ''}${team.name}`.slice(0, 80))
+        .setStyle(isActive ? ButtonStyle.Success : ButtonStyle.Secondary)
+    );
+    // Discord membatasi 5 tombol per baris.
+    if (row.components.length === 5) { rows.push(row); row = new ActionRowBuilder(); }
+  });
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+function isTeamButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${TEAM_BUTTON}${ID_SEP}`);
+}
+
+// Tombol "lihat kekalahan" pada hasil simulasi global. customId membawa userId
+// supaya hasil milik orang lain tidak bisa dibuka, dan `token` supaya tombol
+// lama tidak menampilkan data dari simulasi yang sudah digantikan.
+const GLOBAL_BUTTON = 'battle_global_losses';
+const GLOBAL_LOSS_PAGE_BUTTON = 'battle_global_losses_page';
+const LOSS_PAGE_SIZE = 10;
+// Tombol 🔁 pada hasil satu pertarungan: ulangi sebagai `-m <runs>`.
+const REPEAT_BUTTON = 'battle_sim_repeat';
+
+function globalLossButton(userId, token) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}`)
+      .setLabel('Lihat kekalahan')
+      .setEmoji('🔍')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
+function isGlobalLossButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${GLOBAL_BUTTON}${ID_SEP}`);
+}
+
+function parseGlobalLossButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 3 || parts[0] !== GLOBAL_BUTTON) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2] };
+}
+
+// Navigasi halaman daftar kekalahan. Halaman disimpan di customId supaya
+// tombol lama tidak menampilkan halaman dari hasil simulasi yang berbeda.
+function globalLossPageButtons(userId, token, page, totalPages) {
+  const row = new ActionRowBuilder();
+  row.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_LOSS_PAGE_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}${ID_SEP}${page - 1}`)
+      .setLabel('Sebelumnya')
+      .setEmoji('◀️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page <= 0),
+    new ButtonBuilder()
+      .setCustomId(`${GLOBAL_LOSS_PAGE_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}${ID_SEP}${page + 1}`)
+      .setLabel('Berikutnya')
+      .setEmoji('▶️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page >= totalPages - 1)
+  );
+  return row;
+}
+
+function isGlobalLossPageButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${GLOBAL_LOSS_PAGE_BUTTON}${ID_SEP}`);
+}
+
+function parseGlobalLossPageButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 4 || parts[0] !== GLOBAL_LOSS_PAGE_BUTTON) return { ok: false };
+  const page = Number(parts[3]);
+  if (!Number.isInteger(page) || page < 0) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2], page };
+}
+
+function globalLossPageCount(result, pageSize = LOSS_PAGE_SIZE) {
+  return Math.max(1, Math.ceil(result.losses.length / pageSize));
+}
+
+// Tombol ulang: `battle_sim_repeat:<userId>:<token>`.
+function repeatButton(userId, token, runs) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${REPEAT_BUTTON}${ID_SEP}${userId}${ID_SEP}${token}`)
+      .setLabel(String(runs))
+      .setEmoji('🔁')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+function isRepeatButton(customId) {
+  return typeof customId === 'string' && customId.startsWith(`${REPEAT_BUTTON}${ID_SEP}`);
+}
+
+function parseRepeatButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 3 || parts[0] !== REPEAT_BUTTON) return { ok: false };
+  return { ok: true, userId: parts[1], token: parts[2] };
+}
+
+function percent(value) {
+  return `${Number(value || 0).toLocaleString('id-ID')}%`;
+}
+
+// Komposisi tim pemain pada simulasi global. Senjata dan pasif hanya ikut
+// ditampilkan saat toggle developer aktif.
+function teamCompLines(specs, { showWeapons = false } = {}) {
+  if (!specs || !specs.length) return '*Tim kosong.*';
+  return specs.map((spec, index) => {
+    const slot = spec.slot || index + 1;
+    const label = spec.label || `slot${slot}`;
+    const line = `\`${slot}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}`;
+    return line + (showWeapons ? weaponSpecSuffix(spec) : '');
+  }).join('\n');
+}
+
+// Satu kelompok level pada laporan: jumlah tim, rata-rata level, dan hasil.
+function bucketLines(bucket) {
+  if (!bucket.teams) {
+    return `*Tidak ada tim lawan di kelompok ini.*`;
+  }
+  const { tally } = bucket;
+  return [
+    `**${tally.player.toLocaleString('id-ID')}** menang · **${tally.tie.toLocaleString('id-ID')}** seri · **${tally.enemy.toLocaleString('id-ID')}** kalah`,
+    `-# ${bucket.teams.toLocaleString('id-ID')} tim · rata-rata L.**${bucket.avgLevel}** · ${bucket.battles.toLocaleString('id-ID')} pertarungan`,
+  ].join('\n');
+}
+
+// Hasil simulasi global. Angka utama ditaruh di description mengikuti gaya
+// laporan yang sudah dipakai bot lain, lalu rincian per kelompok level.
+function globalSimEmbed(result, { playerLabel = 'Tim kamu', prefix = 'd', playerSpecs = null, totals = null, showWeapons = false } = {}) {
+  const seconds = (result.durationMs / 1000).toFixed(2);
+  const low = result.buckets.low;
+  const high = result.buckets.high;
+
+  const embed = new EmbedBuilder()
+    .setColor(COLOR.blue)
+    .setTitle('🌍 Simulasi Global')
+    .setDescription([
+      `### Hasil Simulasi Global (${seconds}s)`,
+      `**Tim kamu:** ${playerLabel}`,
+      `**Lawan:** ${result.opponents.toLocaleString('id-ID')} tim · ${result.battles.toLocaleString('id-ID')} pertarungan (${result.runs.toLocaleString('id-ID')}× per tim)`,
+      ...(totals
+        ? [`-# ${totals.all.toLocaleString('id-ID')} tim di \`${prefix}tm\` · `
+          + `1 sedang dipilih (tidak diadu)`]
+        : []),
+      `-# ${result.workers || 1} worker · ${Math.round(result.battles / Math.max(1, result.durationMs / 1000)).toLocaleString('id-ID')} pertarungan/detik`,
+    ].join('\n'))
+    .addFields(
+      {
+        name: '🪖 Komposisi tim kamu',
+        value: teamCompLines(playerSpecs, { showWeapons }),
+        inline: false,
+      },
+      {
+        name: `🔅 ${low.label}`,
+        value: bucketLines(low),
+        inline: false,
+      },
+      {
+        name: `🔆 ${high.label}`,
+        value: bucketLines(high),
+        inline: false,
+      },
+      {
+        name: '📊 Rekap',
+        value: [
+          `Menang **${result.tally.player.toLocaleString('id-ID')}** (${percent(result.winRate)})`,
+          `Seri **${result.tally.tie.toLocaleString('id-ID')}** (${percent(result.tieRate)})`,
+          `Kalah **${result.tally.enemy.toLocaleString('id-ID')}** (${percent(result.lossRate)})`,
+        ].join('\n'),
+        inline: true,
+      },
+      {
+        name: '🔥 Streak',
+        value: [
+          `Rata-rata **${result.streak.avg.toLocaleString('id-ID')}**`,
+          `Terpanjang **${result.streak.max.toLocaleString('id-ID')}**`,
+          `Max Streak **${(result.streak.maxAvg ?? 0).toLocaleString('id-ID')}**`,
+        ].join('\n'),
+        inline: true,
+      },
+    )
+    .setFooter({ text: `Seed ${result.seed} · hasil bisa berbeda karena RNG · cooldown ${prefix} sim global 10 detik` });
+
+  if (!result.tally.enemy) {
+    embed.addFields({ name: '🏆 Tanpa kekalahan', value: 'Tidak ada tim lawan yang berhasil mengalahkan tim kamu.' });
+  }
+  return embed;
+}
+
+// Ikon senjata disembunyikan saat membuka daftar kekalahan: lawan tidak perlu
+// tahu senjata apa yang dipakai tim yang mengalahkan kamu.
+const HIDDEN_WEAPON = '❓';
+
+// Rincian senjata satu spec: hanya ikon rank, senjata, dan pasif.
+function weaponSpecSuffix(spec) {
+  if (!spec.weapon) return '';
+  const quality = spec.displayQuality ?? spec.weapon.quality ?? data.DEFAULT_QUALITY;
+  const passiveIcons = (spec.weapon.passives || []).map(passive => {
+    const id = passive && typeof passive === 'object' ? passive.id : passive;
+    const passiveQuality = passive && typeof passive === 'object' && passive.quality != null
+      ? passive.quality
+      : quality;
+    return emoji.passiveEmoji(id, passiveQuality);
+  }).join('');
+  return ` · ${emoji.rankEmoji(quality)}${emoji.weaponEmoji(spec.weapon.id, quality)}${passiveIcons}`;
+}
+
+// Slot tanpa senjata tidak diberi tanda tanya: itu akan menyiratkan ada senjata
+// yang disembunyikan padahal memang kosong.
+function hiddenSpecLine(spec, index, { showWeapons = false } = {}) {
+  const label = spec.label || `slot${spec.slot || index + 1}`;
+  const weapon = showWeapons ? weaponSpecSuffix(spec) : (spec.weapon ? ` ${HIDDEN_WEAPON}` : '');
+  return `\`${spec.slot || index + 1}\` L.${spec.level} ${emoji.animalEmoji(spec.animal)} ${label}${weapon}`;
+}
+
+// Daftar tim yang mengalahkan pemain, dipakai sebagai balasan ephemeral.
+function globalLossesEmbed(result, {
+  playerLabel = 'Tim kamu', showWeapons = false, page = 0, pageSize = LOSS_PAGE_SIZE,
+} = {}) {
+  const embed = new EmbedBuilder()
+    .setColor(COLOR.error)
+    .setTitle('🔍 Tim yang mengalahkan kamu');
+
+  if (!result.losses.length) {
+    return embed.setDescription(
+      `**${playerLabel}** tidak kalah dari satu tim pun dalam simulasi ini. 🏆`
+    );
+  }
+
+  const panelLosses = result.losses.reduce((sum, loss) => sum + loss.tally.enemy, 0);
+  const sampled = result.lossPanelRuns && result.runs > result.lossPanelRuns;
+  const totalPages = globalLossPageCount(result, pageSize);
+  const safePage = Math.min(Math.max(0, Number(page) || 0), totalPages - 1);
+  const start = safePage * pageSize;
+  const pageLosses = result.losses.slice(start, start + pageSize);
+  const description = `**${playerLabel}** kalah dari **${result.losses.length}** tim`
+    + ` (total ${panelLosses.toLocaleString('id-ID')} kekalahan).\n`
+    + (totalPages > 1 ? `-# Halaman ${safePage + 1}/${totalPages} · ${pageSize} tim per halaman.\n` : '')
+    + (sampled ? `-# Menampilkan ${result.lossPanelRuns} pertarungan pertama per tim.\n` : '')
+    + (showWeapons ? '-# Senjata lawan ditampilkan.' : '-# Senjata lawan disembunyikan.');
+  embed.setDescription(description);
+
+  // Discord membatasi 20 field DAN total 6.000 karakter per embed. Halaman
+  // ini maksimal 10 tim, tetapi anggaran karakter tetap dijaga.
+  const MAX_EMBED_CHARS = 5900;
+  let used = embed.data.title.length + description.length;
+  const shown = [];
+  for (const loss of pageLosses) {
+    const name = `${loss.label} · L.${loss.level}`.slice(0, 256);
+    const detail = [
+      `Kalah **${loss.tally.enemy.toLocaleString('id-ID')}**× · seri ${loss.tally.tie.toLocaleString('id-ID')}× · menang ${loss.tally.player.toLocaleString('id-ID')}×`,
+      ...loss.specs.map((spec, i) => hiddenSpecLine(spec, i, { showWeapons })),
+    ].join('\n');
+    const available = MAX_EMBED_CHARS - used - name.length;
+    if (available < 80) break;
+    const value = detail.slice(0, Math.min(1024, available));
+    embed.addFields({ name, value, inline: false });
+    used += name.length + value.length;
+    shown.push(loss);
+  }
+  if (pageLosses.length > shown.length) {
+    const footer = `…${pageLosses.length - shown.length} tim di halaman ini tidak ditampilkan.`;
+    if (used + footer.length <= 6000) embed.setFooter({ text: footer });
+  }
+  return embed;
+}
+
+function parseTeamButton(customId) {
+  const parts = String(customId || '').split(ID_SEP);
+  if (parts.length !== 3 || parts[0] !== TEAM_BUTTON) return { ok: false };
+  const index = Number(parts[2]);
+  if (!Number.isInteger(index) || index < 0) return { ok: false };
+  return { ok: true, userId: parts[1], index };
+}
+
+module.exports = {
+  COLOR, TEAM_BUTTON, MAX_SLOTS,
+  weaponName, bar, slotField, slotStats, slotIcon,
+  teamEmbed, teamListEmbed, simEmbed, simProgressEmbed, simColor, teamCompLines, renderMatchup, usageEmbed, errorEmbed, okEmbed, warnEmbed,
+  turnDistribution, sideLine, shortDuration, duelEmbed, duelUnitLines, duelTeamField,
+  teamButtons, isTeamButton, parseTeamButton,
+  GLOBAL_BUTTON, globalSimEmbed, globalLossesEmbed, globalLossButton, isGlobalLossButton, parseGlobalLossButton,
+  LOSS_PAGE_SIZE, globalLossPageCount, globalLossPageButtons, isGlobalLossPageButton, parseGlobalLossPageButton,
+  REPEAT_BUTTON, repeatButton, isRepeatButton, parseRepeatButton,
+};
