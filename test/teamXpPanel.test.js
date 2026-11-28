@@ -35,6 +35,27 @@ test('panel punya tombol impor, forecast, pengaturan, dan info', () => {
   assert.match(payload.embeds[0].data.footer.text, /Streak saat ini/);
 });
 
+test('bonus Llumi dan streak maksimum kosong secara default', () => {
+  const panel = panelModule.createPanel('user-default', parsedTeam());
+  assert.equal(panel.settings.llumiBonusPercent, null);
+  assert.equal(panel.settings.maxStreak, null);
+  assert.match(panelModule.statsPayload(panel).embeds[0].data.footer.text, /Llumi —/);
+});
+
+test('tombol prediksi hanya bisa dipakai pemilik panel', async () => {
+  const panel = panelModule.createPanel('user-owner', parsedTeam());
+  let replyPayload = null;
+  let updated = false;
+  await panelModule.handleButton({
+    customId: `xp_panel:${panel.id}:forecast`,
+    user: { id: 'user-lain' },
+    reply: async payload => { replyPayload = payload; },
+    update: async () => { updated = true; },
+  });
+  assert.match(replyPayload.content, /milik orang lain/);
+  assert.equal(updated, false);
+});
+
 test('modal pengaturan memuat lima field yang diminta', () => {
   const panel = panelModule.createPanel('user-2', parsedTeam());
   const modal = panelModule.settingsModal(panel).toJSON();
@@ -42,7 +63,7 @@ test('modal pengaturan memuat lima field yang diminta', () => {
   assert.deepEqual(labels, [
     'Battle per hari (1-5760)',
     'Rata-rata XP/hunt',
-    'Bonus XP Llumi (%)',
+    'Bonus XP Llumi (%) (opsional)',
     'Peluang seri (%)',
     'Streak maksimum (opsional)',
   ]);
@@ -57,6 +78,7 @@ test('validasi pengaturan menolak nilai di luar batas', () => {
   assert.equal(ok.settings.tieRate, 2);
   const empty = panelModule.parseSettings({ battlesPerDay: 3000, avgHuntXp: 0, tieRate: 2, maxStreak: '' }, panel);
   assert.equal(empty.settings.maxStreak, null);
+  assert.equal(empty.settings.llumiBonusPercent, null);
 });
 
 test('streak maksimum opsional tidak diambil dari kartu dan tidak menjadi cap', () => {

@@ -605,8 +605,8 @@ Tombol **Pengaturan** membuka form berisi `Battle per hari (1-5760)`,
 diambil dari kartu; user bisa mengisinya sendiri dengan hasil simulasi global.
 Nilai ini bukan batas cap. XP/hunt adalah XP dari hunt; hunt dan battle aksi
 berbeda, jadi XP/hunt tidak dicampur ke forecast battle. `Bonus XP Llumi`
-dihitung sebagai pengali semua input XP (default 1000% = x11; isi 0 kalau
-akun tidak punya Llumi). Perubahan form langsung dipakai oleh statistik dan
+dihitung sebagai pengali semua input XP. Default-nya kosong (tanpa bonus);
+isi 1000 untuk bonus +1000% (= x11). Perubahan form langsung dipakai oleh statistik dan
 forecast, lalu disimpan per user di `data/team-xp-settings.json` supaya tetap
 ada saat panel dibuka lagi atau bot restart.
 

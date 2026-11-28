@@ -14,8 +14,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   battlesPerDay: 3000,
   avgHuntXp: 0,
   tieRate: 2,
-  maxStreak: 0,
-  llumiBonusPercent: 1000,
+  maxStreak: null,
+  llumiBonusPercent: null,
 });
 
 const panels = new Map();
@@ -143,7 +143,7 @@ function statsPayload(panel) {
     text: `Streak saat ini: ${formatNumber(meta.streak)} • Rata-rata XP/battle: ${formatDecimal(avg)}`
       + `\n${formatNumber(panel.settings.battlesPerDay)} battle/hari • Seri ${formatNumber(panel.settings.tieRate)}%`
       + ` • Streak maks ${meta.streakMax == null ? '—' : formatNumber(meta.streakMax)}`
-      + ` • Llumi +${Number(panel.settings.llumiBonusPercent) || 0}%`
+      + ` • ${panel.settings.llumiBonusPercent == null ? 'Llumi —' : `Llumi +${Number(panel.settings.llumiBonusPercent)}%`}`
       + ` • ${meta.teamCount} tim ${meta.active ? 'aktif ceil' : 'nonaktif floor'}`,
   });
   return { embeds: [embed], components: panelComponents(panel, 'stats') };
@@ -260,7 +260,7 @@ function forecastPayload(panel) {
     .setFooter({
       text: `${rows.length} baris • ${formatNumber(panel.settings.battlesPerDay)} battle/hari`
         + ` • Seri ${formatNumber(panel.settings.tieRate)}% • Streak maks ${formatNumber(maxSeen)}`
-        + ` • Llumi +${Number(panel.settings.llumiBonusPercent) || 0}%`,
+        + ` • ${panel.settings.llumiBonusPercent == null ? 'Llumi —' : `Llumi +${Number(panel.settings.llumiBonusPercent)}%`}`,
     });
   return { embeds: [embed], components: panelComponents(panel, 'forecast') };
 }
@@ -279,7 +279,7 @@ function infoEmbed(panel) {
       + '• Level lawan dianggap sama karena tidak ada di kartu.\n'
       + '• Multiplier Knowledge belum dihitung.\n'
       + `• Rata-rata XP/hunt adalah XP dari hunt. Hunt dan battle aksi berbeda, jadi tidak dicampur ke forecast battle: **${formatNumber(panel.settings.avgHuntXp)}**`
-      + ` (setelah Llumi: **${formatNumber(Math.round(panel.settings.avgHuntXp * (1 + (Number(panel.settings.llumiBonusPercent) || 0) / 100)))}**).\n`
+      + ` (setelah Llumi: **${panel.settings.llumiBonusPercent == null ? '—' : formatNumber(Math.round(panel.settings.avgHuntXp * (1 + Number(panel.settings.llumiBonusPercent) / 100)))}**).\n`
       + '• Streak maksimum opsional; tidak diambil dari kartu. Isi sendiri dengan hasil simulasi global kalau mau.',
     );
 }
@@ -306,7 +306,7 @@ function settingsModal(panel) {
         'avg_xp_hunt', 'Rata-rata XP/hunt', panel.settings.avgHuntXp, '0',
       )),
       new ActionRowBuilder().addComponents(input(
-        'llumi_bonus', 'Bonus XP Llumi (%)', panel.settings.llumiBonusPercent, '1000',
+        'llumi_bonus', 'Bonus XP Llumi (%) (opsional)', panel.settings.llumiBonusPercent ?? '', '1000', false,
       )),
       new ActionRowBuilder().addComponents(input(
         'tie_rate', 'Peluang seri (%)', panel.settings.tieRate, '2',
@@ -321,8 +321,8 @@ function parseSettings(values, panel) {
   const battlesPerDay = Number(values.battlesPerDay);
   const avgHuntXp = Number(values.avgHuntXp);
   const tieRate = Number(values.tieRate);
-  const llumiRaw = String(values.llumiBonusPercent ?? '1000').trim();
-  const llumiBonusPercent = llumiRaw === '' ? 0 : Number(llumiRaw);
+  const llumiRaw = String(values.llumiBonusPercent ?? '').trim();
+  const llumiBonusPercent = llumiRaw === '' ? null : Number(llumiRaw);
   const maxStreakRaw = String(values.maxStreak ?? '').trim();
   const maxStreak = maxStreakRaw === '' ? null : Number(maxStreakRaw);
   if (!Number.isInteger(battlesPerDay) || battlesPerDay < 1 || battlesPerDay > 5760) {
@@ -334,8 +334,9 @@ function parseSettings(values, panel) {
   if (!Number.isFinite(tieRate) || tieRate < 0 || tieRate > 100) {
     return { error: 'Peluang seri harus 0-100.' };
   }
-  if (!Number.isFinite(llumiBonusPercent) || llumiBonusPercent < 0 || llumiBonusPercent > 10000) {
-    return { error: 'Bonus XP Llumi harus 0-10000.' };
+  if (llumiBonusPercent != null
+    && (!Number.isFinite(llumiBonusPercent) || llumiBonusPercent < 0 || llumiBonusPercent > 10000)) {
+    return { error: 'Bonus XP Llumi harus 0-10000, atau dikosongkan.' };
   }
   if (maxStreak != null && (!Number.isInteger(maxStreak) || maxStreak < 0)) {
     return { error: 'Streak maksimum harus angka bulat 0 atau lebih, atau dikosongkan.' };
