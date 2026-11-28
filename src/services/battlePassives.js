@@ -200,6 +200,22 @@ const PASSIVES = {
     },
   }),
 
+  29: (stats) => ({
+    id: 29, name: 'Purification', stats, turns: 0,
+    postTurn(ctx, unit) {
+      const { heal, maxHp } = engine();
+      if (unit.stats.hp[0] <= 0) return;
+      this.turns += 1;
+      if (this.turns % 2 !== 0) return;
+      const debuff = unit.buffs.find(b => b.debuff);
+      if (!debuff) return;
+      if (ctx.rng.next() * 100 >= stats[0]) return;
+      const index = unit.buffs.indexOf(debuff);
+      if (index >= 0) unit.buffs.splice(index, 1);
+      heal(ctx, unit, maxHp(unit) * (stats[1] / 100), unit);
+    },
+  }),
+
   16: (stats) => ({
     id: 16, name: 'Energize', stats,
     postTurn(ctx, unit) {

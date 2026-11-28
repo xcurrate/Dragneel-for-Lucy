@@ -1037,9 +1037,9 @@ describe('cooldown simulasi', () => {
   const sendEmbed = (m, embed) => { replies.push(embed.toJSON()); };
   const message = { guildId: 'g', author: { id: 'u' } };
 
-  async function run(args) {
+  async function run(args, deps = {}) {
     replies = [];
-    await handleSimCommand(message, args, 'd', { sendEmbed });
+    await handleSimCommand(message, args, 'd', { sendEmbed, ...deps });
     return replies[0];
   }
 
@@ -1055,10 +1055,28 @@ describe('cooldown simulasi', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('simulasi yang berhasil memasang cooldown 5 detik', async () => {
+  it('simulasi tim biasa memasang cooldown 15 detik untuk non-donatur', async () => {
     await run(['-m', '5', '-s', '1']);
     const sisa = store.cooldownRemaining('u', 'sim');
+    assert.ok(sisa > 14000 && sisa <= 15000, `sisa ${sisa} ms harus mendekati 15 detik`);
+  });
+
+  it('penolakan cooldown menyarankan donasi untuk non-donatur', async () => {
+    store.setCooldown('u', 'sim', Date.now() + 3000);
+    const embed = await run(['-m', '5', '-s', '1']);
+    assert.ok(embed.description.includes('donasi'), embed.description);
+  });
+
+  it('donatur mendapat cooldown 5 detik dan batas -m 10.000', async () => {
+    const embed = await run(['-m', '201', '-s', '1'], { isDonor: () => true });
+    assert.ok(embed.title.includes('vs.'), embed.title);
+    const sisa = store.cooldownRemaining('u', 'sim');
     assert.ok(sisa > 4000 && sisa <= 5000, `sisa ${sisa} ms harus mendekati 5 detik`);
+
+    store.clearCooldown('u', 'sim');
+    const tooMany = await run(['-m', '10001'], { isDonor: () => true });
+    assert.strictEqual(tooMany.color, 0xED4245);
+    assert.ok(tooMany.description.includes('10.000'), tooMany.description);
   });
 
   it('simulasi kedua dalam jendela tunggu ditolak dengan sisa waktu', async () => {
@@ -2060,7 +2078,7 @@ describe('alias senjata dan pasif', () => {
     assert.deepStrictEqual(pending.weapons, []);
     assert.deepStrictEqual(
       pending.passives.map(item => item.name).sort(),
-      ['Conserve', 'Purify'],
+      ['Conserve'],
       'hanya pasif baru yang belum punya mekanik',
     );
   });
@@ -2298,6 +2316,27 @@ describe('lawan simulasi berupa tim', () => {
     const enemy = resolveEnemy('u', ['hp=8,att=6,pr=2,wp=3,mag=5,mr=1']);
     assert.ok(!enemy.error, enemy.error);
     assert.strictEqual(enemy.label, 'stat manual');
+  });
+
+  it('rank= di awal unit dibaca sebagai komposisi inline, bukan stat manual', () => {
+    const input = "rank=rare 32 pig arbiter's edge 30 strength 10 adaptation 10 "
+      + '~86140/90720,195,55,628,164,59, 47 ?? culling scythe 50 physical resistance 87 energize 87 '
+      + '~94031/100000,382,64,504,147,54, rank=legendary 81 ?? vanguard\'s banner 50 knowledge 96 magic 10 '
+      + '~91972/100000,181,62,1472,669,62';
+    const enemy = resolveEnemy('u', input.split(' '));
+    assert.ok(!enemy.error, enemy.error);
+    assert.strictEqual(enemy.specs.length, 3);
+    assert.ok(!('animalRank' in enemy.specs[0]), 'rank tidak disimpan');
+    assert.strictEqual(enemy.specs[0].finalStats.hp, 90720);
+    assert.strictEqual(enemy.specs[1].weapon.id, 17);
+    assert.strictEqual(enemy.specs[2].weapon.id, 16);
+
+    const withoutRank = resolveEnemy('u', input.replace(/rank=[a-z]+\s+/gi, '').split(' '));
+    assert.ok(!withoutRank.error, withoutRank.error);
+    assert.deepStrictEqual(
+      withoutRank.specs.map(spec => [spec.level, spec.weapon, spec.finalStats]),
+      enemy.specs.map(spec => [spec.level, spec.weapon, spec.finalStats]),
+    );
   });
 });
 
@@ -2729,8 +2768,8 @@ describe('Resurrection Staff', () => {
     assert.ok(healer.stats.wp[0] < engine.maxWp(healer), 'WP terpakai');
   });
 
-  it('menyembuhkan 50-80% MAG sesuai quality', () => {
-    for (const [q, pct] of [[0, 0.5], [100, 0.8]]) {
+  it('menyembuhkan 60-90% MAG sesuai quality', () => {
+    for (const [q, pct] of [[0, 0.6], [100, 0.9]]) {
       const { healer, dead, ctx } = setup(q);
       const mag = healer.stats.mag[0] + healer.stats.mag[1];
       weaponModule.weaponAbility(ctx, healer.weapon, healer);
@@ -2805,6 +2844,38 @@ describe("Vanguard's Banner", () => {
     unit.stats.wp[0] = unit.weapon.manaCost - 1;
     engine.runTurn(ctx, unit.team, unit.foes);
     assert.ok(!unit.buffs.some(b => b.id === 7), 'tidak ada eskalasi tanpa WP');
+  });
+});
+
+describe('Purification', () => {
+  function setup(quality = [100, 100], roll = 0) {
+    const rng = rngModule.createRng(5);
+    const unit = engine.buildUnit({ label: 'purif', level: 50, coeffs: COEFFS_STRONG }, rng);
+    const passive = createPassive(29, quality, rng);
+    unit.weapon = { passives: [passive] };
+    unit.buffs.push(createBuff(2, { quality: 100, from: unit, rng }));
+    unit.stats.hp[0] = engine.maxHp(unit) * 0.5;
+    const ctx = { rng: { next: () => roll }, tags: new Set(), damageDealt: 0 };
+    return { unit, passive, ctx };
+  }
+
+  it('membersihkan debuff setiap 2 turn lalu memulihkan 5-10% Max HP', () => {
+    const { unit, passive, ctx } = setup();
+    const max = engine.maxHp(unit);
+    passive.postTurn(ctx, unit, [unit], []);
+    assert.ok(unit.buffs.some(b => b.id === 2), 'turn pertama belum cleanse');
+    assert.strictEqual(unit.stats.hp[0], max * 0.5, 'belum ada heal');
+
+    passive.postTurn(ctx, unit, [unit], []);
+    assert.ok(!unit.buffs.some(b => b.id === 2), 'debuff dibersihkan pada turn kedua');
+    assert.ok(Math.abs(unit.stats.hp[0] - max * 0.6) <= 1, `heal 10% Max HP, dapat ${unit.stats.hp[0]}`);
+  });
+
+  it('tidak menghapus debuff saat roll peluang gagal', () => {
+    const { unit, passive, ctx } = setup([0, 100], 0.99);
+    passive.postTurn(ctx, unit, [unit], []);
+    passive.postTurn(ctx, unit, [unit], []);
+    assert.ok(unit.buffs.some(b => b.id === 2), 'debuff tetap ada saat roll gagal');
   });
 });
 
@@ -3190,6 +3261,27 @@ describe('update OwO: Wounding Crossbow, Frostbite, Pest, Exposed, Resonance, Li
       // Damage MAG melewati resistensi MR sasaran, jadi bandingkan batas bawah.
       assert.ok(dealt > 0 && dealt <= Math.ceil(mag * (dmgPct / 100)), `damage ${dealt} <= ${dmgPct}% MAG`);
     }
+  });
+
+  it('stat senjata dan pasif mengikuti update terbaru', () => {
+    const weapon = name => data.weapons().find(w => w.name === name);
+    const passive = require(path.join(ROOT, 'src/data/owoPassives.json')).passives;
+    const passiveByName = name => passive.find(p => p.name === name);
+
+    assert.deepStrictEqual(weapon('Healing Staff').qualityList, [[110, 160]]);
+    assert.deepStrictEqual(weapon('Arcane Scepter').qualityList, [[65, 95]]);
+    assert.deepStrictEqual(weapon('Vampiric Staff').manaRange, [190, 90]);
+    assert.deepStrictEqual(weapon('Wand of Absorption').qualityList, [[80, 115], [20, 40]]);
+    assert.deepStrictEqual(weapon('Resurrection Staff').qualityList, [[60, 90]]);
+    assert.deepStrictEqual(weapon('Glacial Axe').qualityList, [[40, 60]]);
+    assert.deepStrictEqual(weapon('Glacial Axe').manaRange, [260, 160]);
+    assert.deepStrictEqual(weapon("Vanguard's Banner").manaRange, [290, 235]);
+    assert.deepStrictEqual(weapon('Spirit Staff').manaRange, [250, 150]);
+
+    assert.deepStrictEqual(passiveByName('Discharge').qualityList, [[110, 150]]);
+    assert.deepStrictEqual(passiveByName('Enrage').qualityList, [[2, 5]]);
+    assert.deepStrictEqual(passiveByName('Purification').qualityList, [[50, 70], [5, 10]]);
+    assert.ok(passiveByName('Purification').aliases.includes('prf'));
   });
 
   it('Glacial Axe memakai 40-60% STR, 260-160 WP, dan 2 stack Freeze', () => {

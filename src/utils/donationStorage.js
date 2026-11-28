@@ -1,5 +1,5 @@
-// Konfigurasi donasi bersifat global untuk bot, bukan per server. Tracking
-// nominal dilakukan manual lewat dashboard; tidak ada data donatur per orang.
+// Konfigurasi donasi bersifat global untuk bot, bukan per server. Nominal
+// dicatat manual; daftar donatur aktif dikelola lewat dashboard.
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -20,7 +20,33 @@ const DEFAULTS = {
   qrisImageUrl: '',
   goal: 0,
   collected: 0,
+  donors: [],
 };
+
+const MAX_DONORS = 500;
+const DONOR_ID = /^\d{15,20}$/;
+
+function parseDonors(value, { strict = false } = {}) {
+  const raw = Array.isArray(value) ? value : String(value ?? '').split(/[\s,]+/);
+  const donors = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const id = String(item ?? '').trim();
+    if (!id) continue;
+    if (!DONOR_ID.test(id)) {
+      if (strict) throw new Error('ID donatur harus berupa angka 15–20 digit.');
+      continue;
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    donors.push(id);
+  }
+  if (donors.length > MAX_DONORS) {
+    if (strict) throw new Error(`Daftar donatur maksimal ${MAX_DONORS} ID.`);
+    return donors.slice(0, MAX_DONORS);
+  }
+  return donors;
+}
 
 function text(value, max) {
   return String(value ?? '').trim().slice(0, max);
@@ -42,6 +68,7 @@ function normalize(value = {}) {
     qrisImageUrl: text(value.qrisImageUrl, 500),
     goal: Math.max(0, Math.trunc(Number(value.goal) || 0)),
     collected: Math.max(0, Math.trunc(Number(value.collected) || 0)),
+    donors: parseDonors(value.donors),
   };
 }
 
@@ -72,6 +99,7 @@ function validateDonation(input = {}) {
   const collected = Math.trunc(Number(input.collected) || 0);
   if (!Number.isSafeInteger(goal) || goal < 0) throw new Error('Target donasi harus bilangan bulat 0 atau lebih.');
   if (!Number.isSafeInteger(collected) || collected < 0) throw new Error('Total donasi tercatat harus bilangan bulat 0 atau lebih.');
+  const donors = parseDonors(input.donors, { strict: true });
   return {
     enabled: input.enabled,
     title,
@@ -80,6 +108,7 @@ function validateDonation(input = {}) {
     qrisImageUrl,
     goal,
     collected,
+    donors,
   };
 }
 
@@ -127,5 +156,6 @@ module.exports = {
   saveDonation,
   validateDonation,
   normalize,
+  parseDonors,
   setDonationStore,
 };

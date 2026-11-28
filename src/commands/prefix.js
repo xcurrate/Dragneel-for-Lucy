@@ -205,6 +205,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
       sendPayload: _send,
       isDeveloper: _isDeveloper,
       isAdmin: _isAdmin,
+      isDonor: deps.isDonor,
     });
   }
 

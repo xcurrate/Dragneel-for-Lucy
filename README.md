@@ -380,24 +380,34 @@ dilaporkan sebagai error, bukan dianggap nama lawan.
 
 ### Cooldown simulasi
 
-`d sim` punya cooldown **5 detik per user**. Simulasi bisa berjalan detik-an dan
-memakai CPU bot, jadi satu user tidak bisa menumpuknya:
+Cooldown simulasi dipisah menurut jenisnya:
+
+| Jenis | Non-donatur | Donatur |
+| --- | --- | --- |
+| Simulasi tim biasa (`d sim`) | 15 detik | 5 detik |
+| Simulasi global (`d sim global`) | 30 detik | 5 detik |
 
 ```
 d sim -m 500 -s 42
-d sim -m 500 -s 42     # ⏳ Tunggu 5.0 detik lagi sebelum simulasi berikutnya.
+d sim -m 500 -s 42     # ⏳ Tunggu 15.0 detik lagi sebelum simulasi berikutnya.
 ```
 
 Aturannya:
 
-- **Dihitung dari akhir simulasi.** Run 1 juta yang butuh ~12 detik baru
+- **Dihitung dari akhir simulasi.** Run besar yang butuh belasan detik baru
   membuka cooldown setelah selesai, bukan saat mulai.
 - **Hanya simulasi yang berhasil memasang cooldown.** Perintah yang salah ketik
   tetap mendapat pesan validasinya, dan `d sim help` tidak pernah terhalang.
 - **Berlaku per user, lintas server**, dan disimpan di database sehingga tetap
   berlaku setelah bot restart.
 - Balasan penolakan memakai embed peringatan (kuning), bukan error merah, karena
-  perintahnya benar — hanya terlalu cepat.
+  perintahnya benar — hanya terlalu cepat. Untuk non-donatur, balasan juga
+  menyarankan donasi untuk menurunkan cooldown dan membuka fitur.
+- Daftar donatur dikelola di dashboard **Donasi Global**, kolom **ID Donatur**
+  (satu ID per baris atau dipisah koma). Donatur juga boleh memakai `-m`
+  sampai **10.000** pada simulasi tim biasa dan simulasi global. Batas default
+  non-donatur tetap 200 untuk `d sim` dan 100 per tim untuk `d sim global`
+  (bisa diubah developer).
 
 ### Tampilan `d team show`
 

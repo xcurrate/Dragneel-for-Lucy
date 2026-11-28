@@ -82,15 +82,16 @@ test('blueprint bisa diparse oleh dsim', async t => {
   assert.match(built.command, /^d sim timku vs /);
   assert.match(built.command, /-eboss$/);
 
-  assert.match(built.blueprint, /rank=uncommon 28 rabbit poison dagger 50 sacrifice 30 enrage 10/);
-  assert.match(built.blueprint, /rank=rare 53 cat bow 10 giant slayer 10 weapon point 30/);
-  assert.match(built.blueprint, /rank=mythical 72 \?\? orb of potency 87 adaptation 30 magical resistance 30/);
+  assert.doesNotMatch(built.blueprint, /rank=/);
+  assert.match(built.blueprint, /28 rabbit poison dagger 50 sacrifice 30 enrage 10/);
+  assert.match(built.blueprint, /53 cat bow 10 giant slayer 10 weapon point 30/);
+  assert.match(built.blueprint, /72 \?\? orb of potency 87 adaptation 30 magical resistance 30/);
 
   const inline = simParser.parseInlineSide(built.blueprint, { prefix: 'd' });
   assert.equal(inline.error, undefined);
   assert.equal(inline.specs.length, 3);
   assert.deepEqual(inline.specs.map(spec => spec.weapon.id), [8, 3, 6]);
-  assert.deepEqual(inline.specs.map(spec => spec.animalRank), ['uncommon', 'rare', 'mythical']);
+  assert.ok(inline.specs.every(spec => !('animalRank' in spec)), 'rank diabaikan parser');
   assert.deepEqual(inline.specs.map(spec => spec.weapon.quality), [50, 10, 87]);
   assert.deepEqual(inline.specs.map(spec => spec.finalStats.hpCurrent), [80160, 98160, 94560]);
 });
@@ -130,7 +131,8 @@ test('Wounding Crossbow tersedia di fingerprint dan blueprint', () => {
     weapon: { name: 'Wounding Crossbow', quality: 100 },
     passives: [{ name: 'Discharge', quality: 70 }, { name: 'Regeneration', quality: 96 }],
   }], { prefix: 'h' });
-  assert.match(built.blueprint, /rank=epic 78 whale wounding crossbow 100/);
+  assert.doesNotMatch(built.blueprint, /rank=/);
+  assert.match(built.blueprint, /78 whale wounding crossbow 100/);
 });
 
 test('perintah sim raid membaca gambar dari lampiran', async t => {

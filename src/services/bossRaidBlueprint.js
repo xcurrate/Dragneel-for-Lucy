@@ -394,7 +394,7 @@ async function readCard(image, layout, index) {
     whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' -",
     psm: 7, whiteOnly: false,
   }));
-  const { rank, animal } = splitName(nameText);
+  const { animal } = splitName(nameText);
 
   const hpRegion = cropPng(
     image,
@@ -459,7 +459,6 @@ async function readCard(image, layout, index) {
   return {
     slot: index + 1,
     level,
-    rank,
     animal,
     name: nameText,
     stats: complete ? {
@@ -565,7 +564,6 @@ function buildBossBlueprint(cards, { prefix = 'd', player = '<tim>' } = {}) {
     }
     const stats = card.stats;
     const parts = [];
-    if (card.rank) parts.push(`rank=${String(card.rank).toLowerCase()}`);
     if (card.level != null) parts.push(String(card.level));
     const animal = card.animal ? slug(card.animal) : null;
     const knownAnimal = animal && (battleData.findAnimal(animal) || dexStore.resolveAnimal(animal));

@@ -68,6 +68,7 @@ function renderDonation(settings) {
   $('donation-qris-image').value = settings.qrisImageUrl || '';
   $('donation-goal').value = Number(settings.goal || 0);
   $('donation-collected').value = Number(settings.collected || 0);
+  $('donation-donors').value = (settings.donors || []).join('\n');
 }
 function collectDonation() {
   return {
@@ -83,7 +84,8 @@ function collectDonation() {
     },
     qrisImageUrl: $('donation-qris-image').value.trim(),
     goal: Number($('donation-goal').value || 0),
-    collected: Number($('donation-collected').value || 0)
+    collected: Number($('donation-collected').value || 0),
+    donors: $('donation-donors').value.split(/[\s,]+/).map(id => id.trim()).filter(Boolean)
   };
 }
 async function saveDonation() {

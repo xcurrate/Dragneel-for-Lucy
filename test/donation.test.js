@@ -74,6 +74,31 @@ test('donasi hanya menampilkan tombol yang diisi', () => {
   assert.equal(payload.components[0].toJSON().components.length, 1);
 });
 
+test('daftar donatur dari dashboard dipakai untuk status donatur', () => {
+  reset();
+  delete process.env.DONOR_IDS;
+  store.saveDonation({
+    enabled: true,
+    title: 'Dukung',
+    description: 'Tes',
+    donors: ['123456789012345678', '223456789012345678', '123456789012345678'],
+  });
+  assert.deepEqual(store.getDonation().donors, ['123456789012345678', '223456789012345678']);
+  const donor = require(path.join(ROOT, 'src/utils/donor'));
+  assert.equal(donor.isDonor('123456789012345678'), true);
+  assert.equal(donor.isDonor('323456789012345678'), false);
+});
+
+test('validasi donasi menolak ID donatur yang bukan snowflake', () => {
+  reset();
+  assert.throws(() => store.validateDonation({
+    enabled: true,
+    title: 'Dukung',
+    description: 'Tes',
+    donors: ['bukan-id'],
+  }), /ID donatur/);
+});
+
 test('validasi donasi menolak URL non-https dan nominal negatif', () => {
   reset();
   assert.throws(() => store.validateDonation({

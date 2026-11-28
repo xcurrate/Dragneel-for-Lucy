@@ -53,7 +53,7 @@ function buildDonationPayload(settings = donationStore.getDonation()) {
   }
 
   if (settings.qrisImageUrl) embed.setImage(settings.qrisImageUrl);
-  embed.setFooter({ text: 'Donasi dicatat manual oleh developer. Tidak ada daftar donatur atau role otomatis.' });
+  embed.setFooter({ text: 'Donasi dicatat manual. Daftar donatur dikelola lewat dashboard; role tidak diberikan otomatis.' });
 
   const buttons = PLATFORMS
     .filter(platform => settings.links?.[platform.key])

@@ -67,7 +67,7 @@ test('data battle memakai token dari katalog', () => {
   }
   assert.deepEqual(
     pending.passives.map(item => item.name).sort(),
-    ['Conserve', 'Purify'],
+    ['Conserve'],
   );
 });
 

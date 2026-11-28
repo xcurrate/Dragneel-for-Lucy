@@ -376,8 +376,8 @@
       "sourceText": "When WP is replenished, deal **?%** of the replenished amount to a random enemy as MAG damage",
       "qualityList": [
         [
-          100,
-          140
+          110,
+          150
         ]
       ],
       "hooks": [
@@ -522,8 +522,8 @@
       "sourceText": "Every 10% of missing health gives**?%** damage",
       "qualityList": [
         [
-          1,
-          4
+          2,
+          5
         ]
       ],
       "hooks": [
@@ -849,6 +849,40 @@
         "resonance",
         "res",
         "reso"
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Purification",
+      "emojis": [
+        "<:cpurif:1570897255173722143>",
+        "<:upurif:1570897284005236789>",
+        "<:rpurif:1570897305295388682>",
+        "<:epurif:1570897327139590215>",
+        "<:mpurif:1570897346554757223>",
+        "<:lpurif:1570897364439273593>",
+        "<:fpurif:1570897383355588729>"
+      ],
+      "category": "sustain",
+      "summary": "Setiap 2 turn, berpeluang menghapus 1 debuff dari diri sendiri lalu memulihkan HP.",
+      "sourceText": "Every 2 turns, **50-70%** chance to cleanse 1 debuff from yourself. If successful, heal **5-10%** of Max HP.",
+      "qualityList": [
+        [
+          50,
+          70
+        ],
+        [
+          5,
+          10
+        ]
+      ],
+      "hooks": [
+        "postTurn"
+      ],
+      "aliases": [
+        "purif",
+        "purify",
+        "prf"
       ]
     }
   ]

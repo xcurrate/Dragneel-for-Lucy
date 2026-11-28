@@ -379,8 +379,8 @@
       "type": "HEAL",
       "qualityList": [
         [
-          100,
-          150
+          110,
+          160
         ]
       ],
       "manaRange": [
@@ -600,8 +600,8 @@
         ]
       ],
       "manaRange": [
-        200,
-        100
+        190,
+        90
       ],
       "passiveCount": 1,
       "buffList": [],
@@ -695,7 +695,7 @@
       "qualityList": [
         [
           80,
-          100
+          115
         ],
         [
           20,
@@ -845,8 +845,8 @@
         ]
       ],
       "manaRange": [
-        225,
-        125
+        250,
+        150
       ],
       "passiveCount": 1,
       "buffList": [
@@ -935,8 +935,8 @@
       "type": "REVIVE",
       "qualityList": [
         [
-          50,
-          80
+          60,
+          90
         ]
       ],
       "manaRange": [

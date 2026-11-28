@@ -372,17 +372,27 @@ describe('simulasi global', () => {
     assert.ok(reply.content.includes('kedaluwarsa'), reply.content);
   });
 
-  it('memberi cooldown 10 detik untuk selain developer', async () => {
+  it('memberi cooldown 30 detik untuk selain developer', async () => {
     seedWorld();
     const deps = { sendEmbed, isDeveloper: () => false };
     await handleSimCommand(message('d sim global -m 2 -s 1'), ['global', '-m', '2', '-s', '1'], 'd', deps);
     const left = store.cooldownRemaining('me', 'sim-global');
-    assert.ok(left > 0 && left <= GLOBAL_COOLDOWN_MS, `sisa cooldown ${left}`);
+    assert.ok(left > 29000 && left <= GLOBAL_COOLDOWN_MS, `sisa cooldown ${left}`);
 
     replies = [];
     await handleSimCommand(message('d sim global -m 2 -s 2'), ['global', '-m', '2', '-s', '2'], 'd', deps);
     assert.strictEqual(replies.length, 1);
     assert.ok(replies[0].description.includes('baru bisa dipakai lagi'));
+    assert.ok(replies[0].description.includes('donasi'), replies[0].description);
+  });
+
+  it('donatur mendapat cooldown 5 detik dan boleh -m di atas batas umum', async () => {
+    seedWorld();
+    const deps = { sendEmbed, isDeveloper: () => false, isDonor: () => true };
+    await handleSimCommand(message('d sim global -m 101 -s 1'), ['global', '-m', '101', '-s', '1'], 'd', deps);
+    const left = store.cooldownRemaining('me', 'sim-global');
+    assert.ok(left > 4000 && left <= 5000, `sisa cooldown ${left}`);
+    assert.ok(replies[0].title.includes('Simulasi Global'), replies[0].title);
   });
 
   it('developer melewati cooldown simulasi global', async () => {
@@ -600,6 +610,13 @@ describe('jumlah pertarungan simulasi global', () => {
     const odd = resolveRunCount({ '-total': '1000' }, 3);
     assert.strictEqual(odd.value, 333);
     assert.ok(odd.value * 3 <= 1000);
+  });
+
+  it('menerima batas donatur 10.000 per tim', () => {
+    const out = resolveRunCount({ '-m': '10000' }, 4, { maxPerTeam: 10000 });
+    assert.strictEqual(out.value, 10000);
+    assert.strictEqual(out.total, 40000);
+    assert.ok(resolveRunCount({ '-m': '10001' }, 4, { maxPerTeam: 10000 }).error);
   });
 
   it('menolak permintaan di atas batas dan menyebut nilai maksimumnya', () => {

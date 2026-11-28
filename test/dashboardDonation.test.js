@@ -56,6 +56,7 @@ describe('dashboard donation API', () => {
     assert.deepStrictEqual(settings.links, {
       saweria: '', trakteer: '', kofi: '', paypal: '', qris: '',
     });
+    assert.deepStrictEqual(settings.donors, []);
   });
 
   it('saves global donation settings and reads them back', async () => {
@@ -73,6 +74,7 @@ describe('dashboard donation API', () => {
       qrisImageUrl: 'https://example.com/qris.png',
       goal: 100000,
       collected: 25000,
+      donors: ['123456789012345678', '223456789012345678'],
     };
     const saved = await call('PUT', '/api/donation', { settings });
     assert.strictEqual(saved.status, 200);
@@ -83,6 +85,7 @@ describe('dashboard donation API', () => {
     assert.strictEqual(loadedSettings.enabled, true);
     assert.strictEqual(loadedSettings.links.paypal, 'https://paypal.me/dragneel');
     assert.strictEqual(loadedSettings.goal, 100000);
+    assert.deepStrictEqual(loadedSettings.donors, ['123456789012345678', '223456789012345678']);
   });
 
   it('rejects invalid URLs and negative totals', async () => {
@@ -98,5 +101,11 @@ describe('dashboard donation API', () => {
     });
     assert.strictEqual(negative.status, 400);
     assert.match((await negative.json()).error, /Total donasi/);
+
+    const badDonor = await call('PUT', '/api/donation', {
+      settings: { ...base, donors: ['bukan-id'] },
+    });
+    assert.strictEqual(badDonor.status, 400);
+    assert.match((await badDonor.json()).error, /ID donatur/);
   });
 });

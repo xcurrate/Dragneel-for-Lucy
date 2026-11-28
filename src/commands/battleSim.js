@@ -16,6 +16,7 @@ const { createRng, randomSeed } = require('../services/battleRng');
 const globalSim = require('../services/globalSim');
 const battleLogStore = require('../utils/battleLogStorage');
 const data = require('../data/owoBattle');
+const donor = require('../utils/donor');
 const {
   simEmbed, simProgressEmbed, renderMatchup, duelEmbed, usageEmbed, errorEmbed, warnEmbed,
   repeatButton, parseRepeatButton, isRepeatButton,
@@ -52,14 +53,35 @@ function saveBattleLog(log) {
 // Jeda minimum antar-edit pesan progres; Discord membatasi edit pesan.
 const PROGRESS_EDIT_MS = 1000;
 
-// Cooldown perintah simulasi per user. Simulasi bisa berjalan detik-an dan
-// memakai CPU bot, jadi satu user tidak boleh menumpuknya.
-const SIM_COOLDOWN_MS = 5000;
+// Cooldown simulasi tim biasa (15 detik) dan global (30 detik). Donatur
+// mendapat cooldown 5 detik untuk semua simulasi.
+const SIM_COOLDOWN_MS = 15000;
+const GLOBAL_COOLDOWN_MS = 30000;
+const DONOR_COOLDOWN_MS = 5000;
+const DONOR_MAX_RUNS = 10000;
 const SIM_COOLDOWN_ACTION = 'sim';
 const REPEAT_COOLDOWN_ACTION = 'sim_repeat';
 
 // Jumlah pertarungan saat `-m` tidak disebut, termasuk untuk tombol 🔁.
 const DEFAULT_RUNS = 50;
+
+function isDonorMessage(message, deps = {}) {
+  if (typeof deps.isDonor === 'function') return Boolean(deps.isDonor(message));
+  return donor.isDonor(message?.author?.id);
+}
+
+function donorUpsell(prefix) {
+  return `💖 Mau cooldown lebih pendek dan \`-m\` sampai 10.000? `
+    + `Jadilah donatur lewat \`${prefix} donasi\`.`;
+}
+
+function cooldownWarning(waiting, { prefix, global = false, donor: donorActive = false } = {}) {
+  const label = global ? 'Simulasi global baru bisa dipakai lagi' : 'Tunggu';
+  const message = global
+    ? `⏳ ${label} dalam **${(waiting / 1000).toFixed(1)} detik**.`
+    : `⏳ ${label} **${(waiting / 1000).toFixed(1)} detik** lagi sebelum simulasi berikutnya.`;
+  return donorActive ? message : message + '\n' + donorUpsell(prefix);
+}
 
 function usageSections(prefix = 'd') {
   return [
@@ -97,7 +119,7 @@ function usageSections(prefix = 'd') {
     {
       name: '🚩 Opsi',
       value: [
-        'Opsi: `-m <jumlah>` (maks 200 untuk user biasa), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
+        'Opsi: `-m <jumlah>` (maks 200; donatur 10.000), `-s <seed>`, `-qp <0-100>`, `-qe <0-100>`',
         'Stat final unit: `~hpCurrent/hpMax,att,pr,wp,mag,mr` setelah alias pasif terakhir.',
         '`-eboss` — tandai semua unit lawan sebagai boss (untuk pasif Giant Slayer).',
         '`-ehp a/b,c/d` — timpa HP lawan per unit saat kartu hanya menampilkan HP.',
@@ -293,7 +315,6 @@ function applyEnemyOptions(specs, flags) {
 
 // Cooldown simulasi global. Lebih panjang dari `dsim` karena sekali jalan
 // mengadu tim melawan SEMUA tim tersimpan, jadi jauh lebih mahal.
-const GLOBAL_COOLDOWN_MS = 10000;
 const GLOBAL_COOLDOWN_ACTION = 'sim-global';
 
 // Default per tim, sama dengan batas bawaan developer. Angka ini bisa diubah
@@ -555,12 +576,14 @@ function globalUsageSections(prefix = 'd') {
     {
       name: '⚙️ Batas',
       value: [
-        `Batas per tim: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}** pertarungan `
+        `Batas per tim: **${store.getMaxGlobalRuns().toLocaleString('id-ID')}** untuk non-donatur, `
+          + `donatur **${DONOR_MAX_RUNS.toLocaleString('id-ID')}** `
           + `(diatur developer lewat \`${prefix} sim global limit\`).`,
         `Batas keras: **${MAX_GLOBAL_BATTLES.toLocaleString('id-ID')}** pertarungan per perintah.`,
         'Pertarungan dibagi ke beberapa worker, jadi jutaan pertarungan selesai',
         'dalam hitungan detik sampai puluhan detik.',
-        `Cooldown: **${Math.round(GLOBAL_COOLDOWN_MS / 1000)} detik** untuk selain developer.`,
+        `Cooldown: **${Math.round(GLOBAL_COOLDOWN_MS / 1000)} detik** untuk non-donatur; `
+          + `donatur **${Math.round(DONOR_COOLDOWN_MS / 1000)} detik**.`,
       ].join('\n'),
     },
   ];
@@ -573,7 +596,7 @@ function globalUsage(prefix = 'd') {
 // Terima dua bentuk: `-m <per tim>` atau `-total <total pertarungan>`.
 // Keduanya dibatasi MAX_GLOBAL_BATTLES supaya satu perintah tidak menahan bot
 // terlalu lama.
-function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = false, prefix = 'd' } = {}) {
+function resolveRunCount(flags, opponentCount, { maxPerTeam = null, defaultPerTeam = null, isDev = false, prefix = 'd' } = {}) {
   const perTeam = flags['-m'] ?? flags['-n'] ?? flags['-runs'];
   const total = flags['-total'] ?? flags['-t'];
 
@@ -604,7 +627,7 @@ function resolveRunCount(flags, opponentCount, { maxPerTeam = null, isDev = fals
     return { value: perTeamValue, total: value };
   }
 
-  const runs = perTeam ?? maxPerTeam ?? DEFAULT_GLOBAL_RUNS;
+  const runs = perTeam ?? defaultPerTeam ?? maxPerTeam ?? DEFAULT_GLOBAL_RUNS;
   const value = Number(runs);
   if (!Number.isSafeInteger(value) || value < 1) {
     return { error: `Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim global -m 5000\`.` };
@@ -633,6 +656,8 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   const send = deps.sendEmbed || ((m, embed) => m.reply({ embeds: [embed] }));
   const sendPayload = deps.sendPayload || null;
   const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  const donorActive = isDonorMessage(message, deps);
+  const cooldownMs = donorActive ? DONOR_COOLDOWN_MS : GLOBAL_COOLDOWN_MS;
   const userId = message.author.id;
 
   const { flags, rest, unknown } = parseFlags(args);
@@ -708,10 +733,13 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   }
 
   // Jumlah run baru bisa dihitung setelah jumlah lawan diketahui, karena
-  // `-total` dibagi rata ke semua lawan.
-  // Batas per tim mengikuti setting developer; developer bebas melewatinya.
-  const maxPerTeam = isDev ? null : store.globalRunLimitFor();
-  const runCount = resolveRunCount(flags, opponents.length, { maxPerTeam, isDev, prefix });
+  // `-total` dibagi rata ke semua lawan. Default tetap mengikuti setting
+  // developer; donatur hanya mendapat batas maksimum yang lebih tinggi.
+  const defaultPerTeam = store.globalRunLimitFor();
+  const maxPerTeam = isDev ? null : (donorActive ? DONOR_MAX_RUNS : defaultPerTeam);
+  const runCount = resolveRunCount(flags, opponents.length, {
+    maxPerTeam, defaultPerTeam: isDev ? null : defaultPerTeam, isDev, prefix,
+  });
   if (runCount.error) return send(message, errorEmbed(runCount.error));
 
   // Gerbang cooldown dipasang setelah validasi supaya salah ketik tidak
@@ -719,11 +747,11 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
   if (!isDev) {
     const waiting = store.cooldownRemaining(userId, GLOBAL_COOLDOWN_ACTION);
     if (waiting > 0) {
-      return send(message, warnEmbed(
-        `⏳ Simulasi global baru bisa dipakai lagi dalam **${(waiting / 1000).toFixed(1)} detik**.`
-      ));
+      return send(message, warnEmbed(cooldownWarning(waiting, {
+        prefix, global: true, donor: donorActive,
+      })));
     }
-    store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + GLOBAL_COOLDOWN_MS);
+    store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + cooldownMs);
   }
 
   const labels = { playerLabel };
@@ -773,7 +801,7 @@ async function handleGlobalSim(message, args, prefix, deps = {}) {
     if (!isDev) store.clearCooldown(userId, GLOBAL_COOLDOWN_ACTION);
     return send(message, errorEmbed(`❌ ${error.message}`));
   }
-  if (!isDev) store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + GLOBAL_COOLDOWN_MS);
+  if (!isDev) store.setCooldown(userId, GLOBAL_COOLDOWN_ACTION, Date.now() + cooldownMs);
 
   await animalDex.ensureAnimalEmojis([
     ...player.specs.map(spec => spec.animal),
@@ -942,15 +970,17 @@ async function handleRepeatButton(i, deps = {}) {
   }
 
   // Jatah terpisah dari `sim`: tombol ditekan tepat setelah `d sim`, yang sudah
-  // memasang cooldown. Tanpa ini tombolnya selalu ditolak selama 5 detik.
+  // memasang cooldown. Tanpa ini tombolnya selalu ditolak selama cooldown.
+  const donorActive = isDonorMessage(i.user, deps);
+  const cooldownMs = donorActive ? DONOR_COOLDOWN_MS : SIM_COOLDOWN_MS;
   const waiting = store.cooldownRemaining(parsed.userId, REPEAT_COOLDOWN_ACTION);
   if (waiting > 0) {
     return i.reply({
-      content: `⏳ Tunggu **${(waiting / 1000).toFixed(1)} detik** lagi sebelum mengulang.`,
+      content: cooldownWarning(waiting, { prefix, donor: donorActive }),
       flags: MessageFlags.Ephemeral,
     });
   }
-  store.setCooldown(parsed.userId, REPEAT_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+  store.setCooldown(parsed.userId, REPEAT_COOLDOWN_ACTION, Date.now() + cooldownMs);
 
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await sim.simulate(entry.playerSpecs, entry.enemySpecs, {
@@ -958,7 +988,7 @@ async function handleRepeatButton(i, deps = {}) {
     playerQuality: entry.playerQuality,
     enemyQuality: entry.enemyQuality,
   });
-  store.setCooldown(parsed.userId, REPEAT_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+  store.setCooldown(parsed.userId, REPEAT_COOLDOWN_ACTION, Date.now() + cooldownMs);
 
   await animalDex.ensureAnimalEmojis([
     ...entry.playerSpecs.map(spec => spec.animal),
@@ -1091,10 +1121,12 @@ async function handleRaidBlueprint(message, args, prefix, deps = {}) {
     return sendEmbed(message, errorEmbed('Kirim/balas gambar kartu raid OwO. Contoh: `d sim raid` sebagai balasan gambar boss.'));
   }
   const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  const donorActive = isDonorMessage(message, deps);
+  const cooldownMs = donorActive ? DONOR_COOLDOWN_MS : SIM_COOLDOWN_MS;
   if (!isDev) {
     const waiting = store.cooldownRemaining(message.author.id, 'raid_blueprint');
     if (waiting > 0) {
-      return sendEmbed(message, warnEmbed(`Tunggu ${(waiting / 1000).toFixed(1)} detik sebelum membaca kartu lagi.`));
+      return sendEmbed(message, warnEmbed(cooldownWarning(waiting, { prefix, donor: donorActive })));
     }
   }
 
@@ -1109,7 +1141,7 @@ async function handleRaidBlueprint(message, args, prefix, deps = {}) {
   if (result.error) return sendEmbed(message, errorEmbed(result.error));
   const built = buildBossBlueprint(result.cards, { prefix });
   if (built.error) return sendEmbed(message, errorEmbed(built.error));
-  if (!isDev) store.setCooldown(message.author.id, 'raid_blueprint', Date.now() + SIM_COOLDOWN_MS);
+  if (!isDev) store.setCooldown(message.author.id, 'raid_blueprint', Date.now() + cooldownMs);
 
   const section = deps.templateSection
     ? await deps.templateSection(built, { message, prefix })
@@ -1159,6 +1191,8 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   const { flags, rest, unknown } = parseFlags(args);
   if (unknown.length) return send(message, unknownFlagsError(unknown, prefix));
   const isDev = deps.isDeveloper ? deps.isDeveloper(message) : false;
+  const donorActive = isDonorMessage(message, deps);
+  const cooldownMs = donorActive ? DONOR_COOLDOWN_MS : SIM_COOLDOWN_MS;
   if (flags.log && !isDev) {
     return send(message, errorEmbed('Opsi `-log` khusus developer bot.'));
   }
@@ -1225,8 +1259,9 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   if (!Number.isSafeInteger(runCount) || runCount < 1) {
     return send(message, errorEmbed(`Jumlah simulasi harus bilangan bulat 1 atau lebih. Contoh: \`${prefix} sim -m 500\`.`));
   }
-  // Batas per perintah: user biasa mengikuti setting developer, developer bebas.
-  const maxRuns = isDev ? Infinity : store.getMaxRuns();
+  // Batas per perintah: user biasa mengikuti setting developer, donatur
+  // mendapat batas 10.000, developer bebas.
+  const maxRuns = isDev ? Infinity : (donorActive ? DONOR_MAX_RUNS : store.getMaxRuns());
   if (runCount > maxRuns) {
     return send(message, errorEmbed(
       `Jumlah pertarungan maksimum **${maxRuns.toLocaleString('id-ID')}** per perintah.`
@@ -1266,13 +1301,11 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
   // hanya simulasi, jadi itu yang dibatasi.
   const waiting = store.cooldownRemaining(userId, SIM_COOLDOWN_ACTION);
   if (waiting > 0) {
-    return send(message, warnEmbed(
-      `⏳ Tunggu **${(waiting / 1000).toFixed(1)} detik** lagi sebelum simulasi berikutnya.`
-    ));
+    return send(message, warnEmbed(cooldownWarning(waiting, { prefix, donor: donorActive })));
   }
   // Ditandai dua kali: sebelum jalan supaya simulasi yang panjang tidak bisa
   // ditumpuk, dan sesudah selesai supaya cooldown dihitung dari akhir simulasi.
-  store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+  store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + cooldownMs);
 
   if (singleBattle) {
     const startedAt = Date.now();
@@ -1306,7 +1339,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
         log: Boolean(flags.log),
       });
     }
-    store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+    store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + cooldownMs);
     await animalDex.ensureAnimalEmojis([
       ...playerSpecs.map(spec => spec.animal),
       ...enemySpecs.map(spec => spec.animal),
@@ -1372,7 +1405,7 @@ async function handleSimCommand(message, args, prefix, deps = {}) {
       onProgress: publishProgress,
     });
   }
-  store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + SIM_COOLDOWN_MS);
+  store.setCooldown(userId, SIM_COOLDOWN_ACTION, Date.now() + cooldownMs);
 
   // Ringkasan matchup memuat emoji hewan; siapkan dulu seperti `d dex`.
   await animalDex.ensureAnimalEmojis([
@@ -1458,7 +1491,10 @@ function resolveEnemy(userId, args, overrideLevel, prefix = 'd') {
 
   // `level=` eksplisit menang atas flag `lvl`, karena lebih spesifik.
   const level = options.level ? Number(options.level) : (overrideLevel ?? 60);
-  const looksLikeStats = raw.includes('=') || /^[\d\s,-]+$/.test(raw);
+  // `rank=rare` juga mengandung `=`, tetapi itu bagian dari komposisi inline,
+  // bukan stat manual. Cek bentuk inline lebih dulu untuk kasus seperti itu.
+  const looksLikeStats = /^[\d\s,-]+$/.test(raw)
+    || (raw.includes('=') && !simParser.looksInline(rest));
   if (looksLikeStats) {
     // Angka murni bisa berarti ID slot tim. Kalau slot itu bukan milik user,
     // jangan jatuh ke parser stat manual yang membingungkan.
@@ -1498,5 +1534,6 @@ module.exports = {
   handleGlobalLimitCommand,
   DEFAULT_RUNS, splitVs,
   parseFlags, applyEnemyOptions, resolveEnemy, resolveTeamSpecs, usage, usageSections, globalUsage, globalUsageSections, resolveRunCount,
-  GLOBAL_COOLDOWN_MS, DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
+  SIM_COOLDOWN_MS, GLOBAL_COOLDOWN_MS, DONOR_COOLDOWN_MS, DONOR_MAX_RUNS,
+  DEFAULT_GLOBAL_RUNS, MAX_GLOBAL_BATTLES, globalResults,
 };
