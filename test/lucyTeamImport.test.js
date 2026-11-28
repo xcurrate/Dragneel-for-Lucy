@@ -178,41 +178,50 @@ Lvl 83 \`[6,602,130/47,459,321]\`
     assert.equal(await importer.prepareLucyTeamMessage({ author: { id: 'other' } }), false);
   });
 
-  it('mengimpor saat user menekan reaksi 📊 dan mengabaikan bot', async () => {
-    const message = cardMessage({ react: async () => {} });
-    await importer.prepareLucyTeamMessage(message);
-    const reaction = { emoji: { name: '📊' }, message };
-    const result = await importer.handleReaction(reaction, { id: 'user-2', bot: false });
-    assert.equal(result.imported, 1);
-    assert.equal(await importer.handleReaction(reaction, { id: 'bot', bot: true }), null);
-    assert.equal(await importer.handleReaction({ emoji: { name: '👍' }, message }, { id: 'user-3' }), null);
-  });
-
-  it('menampilkan tabel XP ephemeral saat user bereaksi 📊', async () => {
+  it('menampilkan panel XP dan tidak langsung mengimpor saat reaksi 📊', async () => {
     const replies = [];
     const message = cardMessage({
       react: async () => {},
       reply: async payload => replies.push(payload),
     });
     await importer.prepareLucyTeamMessage(message);
-
-    const result = await importer.handleXpReaction(
-      { emoji: { name: '📊' }, message },
-      { id: 'user-2', bot: false },
-    );
-    assert.equal(result.xp, true);
+    const reaction = { emoji: { name: '📊' }, message };
+    const result = await importer.handleReaction(reaction, { id: 'user-2', bot: false });
+    assert.ok(result.panel, 'panel harus dibuat');
     assert.equal(replies.length, 1);
     assert.equal(replies[0].flags, MessageFlags.Ephemeral);
     const embed = replies[0].embeds[0].toJSON();
-    assert.match(embed.title, /Estimasi XP/);
-    assert.match(embed.description, /40\.857\.191/);
-    assert.match(embed.description, /611/);
-    assert.match(embed.description, /66\.870/);
-    assert.match(embed.footer.text, /200 \+ bonus/);
+    assert.match(embed.title, /Statistik XP/);
+    assert.match(embed.fields[0].value, /40\.857\.191/);
+    assert.ok(replies[0].components.length, 'panel harus punya tombol');
+    assert.equal(store.listTeams('user-2').length, 0, 'reaksi tidak boleh langsung mengimpor');
 
-    assert.equal(await importer.handleXpReaction({ emoji: { name: '📊' }, message }, { id: 'bot', bot: true }), null);
-    assert.equal(await importer.handleXpReaction({ emoji: { name: '🎯' }, message }, { id: 'user-3' }), null);
-    assert.equal(await importer.handleXpReaction({ emoji: { name: '📊' }, message: { author: { id: 'other' } } }, { id: 'user-4' }), null);
+    assert.equal(await importer.handleReaction(reaction, { id: 'bot', bot: true }), null);
+    assert.equal(await importer.handleReaction({ emoji: { name: '👍' }, message }, { id: 'user-3' }), null);
+  });
+
+  it('tombol impor di panel menyimpan tim', async () => {
+    const messages = [];
+    const message = cardMessage({
+      react: async () => {},
+      reply: async payload => messages.push(payload),
+    });
+    const panelModule = require('../src/services/teamXpPanel');
+    const parsed = importer.parseLucyTeamMessage(message);
+    const panel = panelModule.createPanel('user-3', parsed);
+    const updates = [];
+    const replies = [];
+    const interaction = {
+      customId: `xp_panel:${panel.id}:import`,
+      user: { id: 'user-3' },
+      reply: async payload => replies.push(payload),
+      update: async payload => updates.push(payload),
+      followUp: async payload => replies.push(payload),
+    };
+    await panelModule.handleButton(interaction);
+    assert.equal(store.listTeams('user-3').length, 1);
+    assert.equal(updates.length, 1);
+    assert.match(replies[0].content, /berhasil diimpor/);
   });
 
   it('membaca streak tim dan memakainya untuk estimasi XP', async () => {
@@ -238,13 +247,11 @@ Lvl 83 \`[6,602,130/47,459,321]\`
     assert.equal(parsed.teamCount, 4);
     assert.equal(parsed.teamIndex, 2);
     assert.equal(parsed.isActive, true);
-    await importer.handleXpReaction({ emoji: { name: '📊' }, message }, { id: 'user-2', bot: false });
+    await importer.handleReaction({ emoji: { name: '📊' }, message }, { id: 'user-2', bot: false });
     const embed = replies[0].embeds[0].toJSON();
-    assert.match(embed.description, /213,2/);
-    assert.match(embed.description, /50\.445/);
-    assert.match(embed.footer.text, /streak 66\.855/);
-    assert.match(embed.footer.text, /dibagi 4/);
-    assert.match(embed.footer.text, /aktif ceil/);
+    assert.match(embed.footer.text, /Streak saat ini: 66\.855/);
+    assert.match(embed.footer.text, /4 tim aktif ceil/);
+    assert.match(embed.fields[0].value, /Hingga \*\*[\d.]+\*\* battle/);
   });
 
   it('mengabaikan bracket yang bukan progres XP', () => {

@@ -69,21 +69,32 @@ function simulateBattles(remaining, {
   active = true,
   multiplier = 1,
   battlesPerDay = BATTLES_PER_DAY,
+  tieRate = 0,
+  maxStreak = null,
+  extraXpPerBattle = 0,
 } = {}) {
   if (!Number.isFinite(remaining) || remaining <= 0) {
     return { battles: 0, gained: 0, xpPerBattle: 0, days: 0, streakAfter: Number(streak) || 0 };
   }
   const count = Math.max(1, Math.floor(Number(teamCount) || 1));
   let currentStreak = Math.max(0, Math.floor(Number(streak) || 0));
+  const cap = Number.isFinite(maxStreak) && maxStreak > 0 ? Math.floor(maxStreak) : Infinity;
+  const tieEvery = tieRate > 0 ? Math.max(1, Math.round(100 / Number(tieRate))) : 0;
   let gained = 0;
   let battles = 0;
   while (gained < remaining && battles < MAX_SIMULATED_BATTLES) {
-    currentStreak += 1;
-    const total = winXpForNextBattle(currentStreak - 1);
-    const share = active ? Math.ceil(total / count) : Math.floor(total / count);
-    const perPet = Math.max(1, Math.round(share * multiplier));
-    gained += perPet;
     battles += 1;
+    const isTie = tieEvery > 0 && battles % tieEvery === 0;
+    let total;
+    if (isTie) {
+      total = 100;
+    } else {
+      currentStreak = Math.min(cap, currentStreak + 1);
+      total = XP_PER_WIN + bonusXpForStreak(currentStreak);
+    }
+    const share = active ? Math.ceil(total / count) : Math.floor(total / count);
+    const perPet = Math.max(1, Math.round((share + extraXpPerBattle) * multiplier));
+    gained += perPet;
   }
   return {
     battles,
@@ -100,6 +111,9 @@ function estimate(slot, {
   streak = 0,
   highestLevel = slot?.level,
   battlesPerDay = BATTLES_PER_DAY,
+  tieRate = 0,
+  maxStreak = null,
+  extraXpPerBattle = 0,
 } = {}) {
   if (slot?.xpMaxed) return { maxed: true, remaining: 0, battles: 0, days: 0, xpPerBattle: null };
   if (!Number.isFinite(slot?.xpCurrent) || !Number.isFinite(slot?.xpMax)) return null;
@@ -111,6 +125,9 @@ function estimate(slot, {
     active,
     multiplier,
     battlesPerDay,
+    tieRate,
+    maxStreak,
+    extraXpPerBattle,
   });
   return {
     maxed: false,

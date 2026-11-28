@@ -595,14 +595,20 @@ pasif dari emoji. Semua senjata yang terdeteksi dianggap **Fabled**
 sengaja diabaikan.
 
 Jika kartu menampilkan progres XP (`Lvl 83 [6,602,130/47,459,321]`), reaksi
-**📊** juga mengirim balasan ephemeral berisi tabel sisa XP, XP per pet per
-battle, perkiraan jumlah battle, dan perkiraan hari sampai level berikutnya.
+**📊** menampilkan panel statistik ephemeral, bukan langsung mengimpor tim.
+Panel berisi sisa XP tiap pet, multiplier level, perkiraan battle, dan tombol
+**Impor**, **Prediksi**, **Pengaturan**, serta **Info**.
+
+Tombol **Pengaturan** membuka form berisi `Battle per hari (1-5760)`,
+`Rata-rata XP/hunt`, `Peluang seri (%)`, dan `Streak maksimum`. Perubahan form
+langsung dipakai oleh statistik dan forecast.
+
 XP battle dibagi rata ke seluruh tim; jumlah tim dibaca dari tombol halaman
 kartu (mis. `2/4`). Tim aktif memakai pembulatan ke atas, tim nonaktif ke bawah.
 XP per battle mengikuti OwO: **200 + bonus streak** (bonus hanya di kelipatan
 10/50/100/500/1000), lalu dikali multiplier catch-up level pet. Level lawan
-dianggap sama karena tidak ada di kartu. Perkiraan memakai **3.000 battle/hari**.
-Multiplier Knowledge belum dihitung.
+dianggap sama karena tidak ada di kartu. Prediksi memakai simulasi battle per
+battle dan default **3.000 battle/hari**. Multiplier Knowledge belum dihitung.
 
 Stat pada kartu Lucy adalah stat final, bukan koefisien. Karena itu stat import
 disimpan terpisah dan tidak ditambah lagi dengan stat senjata saat simulasi.

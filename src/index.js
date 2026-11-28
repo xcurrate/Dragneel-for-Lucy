@@ -24,6 +24,7 @@ const animalDex = require('./services/animalDex');
 const battleEmoji = require('./services/battleEmoji');
 const reminders = require('./services/reminders');
 const lucyTeamImport = require('./services/lucyTeamImport');
+const teamXpPanel = require('./services/teamXpPanel');
 const huntbotCalc = require('./services/huntbotCalc');
 
 logBuffer.install();
@@ -141,8 +142,6 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       await reaction.message.channel.send({ content: `ℹ️ ${result.error}`, allowedMentions: { parse: [] } });
     }
   } catch (e) { console.error('[LucyTeamImport] reaction:', e); }
-  try { await lucyTeamImport.handleXpReaction(reaction, user); }
-  catch (e) { console.error('[PetXp] reaction:', e); }
   try { await huntbotCalc.handleReaction(reaction, user); }
   catch (e) { console.error('[HuntBotCalc] reaction:', e); }
 });
@@ -158,6 +157,8 @@ client.on(Events.MessageUpdate, async (_old, message) => {
 });
 client.on(Events.InteractionCreate, async i => {
   try {
+    if (i.isButton() && teamXpPanel.isPanelButton(i.customId)) { await teamXpPanel.handleButton(i); return; }
+    if (i.isModalSubmit() && teamXpPanel.isPanelModal(i.customId)) { await teamXpPanel.handleModal(i); return; }
     if (i.isChatInputCommand() && i.commandName === 'boss') { await command.execute(i, tracker); return; }
     if (i.isChatInputCommand() && i.commandName === 'prefix') { await serverPrefix.execute(i); return; }
     if (i.isChatInputCommand() && i.commandName === 'donasi') { await donation.execute(i); return; }

@@ -5,6 +5,7 @@ const passiveData = require('../data/owoPassives');
 const store = require('../utils/battleTeamStorage');
 const dexStore = require('../utils/animalDexStorage');
 const petXp = require('./petXp');
+const teamXpPanel = require('./teamXpPanel');
 
 const LUCY_BOT_ID = '1438615298012872817';
 const IMPORT_REACTION = '📊';
@@ -216,23 +217,16 @@ async function handleReaction(reaction, user) {
   if (!reaction || user?.bot || reaction.emoji?.name !== IMPORT_REACTION) return null;
   let message = reaction.message;
   if (message?.partial && message.fetch) message = await message.fetch();
-  const messageId = message?.id || message?.message?.id;
-  if (!messageId || !store.isTeamImportMessage(messageId)) return null;
   const parsed = parseLucyTeamMessage(message);
-  if (!parsed) return null;
-  return importLucyTeam(user.id, parsed);
-}
-
-async function handleXpReaction(reaction, user) {
-  if (!reaction || user?.bot || reaction.emoji?.name !== IMPORT_REACTION) return null;
-  let message = reaction.message;
-  if (message?.partial && message.fetch) message = await message.fetch();
-  const parsed = parseLucyTeamMessage(message);
-  if (!parsed) return null;
-  if (!parsed.slots.some(slot => slot.xpMaxed || petXp.estimate(slot))) return null;
-  if (!message?.reply) return null;
-  await message.reply({ embeds: [petXp.buildEmbed(parsed)], flags: MessageFlags.Ephemeral });
-  return { xp: true };
+  if (!parsed || !message?.reply) return null;
+  const panel = teamXpPanel.createPanel(user.id, parsed);
+  const payload = teamXpPanel.statsPayload(panel);
+  await message.reply({
+    embeds: payload.embeds,
+    components: payload.components,
+    flags: MessageFlags.Ephemeral,
+  });
+  return { panel };
 }
 
 module.exports = {
@@ -244,5 +238,4 @@ module.exports = {
   importLucyTeam,
   prepareLucyTeamMessage,
   handleReaction,
-  handleXpReaction,
 };
