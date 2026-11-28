@@ -657,12 +657,14 @@ dipasang pada papan mines milik developer. Hint dikirim lewat DM.
 d mhint
 d mhint https://discord.com/channels/.../.../...
 d mhint 1576266407027413134
+d mhint debug
 d mhint help
 ```
 
 Karena papan mines tidak punya petunjuk angka, semua tile yang belum dibuka
 punya peluang sama. Hint hanya menghitung probabilitas dan EV; bukan posisi
-ranjau yang pasti.
+ranjau yang pasti. `mhint debug` mengirim JSON komponen pesan terbaru lewat DM,
+berguna untuk memeriksa format setelah pesan Lucy diedit.
 
 ## Kalkulator HuntBot
 

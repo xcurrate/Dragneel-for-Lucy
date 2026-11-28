@@ -98,6 +98,7 @@ describe('mines command and developer gate', () => {
   it('mem-parsing perintah mhint', () => {
     assert.deepEqual(hint.parseCommand('d mhint', 'd'), { args: [] });
     assert.deepEqual(hint.parseCommand('!mines 1576266407027413134', 'd'), { args: ['1576266407027413134'] });
+    assert.equal(hint.parseOptions(['debug']).debug, true);
   });
 
   it('auto-react hanya untuk papan mines developer', async () => {

@@ -1,6 +1,6 @@
 // Hint mines 3x3 Lucy. Papan tidak punya petunjuk angka, jadi semua tile yang
 // belum dibuka punya peluang sama. Hint menghitung peluang aman dan EV lanjut.
-const { EmbedBuilder } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { getGuildSettings, DEFAULT_PREFIX } = require('../utils/storage');
 
 const REACTION = '🎯';
@@ -180,9 +180,10 @@ function parseCommand(content, prefix) {
 }
 
 function parseOptions(args = []) {
-  const options = { source: null, help: false };
+  const options = { source: null, help: false, debug: false };
   for (const arg of args) {
     if (arg.toLowerCase() === 'help') { options.help = true; continue; }
+    if (arg.toLowerCase() === 'debug') { options.debug = true; continue; }
     if (/^\d{17,20}$/.test(arg)) { options.source = { type: 'id', id: arg }; continue; }
     const link = arg.match(/^<?https?:\/\/(?:www\.)?discord(?:app)?\.com\/channels\/(\d+)\/(\d+)\/(\d+)>?$/i);
     if (link) { options.source = { type: 'link', guildId: link[1], channelId: link[2], messageId: link[3] }; continue; }
@@ -199,6 +200,17 @@ async function send(target, payload) {
   const body = strictPayload(payload);
   if (target?.reply) return target.reply(body);
   if (target?.channel?.send) return target.channel.send(body);
+}
+
+async function sendDebugFile(target, data) {
+  const attachment = new AttachmentBuilder(Buffer.from(JSON.stringify(data, null, 2), 'utf8'), {
+    name: 'lucy-mines-debug.json',
+  });
+  const payload = { content: 'Debug komponen pesan mines Lucy terbaru.', files: [attachment] };
+  if (target?.author?.send) {
+    try { return await target.author.send(payload); } catch { /* fallback ke channel */ }
+  }
+  return send(target, payload);
 }
 
 async function deliverHint(message, parsed, user) {
@@ -223,6 +235,7 @@ function helpEmbed() {
       '**Cara pakai**',
       'Balas pesan mines Lucy lalu ketik `mhint`, atau kirim link/ID pesan.',
       'Reaksi 🎯 pada papan mines juga mengirim hint lewat DM.',
+      '`d mhint debug` mengirim JSON komponen pesan terbaru lewat DM.',
       '',
       'Hint hanya untuk developer.',
     ].join('\n'));
@@ -288,7 +301,12 @@ async function handleMessage(message) {
     await send(message, { content: 'Pesan mines Lucy tidak ditemukan. Balas pesan papannya, kirim link/ID, atau jalankan di channel yang punya papan mines.' });
     return true;
   }
-  const parsed = parseMinesMessage(await freshMessage(source.message));
+  const sourceMessage = await freshMessage(source.message);
+  if (options.debug) {
+    await sendDebugFile(message, dataOf(sourceMessage));
+    return true;
+  }
+  const parsed = parseMinesMessage(sourceMessage);
   if (!parsed) {
     await send(message, { content: 'Pesan sumber bukan papan mines Lucy yang bisa dibaca.' });
     return true;
