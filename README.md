@@ -612,7 +612,7 @@ d hbcalc help
 `all=<level>` menargetkan semua trait, `<trait>=<level>` menargetkan satu trait,
 dan `<trait>=+<n>` menambah level dari level sekarang. `essence=` menimpa owned
 essence dari kartu. Ekuivalen hewan/hunt/lucent memakai baris **Max Autohunt**
-pada kartu; cowoncy hanya ditampilkan bila kartu memuat konversinya.
+pada kartu, dan Lucent ditampilkan sebagai mata uang hasil hunt.
 
 Rumus memakai `cumulativeXp(L) = sum(trunc(inc * i^pow))` untuk `i=1..L`.
 Nilai validasi: MAX ALL `451.002.857.406`, Radar level 100 `145.367.518`,

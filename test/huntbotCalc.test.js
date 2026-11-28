@@ -131,6 +131,9 @@ describe('huntbot output and reactions', () => {
     assert.equal(handled, true);
     assert.equal(payload.allowedMentions.parse.length, 0);
     assert.equal(payload.allowedMentions.repliedUser, false);
-    assert.match(payload.embeds[0].toJSON().description, /Total:/);
+    const description = payload.embeds[0].toJSON().description;
+    assert.match(description, /Total:/);
+    assert.match(description, /Lucent:/);
+    assert.doesNotMatch(description, /Cowoncy/i);
   });
 });

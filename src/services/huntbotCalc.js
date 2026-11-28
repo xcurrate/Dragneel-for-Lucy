@@ -148,16 +148,11 @@ function parseHuntBotMessage(message) {
   const gainMatch = text.match(/Gain[^\n`]*`?([\d,.]+)\s*essence\s*\/\s*H/i);
   const gainPerHour = gainMatch ? numberFrom(gainMatch[1]) : null;
 
-  const cowoncyMatch = text.match(/1\s*cowoncy\s*=\s*([\d,.]+)\s*essence/i)
-    || text.match(/([\d,.]+)\s*essence\s*per\s*cowoncy/i);
-  const cowoncyEssence = cowoncyMatch ? numberFrom(cowoncyMatch[1]) : null;
-
   return {
     traits,
     ownedEssence,
     autohunt,
     gainPerHour,
-    cowoncyEssence,
     sourceMessageId: data.id || message?.id || null,
     sourceChannelId: data.channelId || message?.channelId || null,
     text,
@@ -235,7 +230,6 @@ function equivalents(total, parsed) {
       animals: null,
       lucent: null,
       hours: parsed.gainPerHour > 0 ? total / parsed.gainPerHour : null,
-      cowoncy: parsed.cowoncyEssence > 0 ? total / parsed.cowoncyEssence : null,
     };
   }
   const hunts = total === 0 ? 0 : Math.ceil(total / auto.essence);
@@ -244,7 +238,6 @@ function equivalents(total, parsed) {
     animals: hunts * auto.animals,
     lucent: hunts * auto.lucent,
     hours: parsed.gainPerHour > 0 ? total / parsed.gainPerHour : null,
-    cowoncy: parsed.cowoncyEssence > 0 ? total / parsed.cowoncyEssence : null,
   };
 }
 
@@ -293,12 +286,12 @@ function buildCalculationEmbeds(calc) {
   ];
   if (eq.hunts == null) {
     lines.push('🐾 Hewan/hunt: (data Max Autohunt tidak ditemukan)');
+    lines.push('💎 Lucent: (data Max Autohunt tidak ditemukan)');
   } else {
     lines.push('🐾 Hewan: **' + formatNumber(eq.animals) + '** (' + formatNumber(eq.hunts) + ' hunt)');
     lines.push('💎 Lucent: **' + formatNumber(eq.lucent) + '**');
   }
   lines.push('🕒 Waktu: **' + formatDuration(eq.hours) + '**' + (calc.parsed.gainPerHour ? ' (gain ' + formatNumber(calc.parsed.gainPerHour) + ' essence/jam)' : ''));
-  lines.push('🐮 Cowoncy: ' + (eq.cowoncy == null ? '(tidak tersedia)' : '**' + formatNumber(eq.cowoncy) + '**'));
   if (calc.options?.animals && calc.parsed.autohunt) {
     const auto = calc.parsed.autohunt;
     lines.push('-# 1 hunt = ' + formatNumber(auto.animals) + ' hewan, ' + formatNumber(auto.essence) + ' essence, ' + formatNumber(auto.xp) + ' xp, ' + formatNumber(auto.lucent) + ' lucent');
