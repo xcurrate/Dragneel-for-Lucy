@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   battlesPerDay: 3000,
   avgHuntXp: 0,
   tieRate: 2,
-  maxStreak: 100000,
+  maxStreak: 0,
 });
 
 const panels = new Map();
@@ -30,7 +30,7 @@ function createPanel(userId, parsed) {
   const id = crypto.randomBytes(6).toString('hex');
   const settings = {
     ...DEFAULT_SETTINGS,
-    maxStreak: Math.max(DEFAULT_SETTINGS.maxStreak, Number(parsed.streak) || 0),
+    maxStreak: Math.max(Number(parsed.streakMax) || 0, Number(parsed.streak) || 0),
   };
   panels.set(id, {
     id, userId, parsed, settings, imported: false, createdAt: Date.now(),
@@ -68,10 +68,15 @@ function teamMeta(panel) {
     ? panel.parsed.teamCount : 1;
   const active = panel.parsed.isActive !== false;
   const streak = Number.isFinite(panel.parsed.streak) ? panel.parsed.streak : 0;
+  const streakMax = Math.max(
+    Number.isFinite(panel.parsed.streakMax) ? panel.parsed.streakMax : 0,
+    Number(panel.settings?.maxStreak) || 0,
+    streak,
+  );
   const highestLevel = panel.parsed.slots.reduce((max, slot) => (
     Number.isFinite(slot.level) && slot.level > max ? slot.level : max
   ), 1);
-  return { teamCount, active, streak, highestLevel };
+  return { teamCount, active, streak, streakMax, highestLevel };
 }
 
 function settingsOptions(panel) {
@@ -79,9 +84,9 @@ function settingsOptions(panel) {
   return {
     ...meta,
     tieRate: panel.settings.tieRate,
-    maxStreak: panel.settings.maxStreak,
+    maxStreak: null,
     battlesPerDay: panel.settings.battlesPerDay,
-    extraXpPerBattle: panel.settings.avgHuntXp,
+    extraXpPerBattle: 0,
   };
 }
 
@@ -139,7 +144,7 @@ function statsPayload(panel) {
   embed.setFooter({
     text: `Streak saat ini: ${formatNumber(meta.streak)} • Rata-rata XP/battle: ${formatDecimal(avg)}`
       + `\n${formatNumber(panel.settings.battlesPerDay)} battle/hari • Seri ${formatNumber(panel.settings.tieRate)}%`
-      + ` • Streak maks ${formatNumber(panel.settings.maxStreak)}`
+      + ` • Streak maks ${formatNumber(meta.streakMax)}`
       + ` • ${meta.teamCount} tim ${meta.active ? 'aktif ceil' : 'nonaktif floor'}`,
   });
   return { embeds: [embed], components: panelComponents(panel, 'stats') };
@@ -191,7 +196,7 @@ function simulateForecast(panel) {
   const tieEvery = settings.tieRate > 0
     ? Math.max(1, Math.round(100 / Number(settings.tieRate)))
     : 0;
-  const cap = settings.maxStreak > 0 ? Math.floor(settings.maxStreak) : Infinity;
+  let maxSeen = Math.max(meta.streakMax || 0, meta.streak);
   const rows = [];
   const initial = states.map(state => ({ level: state.level, up: false }));
   rows.push({ levels: initial, battles: 0, streak, days: 0 });
@@ -203,7 +208,8 @@ function simulateForecast(panel) {
     if (isTie) {
       total = 100;
     } else {
-      streak = Math.min(cap, streak + 1);
+      streak += 1;
+      if (streak > maxSeen) maxSeen = streak;
       total = petXp.XP_PER_WIN + petXp.bonusXpForStreak(streak);
     }
     const share = meta.active ? Math.ceil(total / meta.teamCount) : Math.floor(total / meta.teamCount);
@@ -214,8 +220,7 @@ function simulateForecast(panel) {
       const state = states[index];
       if (state.maxed) continue;
       const multiplier = petXp.levelMultiplier(state.level, highest);
-      let gain = Math.max(1, Math.round(share * multiplier));
-      if (settings.avgHuntXp > 0) gain += Math.round(settings.avgHuntXp);
+      const gain = Math.max(1, Math.round(share * multiplier));
       state.xp += gain;
       while (state.xp >= state.max) {
         state.xp -= state.max;
@@ -236,7 +241,7 @@ function simulateForecast(panel) {
       });
     }
   }
-  return rows;
+  return { rows, maxSeen };
 }
 
 function formatForecastRow(row) {
@@ -245,7 +250,7 @@ function formatForecastRow(row) {
 }
 
 function forecastPayload(panel) {
-  const rows = simulateForecast(panel);
+  const { rows, maxSeen } = simulateForecast(panel);
   const lines = rows.map(formatForecastRow);
   const description = '```Key: Lvl ｜ Battle ｜ Streak ｜ Hari\n' + lines.join('\n') + '\n```';
   const embed = new EmbedBuilder()
@@ -254,7 +259,7 @@ function forecastPayload(panel) {
     .setDescription(clip(description, 4096))
     .setFooter({
       text: `${rows.length} baris • ${formatNumber(panel.settings.battlesPerDay)} battle/hari`
-        + ` • Seri ${formatNumber(panel.settings.tieRate)}%`,
+        + ` • Seri ${formatNumber(panel.settings.tieRate)}% • Streak maks ${formatNumber(maxSeen)}`,
     });
   return { embeds: [embed], components: panelComponents(panel, 'forecast') };
 }
@@ -272,7 +277,7 @@ function infoEmbed(panel) {
       + '• XP menang: `200 + bonus streak`; bonus hanya di kelipatan 10/50/100/500/1000.\n'
       + '• Level lawan dianggap sama karena tidak ada di kartu.\n'
       + '• Multiplier Knowledge belum dihitung.\n'
-      + `• Rata-rata XP/hunt ditambahkan per battle: **${formatNumber(panel.settings.avgHuntXp)}**.`,
+      + `• Rata-rata XP/hunt adalah XP dari hunt. Hunt dan battle aksi berbeda, jadi tidak dicampur ke forecast battle: **${formatNumber(panel.settings.avgHuntXp)}**.`,
     );
 }
 
@@ -298,7 +303,7 @@ function settingsModal(panel) {
         'tie_rate', 'Peluang seri (%)', panel.settings.tieRate, '2',
       )),
       new ActionRowBuilder().addComponents(input(
-        'max_streak', 'Streak maksimum', panel.settings.maxStreak, '100000',
+        'max_streak', 'Streak maksimum (pernah dicapai)', panel.settings.maxStreak, '0',
       )),
     );
 }
@@ -317,8 +322,8 @@ function parseSettings(values, panel) {
   if (!Number.isFinite(tieRate) || tieRate < 0 || tieRate > 100) {
     return { error: 'Peluang seri harus 0-100.' };
   }
-  if (!Number.isInteger(maxStreak) || maxStreak < 1) {
-    return { error: 'Streak maksimum harus angka bulat 1 atau lebih.' };
+  if (!Number.isInteger(maxStreak) || maxStreak < 0) {
+    return { error: 'Streak maksimum harus angka bulat 0 atau lebih.' };
   }
   const currentStreak = teamMeta(panel).streak;
   if (maxStreak < currentStreak) {

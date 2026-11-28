@@ -30,7 +30,7 @@ test('modal pengaturan memuat empat field yang diminta', () => {
     'Battle per hari (1-5760)',
     'Rata-rata XP/hunt',
     'Peluang seri (%)',
-    'Streak maksimum',
+    'Streak maksimum (pernah dicapai)',
   ]);
 });
 
@@ -41,6 +41,17 @@ test('validasi pengaturan menolak nilai di luar batas', () => {
   assert.match(panelModule.parseSettings({ battlesPerDay: 3000, avgHuntXp: 0, tieRate: 101, maxStreak: 1 }, panel).error, /0-100/);
   const ok = panelModule.parseSettings({ battlesPerDay: 3000, avgHuntXp: 0, tieRate: 2, maxStreak: 100000 }, panel);
   assert.equal(ok.settings.tieRate, 2);
+});
+
+test('streak maksimum dari kartu ditampilkan, bukan dipakai sebagai cap', () => {
+  const data = parsedTeam();
+  data.streak = 10;
+  data.streakMax = 500;
+  const panel = panelModule.createPanel('user-max', data);
+  const payload = panelModule.statsPayload(panel);
+  assert.match(payload.embeds[0].data.footer.text, /Streak maks 500/);
+  const forecast = panelModule.forecastPayload(panel);
+  assert.match(forecast.embeds[0].data.footer.text, /Streak maks [\d.]+/);
 });
 
 test('forecast menghasilkan baris level-up dan tombol kembali ke statistik', () => {
