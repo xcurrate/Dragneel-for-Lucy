@@ -141,6 +141,8 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       await reaction.message.channel.send({ content: `ℹ️ ${result.error}`, allowedMentions: { parse: [] } });
     }
   } catch (e) { console.error('[LucyTeamImport] reaction:', e); }
+  try { await lucyTeamImport.handleXpReaction(reaction, user); }
+  catch (e) { console.error('[PetXp] reaction:', e); }
   try { await huntbotCalc.handleReaction(reaction, user); }
   catch (e) { console.error('[HuntBotCalc] reaction:', e); }
 });

@@ -589,9 +589,20 @@ Dragneel dapat mengenali kartu tim Lucy Components V2 dari bot Lucy resmi
 User yang menekan reaksi tersebut mendapat tim baru `Lucy Import - <nama tim>`;
 tim aktif tidak ditimpa. Pesan yang sama hanya bisa diimpor sekali per user.
 
-Parser membaca nama slot, level, HP, WP, ATT, MG, PR, MR, senjata, dan pasif
-dari emoji. Semua senjata yang terdeteksi dianggap **Fabled** (`quality=100`).
-Kode seperti `2PI` dan `1F1C` adalah ID internal Lucy dan sengaja diabaikan.
+Parser membaca nama slot, level, XP, HP, WP, ATT, MG, PR, MR, senjata, dan
+pasif dari emoji. Semua senjata yang terdeteksi dianggap **Fabled**
+(`quality=100`). Kode seperti `2PI` dan `1F1C` adalah ID internal Lucy dan
+sengaja diabaikan.
+
+Jika kartu menampilkan progres XP (`Lvl 83 [6,602,130/47,459,321]`), reaksi
+**📊** juga mengirim balasan ephemeral berisi tabel sisa XP, XP per pet per
+battle, perkiraan jumlah battle, dan perkiraan hari sampai level berikutnya.
+XP battle dibagi rata ke seluruh tim; jumlah tim dibaca dari tombol halaman
+kartu (mis. `2/4`). Tim aktif memakai pembulatan ke atas, tim nonaktif ke bawah.
+XP per battle mengikuti OwO: **200 + bonus streak** (bonus hanya di kelipatan
+10/50/100/500/1000), lalu dikali multiplier catch-up level pet. Level lawan
+dianggap sama karena tidak ada di kartu. Perkiraan memakai **3.000 battle/hari**.
+Multiplier Knowledge belum dihitung.
 
 Stat pada kartu Lucy adalah stat final, bukan koefisien. Karena itu stat import
 disimpan terpisah dan tidak ditambah lagi dengan stat senjata saat simulasi.

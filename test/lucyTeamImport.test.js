@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { MessageFlags } = require('discord.js');
 
 const ROOT = path.join(__dirname, '..');
 let tempDir;
@@ -56,6 +57,9 @@ describe('Lucy team import', () => {
       label: 'for',
       headerEmoji: 'animal',
       level: 83,
+      xpCurrent: 6602130,
+      xpMax: 47459321,
+      xpMaxed: false,
       displayedStats: { hp: 2990, wp: 666, att: 100, mag: 100, pr: 67, mr: 67 },
       weaponId: 5,
       weaponQuality: 100,
@@ -182,6 +186,79 @@ Lvl 83 \`[6,602,130/47,459,321]\`
     assert.equal(result.imported, 1);
     assert.equal(await importer.handleReaction(reaction, { id: 'bot', bot: true }), null);
     assert.equal(await importer.handleReaction({ emoji: { name: '👍' }, message }, { id: 'user-3' }), null);
+  });
+
+  it('menampilkan tabel XP ephemeral saat user bereaksi 📊', async () => {
+    const replies = [];
+    const message = cardMessage({
+      react: async () => {},
+      reply: async payload => replies.push(payload),
+    });
+    await importer.prepareLucyTeamMessage(message);
+
+    const result = await importer.handleXpReaction(
+      { emoji: { name: '📊' }, message },
+      { id: 'user-2', bot: false },
+    );
+    assert.equal(result.xp, true);
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0].flags, MessageFlags.Ephemeral);
+    const embed = replies[0].embeds[0].toJSON();
+    assert.match(embed.title, /Estimasi XP/);
+    assert.match(embed.description, /40\.857\.191/);
+    assert.match(embed.description, /611/);
+    assert.match(embed.description, /66\.870/);
+    assert.match(embed.footer.text, /200 \+ bonus/);
+
+    assert.equal(await importer.handleXpReaction({ emoji: { name: '📊' }, message }, { id: 'bot', bot: true }), null);
+    assert.equal(await importer.handleXpReaction({ emoji: { name: '🎯' }, message }, { id: 'user-3' }), null);
+    assert.equal(await importer.handleXpReaction({ emoji: { name: '📊' }, message: { author: { id: 'other' } } }, { id: 'user-4' }), null);
+  });
+
+  it('membaca streak tim dan memakainya untuk estimasi XP', async () => {
+    const replies = [];
+    const message = cardMessage({
+      react: async () => {},
+      reply: async payload => replies.push(payload),
+      components: [{ type: 17, components: [
+        { type: 10, content: '## ⭐ **streak team**' },
+        { type: 10, content: '**[1] <:void2:1> **empty** **\nLvl 89 `[51,987,966/62,743,241]`\n<:hp:1> `0856` <:wp:2> `0856`\n<:att:3> `0100` <:mg:4> `1346`\n<:pr:5> `63%` <:mr:6> `63%`' },
+        { type: 10, content: '**[2] <a:ulquiorracifer:2> **for** **\nLvl 89 `[54,267,230/62,743,241]`\n<:hp:1> `3170` <:wp:2> `0678`\n<:att:3> `0100` <:mg:4> `0100`\n<:pr:5> `68%` <:mr:6> `68%`' },
+        { type: 10, content: '**[3] <:ellie:3> **50k Lucent** **\nLvl 89 `[54,846,705/62,743,241]`\n<:hp:1> `1390` <:wp:2> `0678`\n<:att:3> `0100` <:mg:4> `0100`\n<:pr:5> `77%` <:mr:6> `73%`' },
+        { type: 10, content: '-# Streak Saat Ini: 66855 | Streak Tertinggi: 66855' },
+        { type: 1, components: [
+          { type: 2, custom_id: 'teamui_page', label: '2/4', disabled: true },
+          { type: 2, custom_id: 'teamui_set_active', label: null, disabled: true },
+        ] },
+      ] }],
+    });
+    const parsed = importer.parseLucyTeamMessage(message);
+    assert.equal(parsed.streak, 66855);
+    assert.equal(parsed.streakMax, 66855);
+    assert.equal(parsed.teamCount, 4);
+    assert.equal(parsed.teamIndex, 2);
+    assert.equal(parsed.isActive, true);
+    await importer.handleXpReaction({ emoji: { name: '📊' }, message }, { id: 'user-2', bot: false });
+    const embed = replies[0].embeds[0].toJSON();
+    assert.match(embed.description, /213,2/);
+    assert.match(embed.description, /50\.445/);
+    assert.match(embed.footer.text, /streak 66\.855/);
+    assert.match(embed.footer.text, /dibagi 4/);
+    assert.match(embed.footer.text, /aktif ceil/);
+  });
+
+  it('mengabaikan bracket yang bukan progres XP', () => {
+    const message = cardMessage({
+      id: 'lucy-non-xp-bracket',
+      components: [{ type: 17, components: [
+        { type: 10, content: '## ⭐ **bracket lain**' },
+        { type: 10, content: '**[1] <:animal:1> **for** **\nLvl 82 `[1/2]`\n<:hp:1> `2990` <:wp:2> `666`\n<:att:3> `100` <:mg:4> `100`\n<:pr:5> `67%` <:mr:6> `67%`' },
+      ] }],
+    });
+    const parsed = importer.parseLucyTeamMessage(message);
+    assert.equal(parsed.slots[0].xpCurrent, null);
+    assert.equal(parsed.slots[0].xpMax, null);
+    assert.equal(parsed.slots[0].xpMaxed, false);
   });
 
   // Judul yang panjang terpotong 32 karakter oleh `normalizeName`. Kalau sufiks
