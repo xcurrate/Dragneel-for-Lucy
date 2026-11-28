@@ -337,7 +337,7 @@ async function handlePrefixCommand(message, tracker, deps = {}) {
         { name: prefix + ' prefix <prefix>', value: 'Lihat atau ubah prefix server (alias: awalan).', inline: false },
         { name: prefix + ' s count on / off', value: 'Sakelar seluruh counter Lucy untuk server ini (aksi Lucy, battle/hunt, pray, curse).', inline: false },
         { name: 'Slash', value: '/boss setup, /boss server-on, /boss server-off, /prefix, /steal emoji, /steal sticker.', inline: false },
-        { name: prefix + ' steal emoji <emoji>', value: 'Ambil emoji custom ke server ini (developer).', inline: false },
+        { name: prefix + ' steal emoji <emoji> [emoji...]', value: 'Buka panel emoji: navigasi, simpan ke server, atau download (developer).', inline: false },
         { name: prefix + ' steal sticker <id>', value: 'Ambil sticker ke server ini (developer).', inline: false }
       )] });
   }

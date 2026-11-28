@@ -171,6 +171,7 @@ client.on(Events.InteractionCreate, async i => {
     if (i.isButton() && battlePanel.isGlobalLossButton(i.customId)) { await battleSim.handleGlobalLossButton(i, { prefix: prefixForGuild(i.guildId), isDeveloper }); return; }
     if (i.isButton() && battlePanel.isGlobalLossPageButton(i.customId)) { await battleSim.handleGlobalLossPageButton(i, { prefix: prefixForGuild(i.guildId), isDeveloper }); return; }
     if (i.isButton() && battlePanel.isRepeatButton(i.customId)) { await battleSim.handleRepeatButton(i, { prefix: prefixForGuild(i.guildId) }); return; }
+    if (i.isButton() && steal.isStealPanelButton(i.customId)) { await steal.handleStealPanelButton(i, { isDeveloper }); return; }
     if ((i.isButton() || i.isStringSelectMenu()) && teamPanel.isTeamPanelNav(i.customId)) {
       await battleTeam.handleTeamPanelNav(i, { prefix: prefixForGuild(i.guildId) });
       return;
