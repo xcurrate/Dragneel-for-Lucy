@@ -1,6 +1,6 @@
 // Analisis kartu blackjack Lucy. Hanya memberi rekomendasi hit/stand karena
 // reaksi yang tersedia di kartu Lucy adalah 👊 dan 🛑.
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { getGuildSettings, DEFAULT_PREFIX } = require('../utils/storage');
 
 const REACTION = '🎯';
@@ -23,15 +23,36 @@ function developerFor(user, client) {
   return developerIds(client).has(String(user?.id || ''));
 }
 
-// Auto-react hanya di guild yang pemiliknya atau salah satu cached member-nya
-// developer bot. Command/reaction tetap dicek per user.
-function developerGuild(message) {
+function normalizeName(value) {
+  return String(value || '').trim().replace(/[*_~`]/g, '').replace(/\s+/g, ' ').toLowerCase();
+}
+
+function memberNames(member) {
+  return new Set([
+    member?.nickname,
+    member?.displayName,
+    member?.user?.username,
+    member?.user?.globalName,
+  ].map(normalizeName).filter(Boolean));
+}
+
+async function developerMembers(message) {
   const ids = developerIds(message?.client);
-  const ownerId = message?.guild?.ownerId;
-  if (ownerId && ids.has(String(ownerId))) return true;
-  const members = message?.guild?.members?.cache;
-  if (members) for (const id of ids) if (members.has(id)) return true;
-  return false;
+  const guild = message?.guild;
+  if (!guild || !ids.size) return [];
+  const members = [];
+  for (const id of ids) {
+    let member = guild.members?.cache?.get?.(id);
+    if (!member && guild.members?.fetch) member = await guild.members.fetch(id).catch(() => null);
+    if (member) members.push(member);
+  }
+  return members;
+}
+
+async function targetedForDeveloper(parsed, members) {
+  if (!parsed?.playerName) return false;
+  const target = normalizeName(parsed.playerName);
+  return members.some(member => memberNames(member).has(target));
 }
 
 function dataOf(message) {
@@ -226,7 +247,7 @@ function parseOptions(args = []) {
 }
 
 function strictPayload(payload) {
-  return { ...payload, allowedMentions: { parse: [], repliedUser: false } };
+  return { ...payload, allowedMentions: { parse: [], repliedUser: false }, flags: MessageFlags.Ephemeral };
 }
 
 async function send(target, payload) {
@@ -316,8 +337,10 @@ async function handleMessage(message) {
 
 async function autoReact(message) {
   if (!message || message.author?.id !== LUCY_BOT_ID) return false;
-  if (!developerGuild(message)) return false;
-  if (!parseBlackjackMessage(message)) return false;
+  const parsed = parseBlackjackMessage(message);
+  if (!parsed) return false;
+  const members = await developerMembers(message);
+  if (!(await targetedForDeveloper(parsed, members))) return false;
   try {
     await message.react(REACTION);
     return true;
@@ -336,12 +359,17 @@ async function handleReaction(reaction, user) {
   }
   const parsed = parseBlackjackMessage(message);
   if (!parsed) return false;
+  const members = await developerMembers(message);
+  if (!(await targetedForDeveloper(parsed, members))) {
+    await send(message, { content: 'Hint ini hanya untuk pesan blackjack developer.' });
+    return true;
+  }
   await send(message, { embeds: [buildHintEmbed(parsed)] });
   return true;
 }
 
 module.exports = {
   REACTION, LUCY_BOT_ID, parseCards, handValue, parseBlackjackMessage, recommend,
-  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, developerGuild,
+  buildHintEmbed, parseCommand, parseOptions, helpEmbed, resolveSource, developerMembers, targetedForDeveloper,
   handleMessage, autoReact, handleReaction,
 };

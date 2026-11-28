@@ -630,9 +630,10 @@ Bot membutuhkan intent dan izin Discord berikut untuk fitur ini:
 
 Fitur ini hanya untuk developer bot. Bot membaca kartu blackjack Lucy dari embed, lalu memberi rekomendasi **👊 HIT**
 atau **🛑 STAND**. Kartu blackjack Lucy otomatis diberi reaksi **🎯**; tekan
-reaksi itu untuk mendapat hint. Reaksi 🎯 hanya dipasang di guild milik
-developer. Perintah teks bisa membalas kartu, memakai link/ID, atau mencari
-kartu blackjack terakhir di channel.
+reaksi itu untuk mendapat hint. Reaksi 🎯 hanya dipasang kalau nama pemain di
+kartu cocok dengan username/nickname developer di guild itu. Perintah teks
+bisa membalas kartu, memakai link/ID, atau mencari kartu blackjack terakhir di
+channel. Balasan hint memakai flag ephemeral.
 
 ```text
 d bjhint

@@ -1,5 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const { MessageFlags } = require('discord.js');
 const hint = require('../src/services/blackjackHint');
 
 function message(fields, overrides = {}) {
@@ -7,7 +8,7 @@ function message(fields, overrides = {}) {
     id: '1576257300212228260',
     channelId: '1563479019624857710',
     guildId: '1554454222416646145',
-    guild: { ownerId: 'dev-owner' },
+    guild: { ownerId: 'dev-owner', members: { cache: new Map([['dev-owner', { nickname: 'nnneozen', displayName: 'nnneozen', user: { username: 'nnneozen' } }]]) } },
     author: { id: '1438615298012872817', bot: true },
     embeds: [{ fields }],
     ...overrides,
@@ -101,6 +102,11 @@ describe('blackjack command and output', () => {
       assert.deepEqual(reactions, ['🎯']);
       const otherGuild = message([{ name: 'Lain', value: '<:as:1>' }], { guild: { ownerId: 'orang-biasa' }, react: async () => {} });
       assert.equal(await hint.autoReact(otherGuild), false);
+      const otherPlayer = message([
+        { name: 'Dealer `[10+?]`', value: '<:10h:1> <:cardback:2>' },
+        { name: 'orang-lain `[14]`', value: '<:8s:3> <:6s:4>' },
+      ], { react: async () => {} });
+      assert.equal(await hint.autoReact(otherPlayer), false);
     } finally {
       if (previous == null) delete process.env.DEVELOPER_IDS;
       else process.env.DEVELOPER_IDS = previous;
@@ -116,6 +122,7 @@ describe('blackjack command and output', () => {
     });
     assert.equal(handled, true);
     assert.match(replyPayload.content, /khusus developer/);
+    assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
   });
 
   it('pengguna non-developer ditolak saat menekan reaksi hint', async () => {
@@ -129,5 +136,6 @@ describe('blackjack command and output', () => {
     }, { id: 'user-biasa', bot: false });
     assert.equal(handled, true);
     assert.match(replyPayload.content, /khusus developer/);
+    assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
   });
 });
